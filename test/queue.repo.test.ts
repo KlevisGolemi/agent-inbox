@@ -12,7 +12,10 @@ let db: Database.Database
 let clock: number
 let repo: QueueRepo
 
-const add = (n: number, extra: { topic?: string; correlationId?: string | null; source?: string } = {}) =>
+const add = (
+  n: number,
+  extra: { topic?: string; correlationId?: string | null; source?: string } = {},
+) =>
   repo.enqueue({
     payload: { n },
     source: extra.source ?? 't',
@@ -28,7 +31,7 @@ beforeEach(() => {
 })
 
 describe('file FIFO', () => {
-  it('sert les messages dans l\'ordre et les marque lus', () => {
+  it("sert les messages dans l'ordre et les marque lus", () => {
     add(1)
     clock += 10
     add(2)
@@ -40,11 +43,15 @@ describe('file FIFO', () => {
     expect(repo.claimNext()).toBeNull()
   })
 
-  it('refuse un correlation_id en double et renvoie l\'id existant', () => {
+  it("refuse un correlation_id en double et renvoie l'id existant", () => {
     const first = add(1, { correlationId: 'abc' })
     const second = add(2, { correlationId: 'abc' })
     expect(first.ok).toBe(true)
-    expect(second).toEqual({ ok: false, error: 'duplicate_correlation_id', existingId: first.ok ? first.id : null })
+    expect(second).toEqual({
+      ok: false,
+      error: 'duplicate_correlation_id',
+      existingId: first.ok ? first.id : null,
+    })
   })
 
   it('renvoie le nombre de messages en attente', () => {
@@ -118,7 +125,7 @@ describe('file FIFO', () => {
 })
 
 describe('topics', () => {
-  it('le filtre topic n\'emprunte jamais un autre topic', () => {
+  it("le filtre topic n'emprunte jamais un autre topic", () => {
     add(1, { topic: 'a' })
     add(2, { topic: 'b' })
     expect(repo.claimNext({ topic: 'c' })).toBeNull()
@@ -199,7 +206,12 @@ describe('search', () => {
     clock += 1000
     add(2, { source: 'beta', topic: 'b' })
     clock += 1000
-    repo.enqueue({ payload: { msg: '100% sûr_ok' }, source: 'alpha', correlationId: null, topic: 'a' })
+    repo.enqueue({
+      payload: { msg: '100% sûr_ok' },
+      source: 'alpha',
+      correlationId: null,
+      topic: 'a',
+    })
     repo.claimNext({ topic: 'b' })
   })
 

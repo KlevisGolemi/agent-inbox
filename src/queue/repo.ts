@@ -85,7 +85,8 @@ type Row = {
   correlation_id: string | null
 }
 
-const COLS = 'id, source, payload, status, topic, created_at, read_at, lease_until, attempts, correlation_id'
+const COLS =
+  'id, source, payload, status, topic, created_at, read_at, lease_until, attempts, correlation_id'
 const HOUR_MS = 3_600_000
 const iso = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString())
 
@@ -175,9 +176,19 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
     enqueue({ payload, source, correlationId, topic }) {
       const id = randomUUID()
       try {
-        insert.run(id, source, JSON.stringify(payload ?? {}), now(), correlationId, topic ?? 'default')
+        insert.run(
+          id,
+          source,
+          JSON.stringify(payload ?? {}),
+          now(),
+          correlationId,
+          topic ?? 'default',
+        )
       } catch (err) {
-        if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' && correlationId !== null) {
+        if (
+          (err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
+          correlationId !== null
+        ) {
           const existing = selectByCid.get(correlationId) as Row | undefined
           return { ok: false, error: 'duplicate_correlation_id', existingId: existing?.id ?? null }
         }
@@ -205,11 +216,13 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
 
     claimByCorrelation(cid, opts = {}) {
       const lease = opts.lease === true
-      const row = (lease ? cidLease : cidRead).get({ cid, ...claimParams(lease, now()) }) as Row | undefined
+      const row = (lease ? cidLease : cidRead).get({ cid, ...claimParams(lease, now()) }) as
+        Row | undefined
       if (row) return { item: toItem(row) }
       const existing = selectByCid.get(cid) as Row | undefined
       if (!existing) return { error: 'not_found' }
-      if (existing.status === 'leased') return { error: 'leased', lease_until: iso(existing.lease_until)! }
+      if (existing.status === 'leased')
+        return { error: 'leased', lease_until: iso(existing.lease_until)! }
       return { error: 'already_read', id: existing.id, read_at: iso(existing.read_at) }
     },
 
@@ -243,7 +256,8 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
       if (f.status !== undefined) add('status = :status', 'status', f.status)
       if (f.since !== undefined) add('created_at >= :since', 'since', f.since)
       if (f.until !== undefined) add('created_at <= :until', 'until', f.until)
-      if (f.text !== undefined) add(`payload LIKE :text ESCAPE '\\'`, 'text', `%${escapeLike(f.text)}%`)
+      if (f.text !== undefined)
+        add(`payload LIKE :text ESCAPE '\\'`, 'text', `%${escapeLike(f.text)}%`)
       const sql = `SELECT ${COLS} FROM messages ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
                    ORDER BY created_at DESC, rowid DESC LIMIT :limit`
       return (db.prepare(sql).all(params) as Row[]).map(toItem)
@@ -277,7 +291,8 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
     },
 
     deleteExpired(cutoffMs, overrides, nowMs) {
-      const delRead = (cond: string) => `DELETE FROM messages WHERE status = 'read' AND read_at < ? AND ${cond}`
+      const delRead = (cond: string) =>
+        `DELETE FROM messages WHERE status = 'read' AND read_at < ? AND ${cond}`
       const delOpen = (cond: string) =>
         `DELETE FROM messages WHERE status != 'read' AND created_at < ? AND ${cond}`
       const topics = Object.keys(overrides)
