@@ -73,7 +73,7 @@ export function sessionCookieOptions(env: Env): CookieOptions {
  */
 export function requireAdminSession(
   sessions: AdminSessions,
-  opts: { redirectTo?: string } = {},
+  opts: { redirectTo?: string; json?: boolean } = {},
 ): RequestHandler {
   const loginPath = opts.redirectTo ?? '/login'
   return (req, res, next) => {
@@ -85,10 +85,10 @@ export function requireAdminSession(
       next()
       return
     }
-    if (req.accepts(['json', 'html']) === 'html') {
+    if (!opts.json && req.accepts(['json', 'html']) === 'html') {
       res.redirect(302, `${loginPath}?next=${encodeURIComponent(req.originalUrl)}`)
     } else {
-      res.status(401).json({ ok: false, error: 'unauthorized' })
+      res.status(401).json({ ok: false, error: 'unauthorized', message: 'Session requise' })
     }
   }
 }

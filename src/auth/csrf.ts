@@ -25,16 +25,29 @@ export function issueCsrfToken(req: Request, res: Response, env: Env): string {
  * Vérifie le jeton CSRF : champ `_csrf` du corps (formulaires) ou en-tête `x-csrf-token` (API),
  * comparé à temps constant au cookie `cq_csrf`. Sinon 403.
  */
-export const requireCsrf: RequestHandler = (req, res, next) => {
+function csrfMatches(req: Request): boolean {
   const cookie = (req.cookies as Record<string, unknown> | undefined)?.[CSRF_COOKIE]
   const body = req.body as Record<string, unknown> | undefined
   const sent = body?.[CSRF_FIELD] ?? req.get(CSRF_HEADER)
-  if (
+  return (
     typeof cookie === 'string' &&
     TOKEN_RE.test(cookie) &&
     typeof sent === 'string' &&
     safeEqual(sent, cookie)
-  ) {
+  )
+}
+
+/** Variante API : échec toujours en JSON (jamais de page HTML), quel que soit l'en-tête Accept. */
+export const requireCsrfJson: RequestHandler = (req, res, next) => {
+  if (csrfMatches(req)) {
+    next()
+    return
+  }
+  res.status(403).json({ ok: false, error: 'csrf', message: 'Jeton CSRF manquant ou invalide.' })
+}
+
+export const requireCsrf: RequestHandler = (req, res, next) => {
+  if (csrfMatches(req)) {
     next()
     return
   }
@@ -46,6 +59,8 @@ export const requireCsrf: RequestHandler = (req, res, next) => {
       '<p>Le formulaire a expiré ou est invalide. Rechargez la page et réessayez.</p>',
     )
   } else {
-    res.status(403).json({ ok: false, error: 'csrf_invalid' })
+    res
+      .status(403)
+      .json({ ok: false, error: 'csrf_invalid', message: 'Jeton CSRF manquant ou invalide.' })
   }
 }

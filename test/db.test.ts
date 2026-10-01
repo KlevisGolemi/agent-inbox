@@ -22,7 +22,9 @@ const silent = (): void => {}
 
 function tableNames(db: Database.Database): string[] {
   const rows = db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
     .all() as { name: string }[]
   return rows.map((r) => r.name)
 }
@@ -62,17 +64,38 @@ describe('migrations', () => {
       .prepare('SELECT id, payload, status, topic, attempts, lease_until FROM messages ORDER BY id')
       .all()
     expect(rows).toEqual([
-      { id: 'm1', payload: '{"a":1}', status: 'pending', topic: 'default', attempts: 0, lease_until: null },
-      { id: 'm2', payload: '{"b":2}', status: 'pending', topic: 'default', attempts: 0, lease_until: null },
-      { id: 'm3', payload: '{"c":3}', status: 'read', topic: 'default', attempts: 0, lease_until: null },
+      {
+        id: 'm1',
+        payload: '{"a":1}',
+        status: 'pending',
+        topic: 'default',
+        attempts: 0,
+        lease_until: null,
+      },
+      {
+        id: 'm2',
+        payload: '{"b":2}',
+        status: 'pending',
+        topic: 'default',
+        attempts: 0,
+        lease_until: null,
+      },
+      {
+        id: 'm3',
+        payload: '{"c":3}',
+        status: 'read',
+        topic: 'default',
+        attempts: 0,
+        lease_until: null,
+      },
     ])
 
     const cols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
     expect(cols.map((c) => c.name)).toContain('correlation_id')
 
-    const idx = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_correlation_id_unique'").get() as
-      | { sql: string }
-      | undefined
+    const idx = db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_correlation_id_unique'")
+      .get() as { sql: string } | undefined
     expect(idx?.sql).toMatch(/UNIQUE/i)
     expect(idx?.sql).toMatch(/WHERE correlation_id IS NOT NULL/i)
     db.close()

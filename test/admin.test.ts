@@ -75,6 +75,39 @@ describe('accès et CSRF', () => {
   })
 })
 
+describe('authentification avant lecture du corps', () => {
+  it('POST non authentifié avec JSON malformé : 401 JSON (pas 400)', async () => {
+    const { app } = makeTestApp()
+    const res = await request(app)
+      .post('/admin/api/messages')
+      .set('Content-Type', 'application/json')
+      .send('{not json')
+    expect(res.status).toBe(401)
+    expect(res.body).toMatchObject({ ok: false, error: 'unauthorized' })
+    expect(typeof res.body.message).toBe('string')
+  })
+
+  it('requête non authentifiée avec Accept: text/html : 401 JSON, jamais de redirection', async () => {
+    const { app } = makeTestApp()
+    const res = await request(app).get('/admin/api/overview').set('Accept', 'text/html')
+    expect(res.status).toBe(401)
+    expect(res.headers.location).toBeUndefined()
+    expect(res.body.error).toBe('unauthorized')
+  })
+
+  it('échec CSRF : 403 JSON avec message, même avec Accept: text/html', async () => {
+    const { app, base } = await setup()
+    const res = await request(app)
+      .patch('/admin/api/settings')
+      .set('Cookie', base)
+      .set('Accept', 'text/html')
+      .send({ ttl_hours: 12 })
+    expect(res.status).toBe(403)
+    expect(res.body).toMatchObject({ ok: false, error: 'csrf' })
+    expect(typeof res.body.message).toBe('string')
+  })
+})
+
 describe('overview', () => {
   it('renvoie URLs, stats, réglages et jeton CSRF, sans jamais le secret complet', async () => {
     const { app, base, settings } = await setup()

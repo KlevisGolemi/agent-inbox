@@ -258,7 +258,7 @@ describe('requireAdminSession', () => {
       .set('Accept', 'application/json')
       .set('Cookie', `cq_session=${s}`)
     expect(json.status).toBe(401)
-    expect(json.body).toEqual({ ok: false, error: 'unauthorized' })
+    expect(json.body).toEqual({ ok: false, error: 'unauthorized', message: 'Session requise' })
   })
 })
 

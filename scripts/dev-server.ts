@@ -13,9 +13,11 @@ import { createUsers } from '../src/auth/users.js'
 import { openDb } from '../src/db/index.js'
 import { migrate } from '../src/db/migrations.js'
 import { loadEnv } from '../src/env.js'
+import { log } from '../src/log.js'
 import { createQueueRepo } from '../src/queue/repo.js'
 import { createSettings, seedSettings } from '../src/settings/index.js'
 
+// Identifiants de développement : source de vérité du compte créé ci-dessous (jamais affichés).
 const ADMIN_EMAIL = 'admin@example.com'
 const ADMIN_PASSWORD = 'dev-password-123'
 
@@ -50,7 +52,8 @@ const app = createApp({
 })
 
 app.listen(env.port, () => {
-  console.log(
-    `Interface : http://localhost:${env.port}/admin  (${ADMIN_EMAIL} / ${ADMIN_PASSWORD})`,
-  )
+  log('info', 'Interface d’administration prête', {
+    url: `http://localhost:${env.port}/admin`,
+    admin_email: ADMIN_EMAIL,
+  })
 })

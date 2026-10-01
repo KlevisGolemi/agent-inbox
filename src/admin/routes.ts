@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import type Database from 'better-sqlite3'
 import type { ApiKeys } from '../auth/apiKeys.js'
-import { issueCsrfToken, requireCsrf } from '../auth/csrf.js'
+import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
 import { requireAdminSession, SESSION_COOKIE, type AdminSessions } from '../auth/sessions.js'
 import type { User, Users } from '../auth/users.js'
@@ -54,7 +54,7 @@ export function createAdminRouter(deps: AdminDeps): Router {
   const { db, settings, repo, env, users, sessions, apiKeys } = deps
   const router = Router()
 
-  router.use(requireAdminSession(sessions))
+  router.use(requireAdminSession(sessions, { json: true }))
   // Réponses sensibles (secret, clés, jeton CSRF) : jamais mises en cache.
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store')
@@ -62,7 +62,7 @@ export function createAdminRouter(deps: AdminDeps): Router {
   })
   router.use((req: Request, res: Response, next: NextFunction) => {
     if (req.method === 'GET' || req.method === 'HEAD') next()
-    else requireCsrf(req, res, next)
+    else requireCsrfJson(req, res, next)
   })
 
   const publicBase = env.publicUrl.href

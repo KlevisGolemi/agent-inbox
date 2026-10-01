@@ -58,8 +58,10 @@ export function createApp(deps: AppDeps): Express {
     })
     next()
   })
-  app.use(express.json({ limit: '1mb' }))
   app.use(cookieParser())
+  // L'API d'administration s'authentifie avant de lire le corps (JSON 401 toujours, jamais de redirection).
+  app.use('/admin/api', requireAdminSession(deps.sessions, { json: true }))
+  app.use(express.json({ limit: '1mb' }))
 
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()), version: deps.version })

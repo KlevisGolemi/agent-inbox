@@ -1210,7 +1210,7 @@ function app() {
         window.location.href = '/login?next=' + encodeURIComponent('/admin')
         throw new Error('Session expirée')
       }
-      if (r.status === 403 && retry && data && data.error === 'csrf_invalid') {
+      if (r.status === 403 && retry && data && data.error === 'csrf') {
         await this.loadOverview()
         return this.call(method, path, body, false)
       }
