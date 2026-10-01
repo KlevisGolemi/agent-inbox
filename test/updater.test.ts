@@ -1,6 +1,6 @@
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
-import { createUpdaterServer } from '../deploy/updater/server.mjs'
+import { createUpdaterServer, dockerEnv } from '../deploy/updater/server.mjs'
 
 const SECRET = 'u'.repeat(32)
 
@@ -75,5 +75,34 @@ describe('updater sidecar', () => {
     release()
     await flush()
     expect((await request(server).post('/update').set(auth)).status).toBe(202)
+  })
+
+  it('refuse un secret absent ou trop court à la création', () => {
+    const run = async () => {}
+    expect(() => createUpdaterServer({ secret: '', run })).toThrow(/32/)
+    expect(() => createUpdaterServer({ secret: 'court', run })).toThrow(/32/)
+    expect(() => createUpdaterServer({ secret: undefined as unknown as string, run })).toThrow(/32/)
+  })
+})
+
+describe('dockerEnv', () => {
+  it('ne transmet que les variables nécessaires à docker', () => {
+    const env = dockerEnv({
+      PATH: '/usr/bin',
+      HOME: '/root',
+      DOCKER_HOST: 'unix:///x.sock',
+      COMPOSE_PROJECT_NAME: 'cq',
+      COMPOSE_FILE: 'a.yml',
+      UPDATER_SECRET: SECRET,
+      PORT: '8081',
+    })
+    expect(env).toEqual({
+      PATH: '/usr/bin',
+      HOME: '/root',
+      DOCKER_HOST: 'unix:///x.sock',
+      COMPOSE_PROJECT_NAME: 'cq',
+      COMPOSE_FILE: 'a.yml',
+    })
+    expect(dockerEnv({ PATH: '/bin', UPDATER_SECRET: SECRET })).toEqual({ PATH: '/bin' })
   })
 })

@@ -32,13 +32,25 @@ function sh(args, env) {
   })
 }
 
+/** Environnement minimal pour docker : jamais UPDATER_SECRET ni le reste de process.env. */
+export function dockerEnv(source = process.env) {
+  const env = {}
+  for (const key of ['PATH', 'HOME', 'DOCKER_HOST', 'COMPOSE_PROJECT_NAME', 'COMPOSE_FILE']) {
+    if (source[key]) env[key] = source[key]
+  }
+  return env
+}
+
 /** Exécution réelle : pull puis up -d, projet Compose repris de l'environnement. */
-export async function runCompose(env = process.env) {
+export async function runCompose(env = dockerEnv()) {
   await sh(['compose', 'pull', 'app'], env)
   await sh(['compose', 'up', '-d', 'app'], env)
 }
 
 export function createUpdaterServer({ secret, run, log = defaultLog }) {
+  if (typeof secret !== 'string' || secret.length < 32) {
+    throw new Error('Updater : le secret doit être une chaîne d’au moins 32 caractères')
+  }
   let running = false
 
   async function execute() {

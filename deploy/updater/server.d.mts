@@ -10,3 +10,4 @@ export interface UpdaterOptions {
 
 export function createUpdaterServer(options: UpdaterOptions): Server
 export function runCompose(env?: Record<string, string | undefined>): Promise<void>
+export function dockerEnv(source?: Record<string, string | undefined>): Record<string, string>

@@ -6,34 +6,37 @@ cd "$(dirname "$0")"
 
 # Si le dossier est un clone git, on récupère aussi les fichiers (compose, scripts).
 if [ -d .git ]; then
-  echo "→ Mise à jour du dépôt (git pull --ff-only)"
+  printf "%s\n" "→ Mise à jour du dépôt (git pull --ff-only)"
   git pull --ff-only
 fi
 
-echo "→ Téléchargement des images"
+printf "%s\n" "→ Téléchargement des images"
 docker compose pull
-echo "→ Redémarrage des conteneurs"
+printf "%s\n" "→ Redémarrage des conteneurs"
 docker compose up -d
 
-# PUBLIC_URL est lue dans .env (sans exécuter le fichier).
+# PUBLIC_URL est lue dans .env (sans exécuter le fichier) : dernière occurrence,
+# sans commentaire en fin de ligne, sans guillemets ni espaces autour.
 public_url=""
 if [ -f .env ]; then
-  public_url="$(grep -E '^PUBLIC_URL=' .env | tail -n 1 | cut -d= -f2- | tr -d '\r"'"'" || true)"
+  public_url="$(grep -E '^[[:space:]]*PUBLIC_URL[[:space:]]*=' .env | tail -n 1 \
+    | sed -E 's/^[^=]*=//; s/[[:space:]]+#.*$//; s/\r$//; s/^[[:space:]]+//; s/[[:space:]]+$//; s/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/' || true)"
 fi
 
 if [ -z "$public_url" ]; then
-  echo "PUBLIC_URL introuvable dans .env : vérification de santé ignorée."
-  exit 0
+  printf '%s\n' "Avertissement : PUBLIC_URL introuvable ou vide dans .env ; essai sur http://localhost:3000." >&2
+  public_url="http://localhost:3000"
 fi
 
-echo "→ Vérification de santé (${public_url%/}/healthz)"
+health_url="${public_url%/}/healthz"
+printf '%s\n' "→ Vérification de santé (${health_url})"
 for _ in $(seq 1 30); do
-  if body="$(curl -fsS --max-time 5 "${public_url%/}/healthz" 2>/dev/null)"; then
-    echo "OK : $body"
+  if body="$(curl -fsS --max-time 5 "$health_url" 2>/dev/null)"; then
+    printf '%s\n' "OK : $body"
     exit 0
   fi
   sleep 2
 done
 
-echo "Le service ne répond pas encore sur ${public_url%/}/healthz ; consultez : docker compose logs --tail=50" >&2
+printf '%s\n' "Le service ne répond pas encore sur ${health_url} ; consultez : docker compose logs --tail=50" >&2
 exit 1

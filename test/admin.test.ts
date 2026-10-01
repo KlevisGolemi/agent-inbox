@@ -426,27 +426,29 @@ describe('version et mise à jour', () => {
     expect(ver.body.updater).toBe(true)
   })
 
-  it('POST /update : updater injoignable ou en erreur → 502 updater_unreachable', async () => {
+  it('POST /update : mappe les réponses de l’updater', async () => {
     const env = testEnv({ updater: { url: new URL('http://updater:8081'), secret: SECRET } })
-    const down = await setupWith({
-      versions,
-      env,
-      updaterFetch: async () => {
-        throw new Error('ECONNREFUSED')
-      },
+    const call = async (updaterFetch: typeof fetch) => {
+      const ctx = await setupWith({ versions, env, updaterFetch })
+      return ctx.api('post', '/update').send({})
+    }
+    const down = await call(async () => {
+      throw new Error('ECONNREFUSED')
     })
-    const r1 = await down.api('post', '/update').send({})
-    expect(r1.status).toBe(502)
-    expect(r1.body).toMatchObject({ ok: false, error: 'updater_unreachable' })
-    expect(JSON.stringify(r1.body)).not.toContain(SECRET)
+    expect(down.status).toBe(502)
+    expect(down.body).toMatchObject({ ok: false, error: 'updater_unreachable' })
+    expect(JSON.stringify(down.body)).not.toContain(SECRET)
 
-    const busy = await setupWith({
-      versions,
-      env,
-      updaterFetch: async () => new Response('busy', { status: 409 }),
-    })
-    const r2 = await busy.api('post', '/update').send({})
-    expect(r2.status).toBe(502)
-    expect(r2.body.error).toBe('updater_unreachable')
+    const busy = await call(async () => new Response('{}', { status: 409 }))
+    expect(busy.status).toBe(409)
+    expect(busy.body).toMatchObject({ ok: false, error: 'update_running' })
+
+    const bad = await call(async () => new Response('{}', { status: 401 }))
+    expect(bad.status).toBe(502)
+    expect(bad.body).toMatchObject({ ok: false, error: 'updater_misconfigured' })
+
+    const other = await call(async () => new Response('{}', { status: 500 }))
+    expect(other.status).toBe(502)
+    expect(other.body.error).toBe('updater_unreachable')
   })
 })

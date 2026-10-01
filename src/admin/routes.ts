@@ -294,18 +294,43 @@ export function createAdminRouter(deps: AdminDeps): Router {
       })
       return
     }
+    let status: number
     try {
       const upstream = await (deps.updaterFetch ?? fetch)(new URL('/update', updater.url), {
         method: 'POST',
         headers: { 'x-updater-secret': updater.secret },
         signal: AbortSignal.timeout(UPDATER_TIMEOUT_MS),
       })
-      if (!upstream.ok) throw new Error(`réponse ${upstream.status}`)
+      status = upstream.status
     } catch (err) {
-      log('warn', 'Updater injoignable ou en erreur', {
+      log('warn', 'Updater injoignable', {
         reason: err instanceof Error ? err.message : 'inconnue',
       })
       fail(res, 502, 'updater_unreachable', 'Le service de mise à jour ne répond pas.')
+      return
+    }
+    if (status === 409) {
+      fail(res, 409, 'update_running', 'Une mise à jour est déjà en cours.')
+      return
+    }
+    if (status === 401) {
+      log('error', 'Updater : secret refusé (UPDATER_SECRET différent des deux côtés ?)')
+      fail(
+        res,
+        502,
+        'updater_misconfigured',
+        'Le service de mise à jour refuse le secret configuré.',
+      )
+      return
+    }
+    if (status !== 202) {
+      log('warn', 'Updater : réponse inattendue', { status })
+      fail(
+        res,
+        502,
+        'updater_unreachable',
+        'Le service de mise à jour a répondu de façon inattendue.',
+      )
       return
     }
     log('info', 'Mise à jour demandée depuis l’administration')
