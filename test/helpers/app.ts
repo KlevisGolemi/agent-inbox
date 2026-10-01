@@ -23,6 +23,7 @@ export function testEnv(over: Partial<Env> = {}): Env {
     port: 3000,
     dbPath: ':memory:',
     nodeEnv: 'test',
+    trustProxy: 1,
     updateRepo: 'KlevisGolemi/cowork-communication',
     seed: {},
     ...over,

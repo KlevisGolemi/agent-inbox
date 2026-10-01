@@ -6,6 +6,8 @@ export interface Env {
   port: number
   dbPath: string
   nodeEnv: 'production' | 'development' | 'test'
+  /** Nombre de proxys de confiance devant l'application (X-Forwarded-For) : 1 par défaut. */
+  trustProxy: number
   adminEmail?: string
   adminPassword?: string
   /** Dépôt GitHub des releases (vérification des mises à jour). */
@@ -37,6 +39,15 @@ const schema = z.object({
     z.coerce.number().int().positive().default(3000),
   ),
   DB_PATH: z.preprocess((v) => (v === '' ? undefined : v), z.string().default('/data/queue.db')),
+  TRUST_PROXY: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce
+      .number({ error: 'doit être un entier entre 0 et 5' })
+      .int({ error: 'doit être un entier entre 0 et 5' })
+      .min(0, { error: 'doit être compris entre 0 et 5' })
+      .max(5, { error: 'doit être compris entre 0 et 5' })
+      .default(1),
+  ),
   NODE_ENV: z.preprocess(
     (v) => (v === '' ? undefined : v),
     z.enum(['production', 'development', 'test']).default('production'),
@@ -119,6 +130,7 @@ export function loadEnv(raw: Record<string, string | undefined>): Env {
     port: e.PORT,
     dbPath: e.DB_PATH,
     nodeEnv: e.NODE_ENV,
+    trustProxy: e.TRUST_PROXY,
     adminEmail: e.ADMIN_EMAIL,
     adminPassword: e.ADMIN_PASSWORD,
     updateRepo: e.UPDATE_REPO,

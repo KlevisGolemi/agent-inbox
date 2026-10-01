@@ -1,0 +1,15 @@
+# Surcharge facultative : rattache l'application au réseau externe de votre Traefik.
+# À combiner avec deploy/docker-compose.traefik.yml (install.sh règle COMPOSE_FILE) ;
+# TRAEFIK_NETWORK doit nommer un réseau Docker existant.
+services:
+  app:
+    networks:
+      - default
+      - traefik
+    labels:
+      - "traefik.docker.network=${TRAEFIK_NETWORK:?TRAEFIK_NETWORK est obligatoire}"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:?TRAEFIK_NETWORK est obligatoire}

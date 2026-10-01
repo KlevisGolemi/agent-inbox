@@ -54,8 +54,8 @@ const bodyErrors: ErrorRequestHandler = (err, _req, res, next) => {
 
 export function createApp(deps: AppDeps): Express {
   const app = express()
-  // Traefik est en frontal : on fait confiance à 1 proxy pour req.ip (rate limit).
-  app.set('trust proxy', 1)
+  // Nombre de proxys de confiance (TRUST_PROXY) : détermine req.ip, donc le rate limit.
+  app.set('trust proxy', deps.env.trustProxy)
   app.disable('x-powered-by')
   app.use((_req, res, next) => {
     res.set({

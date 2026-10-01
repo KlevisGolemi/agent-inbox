@@ -87,4 +87,16 @@ describe('loadEnv : mise à jour', () => {
       /UPDATER_URL/,
     )
   })
+
+  it('TRUST_PROXY : 1 par défaut, entier 0 à 5', () => {
+    const base = { PUBLIC_URL: 'https://q.example.com' }
+    expect(loadEnv(base).trustProxy).toBe(1)
+    expect(loadEnv({ ...base, TRUST_PROXY: '' }).trustProxy).toBe(1)
+    expect(loadEnv({ ...base, TRUST_PROXY: '0' }).trustProxy).toBe(0)
+    expect(loadEnv({ ...base, TRUST_PROXY: '2' }).trustProxy).toBe(2)
+    expect(loadEnv({ ...base, TRUST_PROXY: '5' }).trustProxy).toBe(5)
+    for (const bad of ['-1', '6', '1.5', 'abc']) {
+      expect(() => loadEnv({ ...base, TRUST_PROXY: bad })).toThrow(/TRUST_PROXY/)
+    }
+  })
 })

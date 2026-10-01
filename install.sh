@@ -6,7 +6,8 @@
 #   CQ_PUBLIC_URL       domaine ou URL publique (ou IPv4 : converti en <ip-avec-tirets>.sslip.io)
 #   CQ_MODE             caddy (défaut) | traefik
 #   CQ_TRAEFIK_HOSTS    domaines Traefik séparés par des virgules (défaut : l'hôte de CQ_PUBLIC_URL)
-#   CQ_TRAEFIK_NETWORK  réseau Traefik externe (défaut : traefik_proxy)
+#   CQ_TRAEFIK_NETWORK  réseau Docker partagé avec Traefik (défaut : aucun, ex. Traefik en mode host)
+#   CQ_BEHIND_CLOUDFLARE  1 = derrière Cloudflare (proxy orange) : TRUST_PROXY=2 (défaut : 0 → 1)
 #   CQ_TRAEFIK_CERTRESOLVER  certresolver Traefik (défaut : letsencrypt)
 #   CQ_ADMIN_EMAIL, CQ_ADMIN_PASSWORD   compte administrateur (facultatif, 12 caractères min.)
 #   CQ_UPDATER          yes | no (défaut : no) — mise à jour en un clic depuis l'interface
@@ -137,7 +138,8 @@ if [ -z "$MODE" ]; then
 fi
 case "$MODE" in caddy | traefik) ;; *) fail "CQ_MODE doit valoir « caddy » ou « traefik » (reçu : $MODE)." ;; esac
 
-TRAEFIK_NETWORK="${CQ_TRAEFIK_NETWORK:-traefik_proxy}"
+TRAEFIK_NETWORK="${CQ_TRAEFIK_NETWORK:-}"
+TRUST_PROXY=1
 TRAEFIK_CERTRESOLVER="${CQ_TRAEFIK_CERTRESOLVER:-letsencrypt}"
 TRAEFIK_RULE=""
 if [ "$MODE" = "traefik" ]; then
@@ -151,8 +153,19 @@ if [ "$MODE" = "traefik" ]; then
     TRAEFIK_RULE="${TRAEFIK_RULE:+$TRAEFIK_RULE || }Host(\`$h\`)"
   done
   [ -n "$TRAEFIK_RULE" ] || fail "Aucun domaine Traefik valide."
-  docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
-    || fail "Le réseau Docker « $TRAEFIK_NETWORK » n'existe pas (créez-le ou indiquez CQ_TRAEFIK_NETWORK)."
+  if [ -z "$TRAEFIK_NETWORK" ] && [ -z "${CQ_TRAEFIK_NETWORK+x}" ]; then
+    ask TRAEFIK_NETWORK "Réseau Docker partagé avec Traefik (vide = aucun, ex. Traefik en mode host) :"
+  fi
+  if [ -n "$TRAEFIK_NETWORK" ]; then
+    docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
+      || fail "Le réseau Docker « $TRAEFIK_NETWORK » n'existe pas (créez-le ou laissez CQ_TRAEFIK_NETWORK vide)."
+  fi
+  # Cloudflare + Traefik = 2 proxys devant l'application : sans TRUST_PROXY=2, req.ip serait celle de Cloudflare.
+  BEHIND_CF="${CQ_BEHIND_CLOUDFLARE:-}"
+  if [ -z "$BEHIND_CF" ]; then
+    if confirm "Derrière Cloudflare (proxy orange) ?" n; then BEHIND_CF=1; else BEHIND_CF=0; fi
+  fi
+  [ "$BEHIND_CF" = "1" ] && TRUST_PROXY=2
 fi
 
 # ─── 4. Compte administrateur (facultatif) ────────────────────
@@ -191,8 +204,13 @@ umask 077
   echo "SITE_HOST=$HOST"
   echo "COMPOSE_PROJECT_NAME=cowork-queue"
   if [ "$MODE" = "traefik" ]; then
-    echo "COMPOSE_FILE=deploy/docker-compose.traefik.yml"
-    echo "TRAEFIK_NETWORK=$TRAEFIK_NETWORK"
+    if [ -n "$TRAEFIK_NETWORK" ]; then
+      echo "COMPOSE_FILE=deploy/docker-compose.traefik.yml:deploy/docker-compose.traefik-network.yml"
+      echo "TRAEFIK_NETWORK=$TRAEFIK_NETWORK"
+    else
+      echo "COMPOSE_FILE=deploy/docker-compose.traefik.yml"
+    fi
+    echo "TRUST_PROXY=$TRUST_PROXY"
     echo "TRAEFIK_CERTRESOLVER=$TRAEFIK_CERTRESOLVER"
     echo "TRAEFIK_RULE='$TRAEFIK_RULE'"
   fi
