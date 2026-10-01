@@ -5,7 +5,7 @@ import type { Settings } from '../settings/index.js'
 
 const HOUR_MS = 3_600_000
 const MIN_MS = 60_000
-/** Un client OAuth inactif (aucun jeton valide) depuis sa création au-delà de ce délai est purgé. */
+/** Un client OAuth inactif (aucun jeton valide ni code en cours) depuis sa création au-delà de ce délai est purgé. */
 export const OAUTH_CLIENT_IDLE_MS = 30 * 24 * HOUR_MS
 
 export interface CleanupReport {
@@ -40,13 +40,17 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
 
   const delCodes = db.prepare('DELETE FROM oauth_codes WHERE expires_at <= ?')
   const delTokens = db.prepare('DELETE FROM oauth_tokens WHERE expires_at <= ?')
-  // Codes et jetons du client partent avec lui (ON DELETE CASCADE).
+  // Client inactif : aucun jeton valide ni code d'autorisation en cours (réautorisation pas encore
+  // échangée). Ses codes et jetons partent avec lui (ON DELETE CASCADE).
   const delClients = db.prepare(
     `DELETE FROM oauth_clients
       WHERE created_at <= :cutoff
         AND NOT EXISTS (SELECT 1 FROM oauth_tokens t
                          WHERE t.client_id = oauth_clients.client_id
-                           AND t.revoked = 0 AND t.expires_at > :now)`,
+                           AND t.revoked = 0 AND t.expires_at > :now)
+        AND NOT EXISTS (SELECT 1 FROM oauth_codes c
+                         WHERE c.client_id = oauth_clients.client_id
+                           AND c.expires_at > :now)`,
   )
   const delSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?')
 

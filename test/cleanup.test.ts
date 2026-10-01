@@ -99,34 +99,35 @@ describe('nettoyage', () => {
     ])
   })
 
-  it('supprime les clients OAuth de plus de 30 jours sans jeton actif (cascade)', () => {
+  it('supprime les clients OAuth de plus de 30 jours sans jeton ni code actif (cascade)', () => {
     const { job } = start()
     db.prepare("INSERT INTO users VALUES (1, 'a@b.c', 'h', 0)").run()
     const DAY = 24 * HOUR
     const client = db.prepare("INSERT INTO oauth_clients VALUES (?, '{}', ?)")
-    client.run('old-idle', clock - 31 * DAY)
-    client.run('old-revoked', clock - 31 * DAY)
-    client.run('old-active', clock - 31 * DAY)
+    for (const id of ['old-idle', 'old-revoked', 'old-expired', 'old-active', 'old-code'])
+      client.run(id, clock - 31 * DAY)
     client.run('recent', clock - 29 * DAY)
     const tok = db.prepare(
       "INSERT INTO oauth_tokens VALUES (?, 'refresh', ?, 1, 's', NULL, ?, ?, 0)",
     )
     tok.run('r1', 'old-revoked', clock + DAY, 1)
+    tok.run('e1', 'old-expired', clock - 1, 0)
     tok.run('a1', 'old-active', clock + DAY, 0)
-    db.prepare("INSERT INTO oauth_codes VALUES ('k', 'old-idle', 1, 'ch', 'u', 's', NULL, ?)").run(
-      clock + 1000,
-    )
+    const code = db.prepare("INSERT INTO oauth_codes VALUES (?, ?, 1, 'ch', 'u', 's', NULL, ?)")
+    code.run('k-expired', 'old-expired', clock - 1)
+    // Réautorisation en cours : code émis, pas encore échangé.
+    code.run('k-live', 'old-code', clock + 1000)
 
-    expect(job.runOnce()).toMatchObject({ clientsDeleted: 2 })
+    expect(job.runOnce()).toMatchObject({ clientsDeleted: 3 })
     const ids = (
       db.prepare('SELECT client_id FROM oauth_clients ORDER BY client_id').all() as {
         client_id: string
       }[]
     ).map((r) => r.client_id)
-    expect(ids).toEqual(['old-active', 'recent'])
-    // Jetons et codes des clients supprimés partis avec eux (ON DELETE CASCADE).
+    expect(ids).toEqual(['old-active', 'old-code', 'recent'])
+    // Jetons des clients supprimés partis avec eux (ON DELETE CASCADE) ; le code en cours reste.
     expect(db.prepare('SELECT token_hash FROM oauth_tokens').all()).toEqual([{ token_hash: 'a1' }])
-    expect(db.prepare('SELECT count(*) AS n FROM oauth_codes').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT code_hash FROM oauth_codes').all()).toEqual([{ code_hash: 'k-live' }])
   })
 
   it('supprime à la frontière exacte expires_at === now', () => {
