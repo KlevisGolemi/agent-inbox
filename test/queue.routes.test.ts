@@ -188,10 +188,11 @@ describe('GET /next', () => {
     const r = await request(app).get('/next?ack=manual').set(H)
     expect(r.body.item).toMatchObject({ attempts: 1, read_at: null })
     expect(r.body.item.lease_until).toBe(new Date(clock + 300_000).toISOString())
-    const ack = await request(app).post(`/ack/${r.body.item.id}`).set(H)
+    expect(r.body.item.lease_id).toBe(`${r.body.item.id}.1`)
+    const ack = await request(app).post(`/ack/${r.body.item.lease_id}`).set(H)
     expect(ack.status).toBe(200)
     expect(ack.body).toEqual({ ok: true })
-    expect((await request(app).post(`/ack/${r.body.item.id}`).set(H)).status).toBe(409)
+    expect((await request(app).post(`/ack/${r.body.item.lease_id}`).set(H)).status).toBe(409)
   })
 
   it('bail expiré : message re-servi avec attempts 2', async () => {
@@ -203,16 +204,40 @@ describe('GET /next', () => {
     expect(r.body.item.attempts).toBe(2)
   })
 
-  it('nack remet en attente ; ack/nack : 404 et 409', async () => {
+  it('nack remet en attente ; ack/nack : 400, 404 et 409', async () => {
     const id = (await post({ n: 1 })).body.id
-    expect((await request(app).post(`/ack/${id}`).set(H)).body).toEqual({
+    expect((await request(app).post(`/ack/${id}.1`).set(H)).body).toEqual({
       ok: false,
       error: 'not_leased',
     })
-    expect((await request(app).post('/nack/inconnu').set(H)).status).toBe(404)
+    expect((await request(app).post('/nack/inconnu.1').set(H)).status).toBe(404)
+    const bad = await request(app).post('/ack/malformed').set(H)
+    expect(bad.status).toBe(400)
+    expect(bad.body.error).toBe('invalid_lease')
+    expect((await request(app).post('/nack/abc.x').set(H)).status).toBe(400)
     await request(app).get('/next?ack=manual').set(H)
-    expect((await request(app).post(`/nack/${id}`).set(H)).status).toBe(200)
+    expect((await request(app).post(`/nack/${id}.1`).set(H)).status).toBe(200)
     expect((await request(app).get('/next').set(H)).body.item.id).toBe(id)
+  })
+
+  it('ack avec un lease_id dépassé par un re-claim : 409, bail courant intact', async () => {
+    await post({ n: 1 })
+    const first = (await request(app).get('/next?ack=manual').set(H)).body.item
+    clock += 301_000
+    const second = (await request(app).get('/next?ack=manual').set(H)).body.item
+    expect(second.attempts).toBe(2)
+    const stale = await request(app).post(`/ack/${first.lease_id}`).set(H)
+    expect(stale.status).toBe(409)
+    expect(stale.body.error).toBe('not_leased')
+    expect(repo.stats().leased).toBe(1)
+    expect((await request(app).post(`/ack/${second.lease_id}`).set(H)).status).toBe(200)
+  })
+
+  it("ack d'un bail expiré non ré-emprunté : 200", async () => {
+    await post({ n: 1 })
+    const item = (await request(app).get('/next?ack=manual').set(H)).body.item
+    clock += 301_000
+    expect((await request(app).post(`/ack/${item.lease_id}`).set(H)).status).toBe(200)
   })
 
   it('400 sur wait ou topic invalide', async () => {

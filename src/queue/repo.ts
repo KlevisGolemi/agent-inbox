@@ -13,6 +13,8 @@ export type QueueItem = {
   created_at: string
   read_at: string | null
   lease_until: string | null
+  /** `<uuid>.<attempts>` quand le message est emprunté, sinon null. */
+  lease_id: string | null
   attempts: number
   payload: unknown
 }
@@ -36,6 +38,8 @@ export type ClaimByCorrelation =
   | { error: 'already_read'; id: string; read_at: string | null }
   | { error: 'leased'; lease_until: string }
 
+export type AckResult = 'ok' | 'not_found' | 'not_leased' | 'invalid_lease'
+
 export type EnqueueResult =
   | { ok: true; id: string; pending: number }
   | { ok: false; error: 'duplicate_correlation_id'; existingId: string | null }
@@ -50,8 +54,8 @@ export interface QueueRepo {
   claimNext(opts?: { topic?: string; lease?: boolean }): QueueItem | null
   claimByCorrelation(cid: string, opts?: { lease?: boolean }): ClaimByCorrelation
   findByCorrelation(cid: string): QueueItem | null
-  ack(id: string): 'ok' | 'not_found' | 'not_leased'
-  nack(id: string): 'ok' | 'not_found' | 'not_leased'
+  ack(leaseId: string): AckResult
+  nack(leaseId: string): AckResult
   peek(limit: number, offset: number, opts?: { topic?: string }): QueueItem[]
   search(f: SearchFilter): QueueItem[]
   stats(opts?: { topic?: string }): FullStats
@@ -109,6 +113,7 @@ function toItem(r: Row): QueueItem {
     created_at: new Date(r.created_at).toISOString(),
     read_at: iso(r.read_at),
     lease_until: iso(r.lease_until),
+    lease_id: r.status === 'leased' ? `${r.id}.${r.attempts}` : null,
     attempts: r.attempts,
     payload: safeParse(r.payload),
   }
@@ -155,10 +160,10 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
   const cidLease = db.prepare(cidSql(LEASE_ASSIGN))
 
   const ackStmt = db.prepare(
-    `UPDATE messages SET status = 'read', read_at = ?, lease_until = NULL WHERE id = ? AND status = 'leased'`,
+    `UPDATE messages SET status = 'read', read_at = ?, lease_until = NULL WHERE id = ? AND attempts = ? AND status = 'leased'`,
   )
   const nackStmt = db.prepare(
-    `UPDATE messages SET status = 'pending', lease_until = NULL WHERE id = ? AND status = 'leased'`,
+    `UPDATE messages SET status = 'pending', lease_until = NULL WHERE id = ? AND attempts = ? AND status = 'leased'`,
   )
   const existsStmt = db.prepare('SELECT 1 FROM messages WHERE id = ?')
 
@@ -166,8 +171,14 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
     return lease ? { now: t, lease_until: t + leaseTimeoutMs() } : { now: t }
   }
 
-  function transition(kind: 'ack' | 'nack', id: string): 'ok' | 'not_found' | 'not_leased' {
-    const info = kind === 'ack' ? ackStmt.run(now(), id) : nackStmt.run(id)
+  // Un bail se désigne par `<uuid>.<attempts>` : un ré-emprunt incrémente attempts, ce qui
+  // invalide l'ancien lease_id. Un bail expiré mais non ré-emprunté reste acquittable.
+  function transition(kind: 'ack' | 'nack', leaseId: string): AckResult {
+    const m = /^(.+)\.(\d+)$/.exec(leaseId)
+    if (!m) return 'invalid_lease'
+    const id = m[1]!
+    const attempts = Number(m[2])
+    const info = kind === 'ack' ? ackStmt.run(now(), id, attempts) : nackStmt.run(id, attempts)
     if (info.changes > 0) return 'ok'
     return existsStmt.get(id) ? 'not_leased' : 'not_found'
   }

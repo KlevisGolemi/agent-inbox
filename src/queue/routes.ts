@@ -61,13 +61,11 @@ export function createQueueRouter(deps: { repo: QueueRepo; settings: Settings })
     const rawTopic = String(req.headers['x-topic'] ?? '').trim()
     const topic = rawTopic.length > 0 ? rawTopic : 'default'
     if (!TOPIC_REGEX.test(topic)) {
-      res
-        .status(400)
-        .json({
-          ok: false,
-          error: 'invalid_topic',
-          hint: 'Format attendu : ^[A-Za-z0-9_-]{1,128}$',
-        })
+      res.status(400).json({
+        ok: false,
+        error: 'invalid_topic',
+        hint: 'Format attendu : ^[A-Za-z0-9_-]{1,128}$',
+      })
       return
     }
 
@@ -183,10 +181,13 @@ export function createQueueRouter(deps: { repo: QueueRepo; settings: Settings })
   })
 
   for (const kind of ['ack', 'nack'] as const) {
-    router.post(`/${kind}/:id`, auth, (req, res) => {
-      const outcome = repo[kind](String(req.params.id))
+    router.post(`/${kind}/:leaseId`, auth, (req, res) => {
+      const outcome = repo[kind](String(req.params.leaseId))
       if (outcome === 'ok') res.json({ ok: true })
-      else res.status(outcome === 'not_found' ? 404 : 409).json({ ok: false, error: outcome })
+      else {
+        const status = outcome === 'invalid_lease' ? 400 : outcome === 'not_found' ? 404 : 409
+        res.status(status).json({ ok: false, error: outcome })
+      }
     })
   }
 

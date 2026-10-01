@@ -22,6 +22,7 @@ export function itemView(m: QueueItem) {
     created_at: m.created_at,
     read_at: m.read_at,
     lease_until: m.lease_until,
+    lease_id: m.lease_id,
     attempts: m.attempts,
     payload: m.payload,
   }
@@ -38,7 +39,13 @@ export function claimedView(m: QueueItem, ttlHours: number) {
     read_at: m.read_at,
   }
   if (m.status === 'leased') {
-    return { ...base, lease_until: m.lease_until, attempts: m.attempts, payload: m.payload }
+    return {
+      ...base,
+      lease_until: m.lease_until,
+      lease_id: m.lease_id,
+      attempts: m.attempts,
+      payload: m.payload,
+    }
   }
   const deleteAt = new Date(new Date(m.read_at!).getTime() + ttlHours * HOUR_MS).toISOString()
   return { ...base, delete_at: deleteAt, payload: m.payload }

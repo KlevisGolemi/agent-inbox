@@ -165,26 +165,47 @@ describe('bail, ack, nack', () => {
     expect(second.attempts).toBe(2)
   })
 
-  it('ack passe le message à read ; ack/nack inconnus ou non empruntés', () => {
+  it('ack passe le message à read ; ack/nack inconnus, invalides ou non empruntés', () => {
     const r = add(1)
     const id = r.ok ? r.id : ''
-    expect(repo.ack(id)).toBe('not_leased')
-    expect(repo.nack(id)).toBe('not_leased')
-    expect(repo.ack('inconnu')).toBe('not_found')
-    repo.claimNext({ lease: true })
-    expect(repo.ack(id)).toBe('ok')
+    expect(repo.ack(`${id}.1`)).toBe('not_leased')
+    expect(repo.nack(`${id}.1`)).toBe('not_leased')
+    expect(repo.ack('inconnu.1')).toBe('not_found')
+    expect(repo.ack('inconnu')).toBe('invalid_lease')
+    expect(repo.nack(`${id}.x`)).toBe('invalid_lease')
+    const m = repo.claimNext({ lease: true })!
+    expect(m.lease_id).toBe(`${id}.1`)
+    expect(repo.ack(m.lease_id!)).toBe('ok')
     expect(repo.stats()).toMatchObject({ read_count: 1, leased: 0, pending: 0 })
-    expect(repo.ack(id)).toBe('not_leased')
+    expect(repo.ack(m.lease_id!)).toBe('not_leased')
   })
 
   it('nack remet en attente en conservant attempts', () => {
-    const r = add(1)
-    const id = r.ok ? r.id : ''
-    repo.claimNext({ lease: true })
-    expect(repo.nack(id)).toBe('ok')
-    const m = repo.peek(1, 0)[0]!
-    expect(m).toMatchObject({ status: 'pending', lease_until: null, attempts: 1 })
+    add(1)
+    const m = repo.claimNext({ lease: true })!
+    expect(repo.nack(m.lease_id!)).toBe('ok')
+    const p = repo.peek(1, 0)[0]!
+    expect(p).toMatchObject({ status: 'pending', lease_until: null, lease_id: null, attempts: 1 })
     expect(repo.claimNext({ lease: true })!.attempts).toBe(2)
+  })
+
+  it('un bail dépassé par un nouvel emprunt ne peut plus être acquitté', () => {
+    add(1)
+    const first = repo.claimNext({ lease: true })!
+    clock += 60_001
+    const second = repo.claimNext({ lease: true })!
+    expect(second.lease_id).toBe(`${first.id}.2`)
+    expect(repo.ack(first.lease_id!)).toBe('not_leased')
+    expect(repo.nack(first.lease_id!)).toBe('not_leased')
+    expect(repo.stats().leased).toBe(1)
+    expect(repo.ack(second.lease_id!)).toBe('ok')
+  })
+
+  it('un bail expiré mais non ré-emprunté peut encore être acquitté', () => {
+    add(1)
+    const m = repo.claimNext({ lease: true })!
+    clock += 120_000
+    expect(repo.ack(m.lease_id!)).toBe('ok')
   })
 
   it('claimByCorrelation : leased non expiré → leased, expiré → re-servi', () => {
