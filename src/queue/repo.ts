@@ -91,6 +91,9 @@ type Row = {
 
 const COLS =
   'id, source, payload, status, topic, created_at, read_at, lease_until, attempts, correlation_id'
+/** `<uuid>.<attempts>` : UUID (insensible à la casse) et tentatives entières ≥ 1 sans zéro initial. */
+const LEASE_ID_REGEX =
+  /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([1-9]\d{0,8})$/i
 const HOUR_MS = 3_600_000
 const iso = (ms: number | null): string | null => (ms === null ? null : new Date(ms).toISOString())
 
@@ -174,9 +177,9 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
   // Un bail se désigne par `<uuid>.<attempts>` : un ré-emprunt incrémente attempts, ce qui
   // invalide l'ancien lease_id. Un bail expiré mais non ré-emprunté reste acquittable.
   function transition(kind: 'ack' | 'nack', leaseId: string): AckResult {
-    const m = /^(.+)\.(\d+)$/.exec(leaseId)
+    const m = LEASE_ID_REGEX.exec(leaseId)
     if (!m) return 'invalid_lease'
-    const id = m[1]!
+    const id = m[1]!.toLowerCase()
     const attempts = Number(m[2])
     const info = kind === 'ack' ? ackStmt.run(now(), id, attempts) : nackStmt.run(id, attempts)
     if (info.changes > 0) return 'ok'

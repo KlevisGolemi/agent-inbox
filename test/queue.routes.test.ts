@@ -210,11 +210,15 @@ describe('GET /next', () => {
       ok: false,
       error: 'not_leased',
     })
-    expect((await request(app).post('/nack/inconnu.1').set(H)).status).toBe(404)
+    expect(
+      (await request(app).post('/nack/00000000-0000-4000-8000-000000000000.1').set(H)).status,
+    ).toBe(404)
     const bad = await request(app).post('/ack/malformed').set(H)
     expect(bad.status).toBe(400)
     expect(bad.body.error).toBe('invalid_lease')
     expect((await request(app).post('/nack/abc.x').set(H)).status).toBe(400)
+    expect((await request(app).post('/ack/abc.1').set(H)).body.error).toBe('invalid_lease')
+    expect((await request(app).post(`/ack/${id}.0`).set(H)).status).toBe(400)
     await request(app).get('/next?ack=manual').set(H)
     expect((await request(app).post(`/nack/${id}.1`).set(H)).status).toBe(200)
     expect((await request(app).get('/next').set(H)).body.item.id).toBe(id)

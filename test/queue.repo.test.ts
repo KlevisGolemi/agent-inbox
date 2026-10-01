@@ -170,8 +170,12 @@ describe('bail, ack, nack', () => {
     const id = r.ok ? r.id : ''
     expect(repo.ack(`${id}.1`)).toBe('not_leased')
     expect(repo.nack(`${id}.1`)).toBe('not_leased')
-    expect(repo.ack('inconnu.1')).toBe('not_found')
+    expect(repo.ack('00000000-0000-4000-8000-000000000000.1')).toBe('not_found')
     expect(repo.ack('inconnu')).toBe('invalid_lease')
+    expect(repo.ack('abc.1')).toBe('invalid_lease')
+    expect(repo.ack(`${id}.0`)).toBe('invalid_lease')
+    expect(repo.ack(`${id}.01`)).toBe('invalid_lease')
+    expect(repo.nack(`${id.toUpperCase()}.1`)).toBe('not_leased')
     expect(repo.nack(`${id}.x`)).toBe('invalid_lease')
     const m = repo.claimNext({ lease: true })!
     expect(m.lease_id).toBe(`${id}.1`)
