@@ -39,6 +39,15 @@ L'API HTTP des producteurs (`/webhook`, `/next`, `/peek`…) reste compatible av
 - CI GitHub Actions, image Docker multi-architecture (`ghcr.io/klevisgolemi/cowork-queue`), releases.
 - Templates n8n importables (`examples/n8n/`) et documentation complète.
 
+### Sécurité
+
+- Limites de débit : 600 requêtes par minute et par IP sur `POST /mcp` et `GET /next` ; 100 attentes longues
+  simultanées au plus (`429 too_many_waiters`). `x-source` limité à 100 caractères.
+- Changer le mot de passe administrateur (interface ou `reset-password`) révoque les jetons OAuth du compte.
+- Page d'administration servie avec une CSP restrictive ; scripts CDN vérifiés par SRI.
+- `lease_id` n'est renvoyé qu'à l'emprunt (absent de `peek`, `search` et des consultations).
+- Arrêt propre : les attentes longues se terminent aussitôt (`stop_grace_period: 20s`).
+
 ### Supprimé
 
 - `server.js`, `mcp/`, `poll.sh`, `API_REFERENCE.md` et `COWORK_INSTRUCTIONS.md` (code et documentation de la v1).

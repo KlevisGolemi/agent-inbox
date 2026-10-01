@@ -10,8 +10,10 @@ Les assistants (Claude, ChatGPT) passent plutôt par [MCP](connecter-un-client.m
 - **Corps** : JSON, 1 Mo (1 048 576 octets) au maximum (`413 payload_too_large` au-delà, `400 invalid_json` si illisible).
 - **Réponses** : toujours du JSON avec `ok: true|false`. En cas d'erreur, `error` est un code stable.
 - **Identifiants** : `correlation_id` et `topic` suivent le motif `^[A-Za-z0-9_-]{1,128}$`.
-- **Limite de débit** : `POST /webhook` seulement, 100 requêtes par minute et par IP par défaut
-  (réglage `webhook_rate_limit_per_min`). Dépassement : `429 {"ok":false,"error":"Too many requests"}`.
+- **Limites de débit** : `POST /webhook`, 100 requêtes par minute et par IP par défaut (réglage
+  `webhook_rate_limit_per_min`) ; `GET /next`, 600 requêtes par minute et par IP. Dépassement :
+  `429 {"ok":false,"error":"Too many requests"}`. (`POST /mcp` est limité de même à 600 requêtes par minute.)
+- **Erreur interne** : `500 {"ok":false,"error":"internal_error","message":"Erreur interne."}`, sans détail.
 - **Cycle de vie d'un message** : `pending` → `read` (consommation directe), ou `pending` → `leased` → `read`
   avec un bail ([ci-dessous](#bail-et-acquittement)). Un message est supprimé après `ttl_hours` (48 h par
   défaut) : à partir de sa lecture s'il est `read`, de sa création sinon. Les messages sont servis dans l'ordre d'arrivée.
@@ -76,7 +78,9 @@ Sans `ack=manual`, le message est **marqué lu immédiatement** (comportement de
             "created_at": "…", "read_at": "…", "delete_at": "…", "payload": { "event": "order.created" } } }
 ```
 
-File vide : `{"ok":true,"empty":true,"item":null}` (avec `wait`, après l'attente). Codes d'erreur : `400 invalid_topic`, `400 invalid_wait`.
+File vide : `{"ok":true,"empty":true,"item":null}` (avec `wait`, après l'attente, ou aussitôt quand le
+serveur s'arrête). Codes d'erreur : `400 invalid_topic`, `400 invalid_wait`, et
+`429 too_many_waiters` quand 100 attentes (`wait` ou `queue_wait`) sont déjà en cours : réessayez un peu plus tard.
 
 ### Bail et acquittement
 
