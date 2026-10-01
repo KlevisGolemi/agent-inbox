@@ -1,18 +1,46 @@
 {
-  "name": "webhook-queue",
-  "version": "1.0.0",
-  "description": "Durable webhook queue (SQLite) with TTL cleanup, auth, and Traefik-fronted HTTPS.",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "name": "cowork-queue",
+  "version": "2.0.0-dev",
+  "description": "File d'attente auto-hébergée qui relie vos automatisations à Claude et ChatGPT via MCP.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
-    "better-sqlite3": "^12.9.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.3.2"
+    "express-rate-limit": "^8.7.0",
+    "zod": "^4.6.5"
   },
-  "private": true
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.19.0",
+    "@types/supertest": "^7.2.1",
+    "eslint": "^10.11.0",
+    "prettier": "^3.9.9",
+    "supertest": "^7.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3"
+  }
 }

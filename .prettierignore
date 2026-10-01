@@ -1,0 +1,8 @@
+dist/
+coverage/
+public/
+mcp/
+server.js
+package-lock.json
+.superpowers/
+docs/
