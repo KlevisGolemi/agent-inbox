@@ -4,6 +4,7 @@ import type Database from 'better-sqlite3'
 import request from 'supertest'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.js'
+import { makeAppDeps } from './helpers/app.js'
 import { openDb } from '../src/db/index.js'
 import { migrate } from '../src/db/migrations.js'
 import { createQueueRepo, type QueueRepo } from '../src/queue/repo.js'
@@ -29,7 +30,7 @@ beforeEach(() => {
     now: () => clock,
     leaseTimeoutMs: () => settings.get('lease_timeout_sec') * 1000,
   })
-  app = createApp({ db, settings, repo, version: '9.9.9' })
+  app = createApp(makeAppDeps({ db, settings, repo, version: '9.9.9' }))
 })
 
 const post = (body: unknown = { a: 1 }, headers: Record<string, string> = {}) =>
