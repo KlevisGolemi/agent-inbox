@@ -12,6 +12,7 @@ import { requireAdminSession, type AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
 import type { Backups } from './backups/index.js'
 import type { Env } from './env.js'
+import { log } from './log.js'
 import { createMcpRouter } from './mcp/server.js'
 import { createWaitPool, type WaitPool } from './queue/http.js'
 import { createQueueRouter } from './queue/routes.js'
@@ -53,6 +54,20 @@ const bodyErrors: ErrorRequestHandler = (err, _req, res, next) => {
   } else {
     next(err)
   }
+}
+
+/**
+ * Dernier recours : une ligne de log (chemin sans query string, première ligne du message,
+ * jamais la pile) et une réponse JSON générique, sans détail interne.
+ */
+const unhandledErrors: ErrorRequestHandler = (err, req, res, next) => {
+  const message = (err instanceof Error ? err.message : String(err)).split('\n')[0]
+  log('error', 'Erreur non gérée', { path: req.path, error: message })
+  if (res.headersSent) {
+    next(err)
+    return
+  }
+  res.status(500).json({ ok: false, error: 'internal_error', message: 'Erreur interne.' })
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -115,5 +130,6 @@ export function createApp(deps: AppDeps): Express {
   app.use('/admin/api', createAdminRouter(deps))
 
   app.use(bodyErrors)
+  app.use(unhandledErrors)
   return app
 }
