@@ -6,8 +6,8 @@ dist
 .claude
 .github
 coverage
-mcp
 docs
+examples
 test
 *.db*
 .env

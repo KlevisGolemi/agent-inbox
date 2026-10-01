@@ -7,8 +7,6 @@ export default tseslint.config(
       'dist/',
       'coverage/',
       'public/',
-      'mcp/',
-      'server.js',
       'node_modules/',
       '.superpowers/',
       '.claude/',

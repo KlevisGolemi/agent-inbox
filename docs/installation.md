@@ -177,7 +177,7 @@ comptes, clés et réglages sont créés par la v2.
    ```
 
 5. **Démarrez** : `docker compose up -d`, puis créez le compte administrateur (`/setup`, voir plus haut).
-6. **Reconnectez Claude** : l'ancienne URL `/t/<token>/mcp` n'existe plus. Supprimez l'ancien connecteur et
+6. **Reconnectez Claude** : l'ancienne URL `/t/<jeton>/mcp` n'existe plus. Supprimez l'ancien connecteur et
    ajoutez `https://<hôte>/mcp` ([guide](connecter-un-client.md)).
 
 Les workflows n8n qui appellent `/webhook`, `/next` ou `/peek` fonctionnent sans modification.

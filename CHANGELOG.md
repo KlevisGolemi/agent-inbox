@@ -11,11 +11,11 @@ L'API HTTP des producteurs (`/webhook`, `/next`, `/peek`…) reste compatible av
 
 ### Breaking
 
-- **URL MCP** : `/t/<token>/mcp` devient `/mcp`. L'accès se fait par OAuth 2.1 (email et mot de passe
+- **URL MCP** : `/t/<jeton>/mcp` devient `/mcp`. L'accès se fait par OAuth 2.1 (email et mot de passe
   du compte administrateur) ou par clé API `cwk_…` ; le jeton dans l'URL (`MCP_TOKEN`) n'existe plus.
-- **Services fusionnés** : `webhook-queue` et `cowork-mcp` forment un seul conteneur `app` et un seul
-  volume. `DOMAIN`, `MCP_DOMAIN` et `MCP_TOKEN` sont remplacées par `PUBLIC_URL` (et `SITE_HOST` pour Caddy).
-  L'interface d'administration passe de `/t/<token>/ui` à `/admin` (connexion requise).
+- **Services fusionnés** : les deux services de la v1 (file et serveur MCP) forment un seul conteneur
+  `app` et un seul volume. `DOMAIN`, `MCP_DOMAIN` et `MCP_TOKEN` sont remplacées par `PUBLIC_URL` (et `SITE_HOST` pour Caddy).
+  L'interface d'administration passe de `/t/<jeton>/ui` à `/admin` (connexion requise).
 - **`queue_by_id`** consulte le message sans le consommer par défaut (`peek: true`) ; `peek: false` l'emprunte.
 - **Consommation côté MCP** : `queue_next`, `queue_wait` et `queue_by_id(peek: false)` empruntent le message
   (statut `leased`) ; il faut l'acquitter avec `queue_ack`. Sans acquittement, il est servi à nouveau
