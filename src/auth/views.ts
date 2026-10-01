@@ -24,9 +24,10 @@ input:focus{outline:2px solid #2f6feb;outline-offset:1px}
 button{margin-top:1.4rem;width:100%;padding:.7rem;font:inherit;font-weight:600;color:#fff;background:#2f6feb;border:0;border-radius:8px;cursor:pointer}
 .error{padding:.7rem .9rem;border-radius:8px;background:#fdecea;color:#8a1c12}
 .hint{font-size:.875rem;color:#5b616b}
+button.secondary{margin-top:.6rem;color:#1c1e21;background:#e4e6eb}
 @media (prefers-color-scheme:dark){
 body{background:#16181c;color:#e6e8eb}main{background:#22252a;box-shadow:none}
-input{background:#16181c;color:inherit;border-color:#454a52}.hint{color:#a0a6b0}.error{background:#4a1d19;color:#ffd7d2}}
+input{background:#16181c;color:inherit;border-color:#454a52}button.secondary{color:#e6e8eb;background:#3a3d44}.hint{color:#a0a6b0}.error{background:#4a1d19;color:#ffd7d2}}
 `
 
 /** Page HTML autonome (CSS inline, aucune ressource externe). `bodyHtml` doit être déjà échappé. */
@@ -49,13 +50,23 @@ ${bodyHtml}
 </html>`
 }
 
-/** Envoie une page avec une CSP stricte (styles inline uniquement) et sans cache. */
-export function sendPage(res: Response, status: number, title: string, bodyHtml: string): void {
+/**
+ * Envoie une page avec une CSP stricte (styles inline uniquement) et sans cache.
+ * `formAction` : origines supplémentaires autorisées comme cible de formulaire — y compris
+ * après redirection 302, que les navigateurs soumettent aussi à `form-action`.
+ */
+export function sendPage(
+  res: Response,
+  status: number,
+  title: string,
+  bodyHtml: string,
+  opts: { formAction?: string[] } = {},
+): void {
+  const formAction = ["'self'", ...(opts.formAction ?? [])].join(' ')
   res
     .status(status)
     .set({
-      'Content-Security-Policy':
-        "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+      'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; form-action ${formAction}; frame-ancestors 'none'; base-uri 'none'`,
       'Cache-Control': 'no-store',
     })
     .type('html')
@@ -100,5 +111,23 @@ ${hidden('_csrf', o.csrf)}
 <input id="password" name="password" type="password" autocomplete="new-password" minlength="12" required aria-describedby="pw-hint">
 <p id="pw-hint" class="hint">Au moins 12 caractères.</p>
 <button type="submit">Créer le compte</button>
+</form>`
+}
+
+export function consentBody(o: {
+  csrf: string
+  req: string
+  clientName: string
+  redirectHost: string
+  scopes: string[]
+}): string {
+  return `<p><strong>${escapeHtml(o.clientName)}</strong> demande l’accès à votre file Cowork Queue.</p>
+<p class="hint">Autorisations : ${escapeHtml(o.scopes.join(', '))} (lire, envoyer et supprimer des messages).</p>
+<p class="hint">Vous serez renvoyé vers <strong>${escapeHtml(o.redirectHost)}</strong>. N’autorisez que si vous venez de lancer cette connexion.</p>
+<form method="post" action="/oauth/consent">
+${hidden('_csrf', o.csrf)}
+${hidden('req', o.req)}
+<button type="submit" name="decision" value="allow">Autoriser</button>
+<button type="submit" name="decision" value="deny" class="secondary">Refuser</button>
 </form>`
 }

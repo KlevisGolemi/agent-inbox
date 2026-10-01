@@ -1,6 +1,8 @@
 import type Database from 'better-sqlite3'
 import type { Response } from 'supertest'
 import { createApp, type AppDeps } from '../../src/app.js'
+import { createApiKeys } from '../../src/auth/apiKeys.js'
+import { SqliteOAuthProvider } from '../../src/auth/oauth/provider.js'
 import { createAdminSessions } from '../../src/auth/sessions.js'
 import { createUsers } from '../../src/auth/users.js'
 import { openDb } from '../../src/db/index.js'
@@ -36,15 +38,19 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
   const db = over.db ?? testDb()
   const settings = over.settings ?? createSettings(db)
   if (!over.settings) seedSettings(settings, db, {}, () => 'g'.repeat(64))
+  const env = over.env ?? testEnv()
+  const sessions = over.sessions ?? createAdminSessions(db)
   return {
     db,
     settings,
     repo: over.repo ?? createQueueRepo(db),
     version: over.version ?? '0.0.0-test',
-    env: over.env ?? testEnv(),
+    env,
     users: over.users ?? createUsers(db),
-    sessions: over.sessions ?? createAdminSessions(db),
+    sessions,
     setupCode: over.setupCode ?? { value: null },
+    apiKeys: over.apiKeys ?? createApiKeys(db),
+    oauthProvider: over.oauthProvider ?? new SqliteOAuthProvider({ db, sessions, env }),
   }
 }
 

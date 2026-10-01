@@ -1,6 +1,9 @@
 import cookieParser from 'cookie-parser'
 import express, { type ErrorRequestHandler, type Express } from 'express'
 import type Database from 'better-sqlite3'
+import type { ApiKeys } from './auth/apiKeys.js'
+import { createOAuthRouter } from './auth/oauth/router.js'
+import type { SqliteOAuthProvider } from './auth/oauth/provider.js'
 import { createAuthPagesRouter } from './auth/pages.js'
 import type { AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
@@ -19,6 +22,8 @@ export interface AppDeps {
   sessions: AdminSessions
   /** Code de setup courant (mutable) ; null une fois utilisé ou si un compte existe. */
   setupCode: { value: string | null }
+  apiKeys: ApiKeys
+  oauthProvider: SqliteOAuthProvider
 }
 
 /** Erreurs de lecture du corps : réponses JSON stables (413 trop gros, 400 JSON invalide). */
@@ -53,6 +58,9 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()), version: deps.version })
   })
   app.use(createQueueRouter({ repo: deps.repo, settings: deps.settings }))
+  app.use(
+    createOAuthRouter({ provider: deps.oauthProvider, sessions: deps.sessions, env: deps.env }),
+  )
   app.use(
     createAuthPagesRouter({
       users: deps.users,
