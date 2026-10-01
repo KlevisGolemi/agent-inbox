@@ -47,6 +47,29 @@ npm run format      # prettier --write .
 - **Migrations** : on en ajoute, on ne modifie pas les existantes.
 - **Un test par changement** (Vitest + Supertest) et documentation à jour (`docs/`, `CHANGELOG.md`).
 
+## Production (instance de l'auteur)
+
+- VPS : `ssh vps-hostinger`, projet dans `/opt/agent-inbox` (clone git de `main`), conteneur `agent-inbox-app-1`.
+- Topologie : Cloudflare (proxy) → Traefik en `network_mode: host` (pas de réseau partagé) → app. D'où
+  `COMPOSE_FILE=deploy/docker-compose.traefik.yml`, `TRUST_PROXY=2`, `TRAEFIK_RULE` sur `queue.` et `mcp.igk-digital.cloud`.
+- Données : volume historique `webhook-queue_queue_data` (`QUEUE_VOLUME_NAME`), propriétaire uid 1000 (utilisateur `node`).
+- Déployer : `git pull --ff-only` → `docker compose build app` (l'ancien conteneur tourne encore) → `docker compose up -d app`
+  → vérifier `/healthz` sur les deux domaines, le `401` + `WWW-Authenticate` de `POST /mcp`, et un aller-retour `/webhook`.
+- Sauvegardes manuelles avant toute migration : `/root/backups/` (tar du volume + copie du `.env`).
+
+## Pièges connus
+
+- **Ne jamais nommer le produit ni un connecteur « Cowork… »** : Claude Desktop rejette silencieusement les connecteurs
+  dont le nom commence par ce préfixe réservé (log `~/Library/Logs/Claude/main.log` : « collides with a trusted internal
+  server prefix »). C'est la raison du renommage en Agent Inbox (2.1.0).
+- Un connecteur MCP ajouté pendant une session n'apparaît que dans une **nouvelle** session.
+- Le **code de setup** change à chaque démarrage tant qu'aucun compte admin n'existe : prendre la dernière ligne des logs.
+- Tests : `test/setup/loopback-listen.ts` force Supertest sur `127.0.0.1` ; sans lui, sur macOS, un port éphémère déjà tenu
+  par un autre service (Ollama sur 49152) répond à la place du serveur de test → tests instables.
+- `.env` : `TRAEFIK_RULE` contient des backticks ; ne pas l'écrire via un heredoc non quoté (le shell les exécute).
+- `better-sqlite3` est compilé sans URI SQLite : pas de `file:…?mode=ro` ; vérifier l'existence du fichier avant `ATTACH`.
+- Ne jamais stocker ni utiliser une clé API collée dans la conversation : la faire révoquer et passer par le connecteur MCP.
+
 ## Communication
 
 Réponses concises : l'essentiel, le plan, les décisions ; pas de pavés. L'utilisateur dicte souvent à l'oral : reformuler et poser des questions quand c'est ambigu. Éviter l'over-engineering.
