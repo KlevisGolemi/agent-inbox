@@ -250,3 +250,21 @@ Rollback : redéployer l'image v1 avec la sauvegarde du volume.
 | Prise de contrôle de `/setup` avant l'admin | code de setup à usage unique dans les logs |
 | Socket Docker de l'updater = accès root à l'hôte | désactivé par défaut, documenté |
 | Migration de la base de prod | sauvegarde + test de migration sur une copie de la base v1 |
+
+## 14. Addendum (validé le 2026-10-01) — fonctionnalités produit
+
+1. **Accusé de traitement (lease/ack)** : nouveau statut `leased` (+ `lease_until`, `attempts`). Un message « emprunté »
+   et non confirmé avant `lease_timeout_sec` (réglage, défaut 300) redevient disponible. MCP : `queue_next` et
+   `queue_by_id(peek:false)` empruntent et renvoient `lease_id` ; `queue_ack` confirme (→ `read`), `queue_nack` relâche.
+   HTTP : `/next` et `/by-id` gardent le comportement v1 (consommation immédiate) ; `?ack=manual` active le bail,
+   `POST /ack/:id` et `POST /nack/:id` le terminent.
+2. **Canaux (topics)** : colonne `topic` (défaut `default`, même regex que correlation_id), header `x-topic` à l'envoi,
+   filtre `topic` sur next/peek/wait/search/stats. Réglage `topic_ttl_overrides` (objet `{topic: heures}`).
+3. **`queue_wait`** : attend un message (par `topic` ou `correlation_id`) jusqu'à `timeout_sec` (1–50, défaut 30),
+   réveil immédiat à l'arrivée (émetteur en mémoire, aucun état persistant). HTTP : `GET /next?wait=30`.
+4. **`queue_search`** : filtres `topic`, `source`, `status`, `since`, `until`, `text` (recherche dans le payload),
+   100 résultats max, lecture seule.
+5. **Sauvegardes** : `db.backup()` vers `/data/backups`, réglages `backup_interval_hours` (24, 0 = off) et
+   `backup_retention` (7). Admin : lister, télécharger, sauvegarder maintenant, restaurer (copie des tables depuis la
+   sauvegarde dans une transaction, sauvegarde préalable automatique, sans redémarrage).
+6. **Templates n8n** : `examples/n8n/` — un workflow importable par recette de `docs/cas-d-usage.md`.
