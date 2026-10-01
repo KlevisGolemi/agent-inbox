@@ -150,6 +150,17 @@ describe('resetPassword (cli)', () => {
     expect(await users.verify('a@example.com', 'nouveau mot de passe sûr')).not.toBeNull()
   })
 
+  it('révoque tous les jetons OAuth de l’utilisateur', async () => {
+    const db = testDb()
+    const u = await createUsers(db).create('a@example.com', PW)
+    db.prepare("INSERT INTO oauth_clients VALUES ('c', '{}', 0)").run()
+    db.prepare(
+      "INSERT INTO oauth_tokens VALUES ('t', 'refresh', 'c', ?, 'queue', NULL, ?, 0, 0)",
+    ).run(u.id, Date.now() + 3_600_000)
+    await resetPassword(db, 'a@example.com', 'nouveau mot de passe sûr')
+    expect(db.prepare('SELECT revoked FROM oauth_tokens').get()).toEqual({ revoked: 1 })
+  })
+
   it('refuse un mot de passe court ou un email inconnu', async () => {
     const db = testDb()
     await createUsers(db).create('a@example.com', PW)

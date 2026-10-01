@@ -4,6 +4,7 @@ import type Database from 'better-sqlite3'
 import { BackupError, BACKUP_NAME_REGEX, type Backups } from '../backups/index.js'
 import type { ApiKeys } from '../auth/apiKeys.js'
 import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
+import { revokeUserTokens } from '../auth/oauth/provider.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
 import { SESSION_COOKIE, type AdminSessions } from '../auth/sessions.js'
 import type { User, Users } from '../auth/users.js'
@@ -420,7 +421,8 @@ export function createAdminRouter(deps: AdminDeps): Router {
     await users.setPassword(user.email, next)
     const cookie = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE]
     sessions.destroyOthers(user.id, cookie)
-    log('info', 'Mot de passe administrateur modifié', { user_id: user.id })
+    const revoked = revokeUserTokens(db, user.id)
+    log('info', 'Mot de passe administrateur modifié', { user_id: user.id, oauth_revoked: revoked })
     res.json({ ok: true })
   })
 

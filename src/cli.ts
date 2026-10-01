@@ -2,11 +2,15 @@ import { realpathSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import type Database from 'better-sqlite3'
+import { revokeUserTokens } from './auth/oauth/provider.js'
 import { assertPasswordStrength, createUsers, isValidEmail } from './auth/users.js'
 import { openDb } from './db/index.js'
 import { migrate } from './db/migrations.js'
 
-/** Change le mot de passe d'un compte et invalide toutes les sessions admin. */
+/**
+ * Change le mot de passe d'un compte, invalide toutes les sessions admin et révoque les jetons
+ * OAuth de ce compte (les clés API restent valides).
+ */
 export async function resetPassword(
   db: Database.Database,
   email: string,
@@ -16,6 +20,8 @@ export async function resetPassword(
   const updated = await createUsers(db).setPassword(email, password)
   if (!updated) throw new Error(`Utilisateur introuvable : ${email}`)
   db.prepare('DELETE FROM admin_sessions').run()
+  const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email) as { id: number }
+  revokeUserTokens(db, user.id)
 }
 
 /** Crée le premier compte administrateur ; refuse s'il en existe déjà un. */
@@ -101,7 +107,7 @@ async function main(argv: string[]): Promise<number> {
   process.stdout.write(
     command === 'create-admin'
       ? 'Compte administrateur créé.\n'
-      : 'Mot de passe mis à jour ; toutes les sessions ont été fermées.\n',
+      : 'Mot de passe mis à jour ; sessions fermées et jetons OAuth révoqués (clés API conservées).\n',
   )
   return 0
 }

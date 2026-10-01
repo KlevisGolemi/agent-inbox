@@ -373,6 +373,25 @@ describe('compte et maintenance', () => {
     expect(sessions.resolve(other)).toBeNull()
   })
 
+  it('changer le mot de passe révoque les jetons OAuth de l’utilisateur, pas les clés API', async () => {
+    const { api, db, user, apiKeys } = await setup()
+    db.prepare("INSERT INTO oauth_clients VALUES ('c', '{}', 0)").run()
+    const tok = db.prepare("INSERT INTO oauth_tokens VALUES (?, ?, 'c', ?, 'queue', NULL, ?, 0, 0)")
+    tok.run('a', 'access', user.id, Date.now() + 3_600_000)
+    tok.run('r', 'refresh', user.id, Date.now() + 3_600_000)
+    const { key } = apiKeys.create('cle')
+    const ok = await api('post', '/password').send({
+      current: PASSWORD,
+      next: 'nouveau-mot-de-passe-2',
+    })
+    expect(ok.status).toBe(200)
+    expect(db.prepare('SELECT revoked FROM oauth_tokens ORDER BY token_hash').all()).toEqual([
+      { revoked: 1 },
+      { revoked: 1 },
+    ])
+    expect(apiKeys.verify(key)).not.toBeNull()
+  })
+
   it('VACUUM s’exécute', async () => {
     const { api } = await setup()
     const res = await api('post', '/maintenance/vacuum')

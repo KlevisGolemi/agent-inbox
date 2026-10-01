@@ -203,6 +203,6 @@ incluse) et `--no-backup`. Opération destructive : la base entière est supprim
 | **429** | Limite de débit atteinte (`webhook_rate_limit_per_min`, 100 par défaut ; 10 par minute sur `/login`, `/token`). Si elle frappe tout le monde à la fois, `TRUST_PROXY` ne correspond pas au nombre de proxys. |
 | Pas de certificat, navigateur en erreur | Le DNS doit pointer vers le serveur et les ports 80/443 être joignables avant la première visite. Voir `docker compose logs caddy` (ou les logs de Traefik). |
 | Code de setup introuvable | `docker compose logs app \| grep -i setup`. Il n'existe que tant qu'aucun compte n'a été créé et change à chaque redémarrage. |
-| Mot de passe oublié | `docker compose exec app node dist/cli.js reset-password <email>` (saisie masquée ; ferme toutes les sessions). |
+| Mot de passe oublié | `docker compose exec app node dist/cli.js reset-password <email>` (saisie masquée ; ferme toutes les sessions et révoque les jetons OAuth du compte, pas les clés API). |
 | L'application ne démarre pas | `docker compose logs app` : une variable invalide produit `Configuration invalide : …` avec le nom de la variable. |
 | `/healthz` répond mais `install.sh` signale l'URL publique injoignable | DNS en cours de propagation, ports fermés ou certificat en cours d'émission : réessayez après une minute. |

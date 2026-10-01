@@ -87,6 +87,7 @@ Admin → Connexions liste les clés API (préfixe, dernière utilisation) et le
 (nombre de jetons actifs). Révoquer une clé ou supprimer un client coupe l'accès immédiatement pour les
 clés ; pour un client OAuth, ses codes et jetons sont supprimés avec lui. Le nettoyage périodique
 supprime aussi les clients OAuth enregistrés depuis plus de 30 jours qui n'ont plus aucun jeton actif
-(il suffit de reconnecter le client pour qu'il se réenregistre).
+(il faut alors supprimer puis réajouter le connecteur côté client). Changer le mot de passe administrateur
+révoque tous les jetons OAuth : les connecteurs doivent se reconnecter ; les clés API restent valides.
 
 Le connecteur ne s'affiche pas ou n'a aucun outil ? Voir le [dépannage](installation.md#dépannage).

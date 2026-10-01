@@ -69,6 +69,16 @@ interface TokenRow {
   revoked: number
 }
 
+/**
+ * Révoque tous les jetons OAuth (access et refresh) d'un utilisateur, par exemple après un
+ * changement de mot de passe. Les clés API ne sont pas concernées. Renvoie le nombre révoqué.
+ */
+export function revokeUserTokens(db: Database.Database, userId: number): number {
+  return db
+    .prepare('UPDATE oauth_tokens SET revoked = 1 WHERE user_id = ? AND revoked = 0')
+    .run(userId).changes
+}
+
 /** Scopes demandés (vides ignorés) ; défaut `queue` ; tout scope inconnu est refusé. */
 function resolveScopes(requested: string[] | undefined): string[] {
   const scopes = [...new Set((requested ?? []).filter((s) => s !== ''))]
