@@ -24,7 +24,8 @@ npm run format      # prettier --write .
 
 ## Carte de `src/`
 
-- `index.ts`, `bootstrap.ts` : démarrage et assemblage des dépendances (`buildRuntime`, aussi utilisé par les tests et `dev:ui`).
+- `index.ts`, `bootstrap.ts` : démarrage et assemblage des dépendances (`buildRuntime`, aussi utilisé par les tests et `dev:ui`) ;
+  `shutdown.ts` : arrêt propre (attentes longues résolues, sortie forcée après 15 s). `zod.ts` : messages zod en français.
 - `env.ts` : variables d'environnement (zod). `app.ts` : assemblage Express. `cli.ts` : `create-admin`, `reset-password`.
 - `queue/` : `repo.ts` (SQLite), `routes.ts` (API HTTP), `http.ts` (vues, attente `wait`, filtres), `validation.ts` (regex).
 - `mcp/` : `server.ts` (transport sans état), `tools.ts` (les 12 outils).

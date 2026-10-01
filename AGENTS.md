@@ -137,7 +137,7 @@ npm run build       # Tailwind (public/app.css) puis tsc → dist/
 
 | Chemin | Rôle |
 |---|---|
-| `src/index.ts`, `src/bootstrap.ts` | Démarrage, assemblage des dépendances (`buildRuntime`, partagé avec les tests et `dev:ui`) |
+| `src/index.ts`, `src/bootstrap.ts`, `src/shutdown.ts` | Démarrage, assemblage des dépendances (`buildRuntime`, partagé avec les tests et `dev:ui`), arrêt propre |
 | `src/env.ts` | Variables d'environnement validées (zod) |
 | `src/app.ts` | Assemblage Express (testable sans port) |
 | `src/queue/` | `repo.ts` (SQLite, requêtes préparées), `routes.ts` (API HTTP), `http.ts` (vues, `wait`, filtres), `validation.ts` (regex) |
