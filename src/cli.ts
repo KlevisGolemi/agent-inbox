@@ -18,6 +18,18 @@ export async function resetPassword(
   db.prepare('DELETE FROM admin_sessions').run()
 }
 
+/** Crée le premier compte administrateur ; refuse s'il en existe déjà un. */
+export async function createAdmin(
+  db: Database.Database,
+  email: string,
+  password: string,
+): Promise<void> {
+  const users = createUsers(db)
+  if (users.count() > 0) throw new Error('Un compte administrateur existe déjà.')
+  assertPasswordStrength(password)
+  await users.create(email, password)
+}
+
 /** Saisie masquée sur un terminal (aucun écho). */
 function promptHidden(prompt: string): Promise<string> {
   const stdin = process.stdin
@@ -68,11 +80,11 @@ async function readNewPassword(): Promise<string> {
   return first
 }
 
-const USAGE = 'Usage : node dist/cli.js reset-password <email>'
+const USAGE = 'Usage : node dist/cli.js <reset-password|create-admin> <email>'
 
 async function main(argv: string[]): Promise<number> {
   const [command, email] = argv
-  if (command !== 'reset-password' || !email) {
+  if ((command !== 'reset-password' && command !== 'create-admin') || !email) {
     process.stderr.write(`${USAGE}\n`)
     return 2
   }
@@ -80,11 +92,16 @@ async function main(argv: string[]): Promise<number> {
   const db = openDb(process.env.DB_PATH || '/data/queue.db')
   try {
     migrate(db, () => {})
-    await resetPassword(db, email, password)
+    if (command === 'create-admin') await createAdmin(db, email, password)
+    else await resetPassword(db, email, password)
   } finally {
     db.close()
   }
-  process.stdout.write('Mot de passe mis à jour ; toutes les sessions ont été fermées.\n')
+  process.stdout.write(
+    command === 'create-admin'
+      ? 'Compte administrateur créé.\n'
+      : 'Mot de passe mis à jour ; toutes les sessions ont été fermées.\n',
+  )
   return 0
 }
 

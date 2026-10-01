@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resetPassword } from '../src/cli.js'
+import { createAdmin, resetPassword } from '../src/cli.js'
 import { hashPassword, verifyPassword } from '../src/auth/password.js'
 import { createAdminSessions } from '../src/auth/sessions.js'
 import { createSetupCode, ensureAdmin } from '../src/auth/setup.js'
@@ -157,6 +157,25 @@ describe('resetPassword (cli)', () => {
     await expect(resetPassword(db, 'x@example.com', 'assez long mot de passe')).rejects.toThrow(
       /introuvable/,
     )
+  })
+})
+
+describe('createAdmin (cli)', () => {
+  const TRICKY = `it's "q" $x \\ fin`
+
+  it('crée le premier compte, mot de passe avec caractères spéciaux accepté', async () => {
+    const db = testDb()
+    await createAdmin(db, 'a@example.com', TRICKY)
+    expect(await createUsers(db).verify('a@example.com', TRICKY)).not.toBeNull()
+  })
+
+  it('refuse un mot de passe court, et un second compte quand un admin existe', async () => {
+    const db = testDb()
+    await expect(createAdmin(db, 'a@example.com', 'court')).rejects.toThrow(/12 caractères/)
+    expect(createUsers(db).count()).toBe(0)
+    await createAdmin(db, 'a@example.com', PW)
+    await expect(createAdmin(db, 'b@example.com', PW)).rejects.toThrow(/existe déjà/)
+    expect(createUsers(db).count()).toBe(1)
   })
 })
 

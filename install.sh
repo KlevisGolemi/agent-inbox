@@ -93,7 +93,16 @@ HOST="${HOST%%:*}"     # sans port
 HOST="$(printf '%s' "$HOST" | tr '[:upper:]' '[:lower:]')"
 [[ "$HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "Nom d'hôte invalide : « $HOST »."
 
-if [[ "$HOST" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
+is_ipv4() {
+  local ip="$1" octet
+  [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || return 1
+  local IFS=.
+  for octet in $ip; do
+    [ "$((10#$octet))" -le 255 ] || return 1
+  done
+}
+
+if is_ipv4 "$HOST"; then
   SSLIP_HOST="${HOST//./-}.sslip.io"
   info "Let's Encrypt ne délivre pas de certificat pour une IP : sslip.io fournit $SSLIP_HOST (résolu vers $HOST)."
   if confirm "Utiliser $SSLIP_HOST ?" y; then
@@ -162,7 +171,7 @@ if [ -n "$ADMIN_EMAIL$ADMIN_PASSWORD" ]; then
   [[ "$ADMIN_EMAIL" =~ ^[^[:space:]@\'\"]+@[^[:space:]@\'\"]+$ ]] || fail "E-mail administrateur invalide."
   [ "${#ADMIN_PASSWORD}" -ge 12 ] || fail "Le mot de passe administrateur doit contenir au moins 12 caractères."
   case "$ADMIN_PASSWORD" in
-    *\'* | *$'\n'* | *$'\r'*) fail "Le mot de passe ne peut contenir ni apostrophe ni saut de ligne (limite du fichier .env)." ;;
+    *$'\n'* | *$'\r'*) fail "Le mot de passe ne peut pas contenir de saut de ligne." ;;
   esac
 fi
 
@@ -181,10 +190,6 @@ umask 077
   echo "PUBLIC_URL=$PUBLIC_URL"
   echo "SITE_HOST=$HOST"
   echo "COMPOSE_PROJECT_NAME=cowork-queue"
-  if [ -n "$ADMIN_EMAIL" ]; then
-    echo "ADMIN_EMAIL=$ADMIN_EMAIL"
-    echo "ADMIN_PASSWORD='$ADMIN_PASSWORD'"
-  fi
   if [ "$MODE" = "traefik" ]; then
     echo "COMPOSE_FILE=deploy/docker-compose.traefik.yml"
     echo "TRAEFIK_NETWORK=$TRAEFIK_NETWORK"
@@ -231,12 +236,23 @@ else
   warn "$PUBLIC_URL n'est pas encore joignable (DNS, ports 80/443 ou émission du certificat en cours). Réessayez dans une minute."
 fi
 
-# ─── 8. Résumé ────────────────────────────────────────────────
+# ─── 8. Compte administrateur ─────────────────────────────────
+# Le mot de passe ne touche jamais .env : il passe par stdin vers la commande create-admin.
+ADMIN_CREATED=false
+if [ -n "$ADMIN_EMAIL" ]; then
+  if printf '%s\n' "$ADMIN_PASSWORD" | docker compose exec -T app node dist/cli.js create-admin "$ADMIN_EMAIL"; then
+    ADMIN_CREATED=true
+  else
+    warn "Création du compte impossible : utilisez le code de setup ci-dessous."
+  fi
+fi
+
+# ─── 9. Résumé ────────────────────────────────────────────────
 echo
 ok "Cowork Queue est installé."
 echo "  Interface d'administration : $PUBLIC_URL/admin"
 echo "  Adresse MCP (Claude, ChatGPT) : $PUBLIC_URL/mcp"
-if [ -z "$ADMIN_EMAIL" ]; then
+if ! $ADMIN_CREATED; then
   echo
   echo "  Aucun compte administrateur : ouvrez $PUBLIC_URL/setup et saisissez le code de setup :"
   echo "    docker compose logs app | grep -i setup"
