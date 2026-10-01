@@ -40,7 +40,7 @@ Les assistants (Claude, ChatGPT) passent plutôt par [MCP](connecter-un-client.m
 | `x-webhook-secret` | oui | Secret partagé |
 | `x-topic` | non | Canal du message (défaut `default`) |
 | `x-correlation-id` | non | Identifiant **unique dans toute la file**, pour retrouver ce message |
-| `x-source` | non | Origine (défaut `n8n`) |
+| `x-source` | non | Origine (défaut `n8n`, 100 caractères au maximum) |
 
 Le corps JSON est le payload.
 
@@ -54,6 +54,7 @@ curl -X POST "$QUEUE_URL/webhook" \
 | Code | `error` | Cause |
 |---|---|---|
 | 400 | `invalid_correlation_id`, `invalid_topic` | Valeur hors motif |
+| 400 | `invalid_source` | `x-source` de plus de 100 caractères |
 | 409 | `duplicate_correlation_id` | Déjà utilisé (même pour un message déjà lu) ; la réponse contient `existing_id` |
 
 ### `GET /next`

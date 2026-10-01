@@ -112,6 +112,14 @@ describe('POST /webhook', () => {
     expect(r.body.error).toBe('invalid_topic')
   })
 
+  it('x-source : 100 caractères acceptés, au-delà 400 invalid_source sans rien enregistrer', async () => {
+    expect((await post({}, { 'x-source': 'a'.repeat(100) })).status).toBe(200)
+    const r = await post({}, { 'x-source': 'a'.repeat(101) })
+    expect(r.status).toBe(400)
+    expect(r.body).toMatchObject({ ok: false, error: 'invalid_source' })
+    expect(repo.stats().total).toBe(1)
+  })
+
   it('409 sur doublon avec existing_id', async () => {
     const first = await post({}, { 'x-correlation-id': 'dup' })
     const r = await post({}, { 'x-correlation-id': 'dup' })

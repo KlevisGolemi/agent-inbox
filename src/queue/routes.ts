@@ -17,6 +17,9 @@ import {
 import type { QueueRepo } from './repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from './validation.js'
 
+/** Longueur maximale de `x-source` (comme le paramètre `source` des outils MCP). */
+export const MAX_SOURCE_LENGTH = 100
+
 /** Limite de débit de `GET /next` (requêtes par minute et par IP). */
 export const NEXT_RATE_LIMIT_PER_MIN = 600
 
@@ -64,7 +67,15 @@ export function createQueueRouter(deps: {
   })
 
   router.post('/webhook', webhookLimiter, auth, (req, res) => {
-    const source = req.headers['x-source'] || 'n8n'
+    const source = String(req.headers['x-source'] || 'n8n')
+    if (source.length > MAX_SOURCE_LENGTH) {
+      res.status(400).json({
+        ok: false,
+        error: 'invalid_source',
+        hint: `${MAX_SOURCE_LENGTH} caractères au maximum`,
+      })
+      return
+    }
     const rawCid = String(req.headers['x-correlation-id'] ?? '').trim()
     const correlationId = rawCid.length > 0 ? rawCid : null
     if (correlationId !== null && !CORRELATION_ID_REGEX.test(correlationId)) {
@@ -88,7 +99,7 @@ export function createQueueRouter(deps: {
 
     const result = repo.enqueue({
       payload: req.body ?? {},
-      source: String(source),
+      source,
       correlationId,
       topic,
     })
