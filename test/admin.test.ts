@@ -95,6 +95,32 @@ describe('accès et CSRF', () => {
     expect(ok.text).not.toContain('cdn.tailwindcss.com')
   })
 
+  it('GET /admin : CSP restrictive et scripts CDN avec SRI', async () => {
+    const { app, base } = await setup()
+    const res = await request(app).get('/admin').set('Cookie', base).set('Accept', 'text/html')
+    const csp = String(res.headers['content-security-policy'])
+    const directive = (name: string) =>
+      csp
+        .split(';')
+        .map((d) => d.trim())
+        .find((d) => d.startsWith(`${name} `))
+    expect(directive('script-src')).toBe(
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+    )
+    expect(directive('default-src')).toBe("default-src 'self'")
+    expect(directive('connect-src')).toBe("connect-src 'self'")
+    expect(csp).toContain("frame-ancestors 'none'")
+    expect(csp).toContain("object-src 'none'")
+    const scripts = [...res.text.matchAll(/<script\b[^>]*\bsrc="https:[^"]*"[^>]*>/g)].map(
+      (m) => m[0],
+    )
+    expect(scripts).toHaveLength(3)
+    for (const tag of scripts) {
+      expect(tag).toMatch(/\bintegrity="sha384-[A-Za-z0-9+/]{64}"/)
+      expect(tag).toContain('crossorigin="anonymous"')
+    }
+  })
+
   it('sert les ressources statiques sous /admin/assets', async () => {
     const { app } = makeTestApp()
     const res = await request(app).get('/admin/assets/src.css')

@@ -45,6 +45,23 @@ export interface AppDeps {
 /** Dossier de l'interface (même chemin relatif depuis src/admin et dist/admin). */
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url))
 
+/**
+ * CSP de la page d'administration : scripts locaux et jsDelivr (versions épinglées + SRI) ;
+ * Alpine.js exige 'unsafe-eval' (expressions des attributs x-*) et le script de la page est inline.
+ */
+export const ADMIN_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  'font-src https://fonts.gstatic.com',
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ')
+
 /** Erreurs de lecture du corps : réponses JSON stables (413 trop gros, 400 JSON invalide). */
 const bodyErrors: ErrorRequestHandler = (err, _req, res, next) => {
   const type = (err as { type?: string }).type
@@ -125,7 +142,7 @@ export function createApp(deps: AppDeps): Express {
   })
   app.use('/admin/assets', express.static(PUBLIC_DIR, { index: false, redirect: false }))
   app.get('/admin', requireAdminSession(deps.sessions), (_req, res) => {
-    res.set('Cache-Control', 'no-store')
+    res.set({ 'Cache-Control': 'no-store', 'Content-Security-Policy': ADMIN_CSP })
     res.sendFile('index.html', { root: PUBLIC_DIR })
   })
   app.use('/admin/api', createAdminRouter(deps))
