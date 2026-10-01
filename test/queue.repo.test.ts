@@ -165,6 +165,22 @@ describe('bail, ack, nack', () => {
     expect(second.attempts).toBe(2)
   })
 
+  it('bail expiré dès que now >= lease_until (claimNext et claimByCorrelation)', () => {
+    add(1)
+    add(2, { correlationId: 'cid' })
+    const a = repo.claimNext({ lease: true })!
+    const b = repo.claimByCorrelation('cid', { lease: true })
+    expect('item' in b).toBe(true)
+    clock += 59_999
+    expect(repo.claimNext({ lease: true })).toBeNull()
+    expect(repo.claimByCorrelation('cid', { lease: true })).toMatchObject({ error: 'leased' })
+    clock += 1
+    expect(repo.claimNext({ lease: true })?.id).toBe(a.id)
+    expect(repo.claimByCorrelation('cid', { lease: true })).toMatchObject({
+      item: { attempts: 2 },
+    })
+  })
+
   it('ack passe le message à read ; ack/nack inconnus, invalides ou non empruntés', () => {
     const r = add(1)
     const id = r.ok ? r.id : ''

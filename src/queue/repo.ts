@@ -146,7 +146,7 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
      WHERE id = (
        SELECT id FROM messages
         WHERE (:topic IS NULL OR topic = :topic)
-          AND (status = 'pending' OR (status = 'leased' AND lease_until < :now))
+          AND (status = 'pending' OR (status = 'leased' AND lease_until <= :now))
         ORDER BY created_at ASC, rowid ASC
         LIMIT 1
      )
@@ -157,7 +157,7 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
   const cidSql = (assign: string) => `
     UPDATE messages SET ${assign}
      WHERE correlation_id = :cid
-       AND (status = 'pending' OR (status = 'leased' AND lease_until < :now))
+       AND (status = 'pending' OR (status = 'leased' AND lease_until <= :now))
     RETURNING ${COLS}`
   const cidRead = db.prepare(cidSql(READ_ASSIGN))
   const cidLease = db.prepare(cidSql(LEASE_ASSIGN))
