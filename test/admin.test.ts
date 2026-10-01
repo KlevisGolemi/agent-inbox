@@ -67,6 +67,14 @@ describe('accès et CSRF', () => {
     expect(res.status).toBe(403)
   })
 
+  it('une seule vérification de session par requête d’API', async () => {
+    const ctx = await setup()
+    const resolve = vi.spyOn(ctx.sessions, 'resolve')
+    const res = await ctx.api('get', '/overview')
+    expect(res.status).toBe(200)
+    expect(resolve).toHaveBeenCalledTimes(1)
+  })
+
   it('GET / redirige vers /admin', async () => {
     const { app } = makeTestApp()
     const res = await request(app).get('/')

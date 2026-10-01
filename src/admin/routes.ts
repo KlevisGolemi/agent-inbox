@@ -5,7 +5,7 @@ import { BackupError, BACKUP_NAME_REGEX, type Backups } from '../backups/index.j
 import type { ApiKeys } from '../auth/apiKeys.js'
 import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
-import { requireAdminSession, SESSION_COOKIE, type AdminSessions } from '../auth/sessions.js'
+import { SESSION_COOKIE, type AdminSessions } from '../auth/sessions.js'
 import type { User, Users } from '../auth/users.js'
 import type { Env } from '../env.js'
 import { log } from '../log.js'
@@ -63,7 +63,7 @@ export function createAdminRouter(deps: AdminDeps): Router {
   const router = Router()
   const { backups } = deps
 
-  router.use(requireAdminSession(sessions, { json: true }))
+  // Session vérifiée en amont par app.ts (avant la lecture du corps) : res.locals.user est posé.
   // Réponses sensibles (secret, clés, jeton CSRF) : jamais mises en cache.
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store')
