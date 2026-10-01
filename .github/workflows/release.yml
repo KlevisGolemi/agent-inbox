@@ -15,6 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Vérifier que le tag correspond à package.json
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "${TAG#v}" != "$pkg" ]; then
+            echo "::error::Tag ${TAG} différent de la version de package.json (${pkg})"
+            exit 1
+          fi
       - uses: actions/setup-node@v5
         with:
           node-version: 24

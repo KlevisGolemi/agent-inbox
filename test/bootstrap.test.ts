@@ -34,7 +34,7 @@ describe('buildRuntime', () => {
     expect(rt.db.pragma('user_version', { simple: true })).toBe(LATEST_VERSION)
     const res = await request(rt.app).get('/healthz')
     expect(res.status).toBe(200)
-    expect(res.body.version).toBe('2.0.0-dev')
+    expect(res.body.version).toBe('2.0.0')
     expect(existsSync(join(dir, 'backups'))).toBe(true)
     rt.db.close()
   })

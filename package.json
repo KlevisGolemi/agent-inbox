@@ -1,6 +1,6 @@
 {
   "name": "cowork-queue",
-  "version": "2.0.0-dev",
+  "version": "2.0.0",
   "description": "File d'attente auto-hébergée qui relie vos automatisations à Claude et ChatGPT via MCP.",
   "license": "MIT",
   "private": true,
