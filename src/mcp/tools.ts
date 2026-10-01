@@ -103,7 +103,7 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
         'SANS les consommer. Renvoie { stats, limit, offset, items }. Lecture seule : ' +
         'à privilégier pour inspecter la file.',
       inputSchema: {
-        limit: z.number().int().min(1).max(500).default(50).describe('Nombre de messages (1–500).'),
+        limit: z.number().int().min(1).max(100).default(50).describe('Nombre de messages (1–100).'),
         offset: z.number().int().min(0).default(0).describe('Décalage pour la pagination.'),
         topic: topicSchema,
       },

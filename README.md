@@ -73,7 +73,7 @@ est **emprunté** (statut `leased`) : acquittez-le avec `queue_ack`, sinon il es
 | -------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `queue_status` | Vérifie que le serveur répond (`uptime_s`, `version`)                                          | —                                                                          |
 | `queue_stats`  | Compte les messages (`total`, `pending`, `leased`, `read_count`) et leur répartition par topic | `topic`                                                                    |
-| `queue_peek`   | Liste les messages, du plus récent au plus ancien, sans les consommer                          | `limit` (1–500, 50), `offset`, `topic`                                     |
+| `queue_peek`   | Liste les messages, du plus récent au plus ancien, sans les consommer                          | `limit` (1–100, 50), `offset`, `topic`                                     |
 | `queue_search` | Cherche par topic, source, statut, période ou texte du payload, sans consommer                 | `topic`, `source`, `status`, `since`, `until`, `text`, `limit` (1–100, 50) |
 | `queue_by_id`  | Lit le message d'un `correlation_id` ; `peek: false` l'emprunte                                | `correlation_id`, `peek` (défaut `true`)                                   |
 | `queue_next`   | Emprunte le plus ancien message en attente                                                     | `topic`                                                                    |

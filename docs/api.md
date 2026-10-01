@@ -125,7 +125,7 @@ Liste du plus récent au plus ancien, sans consommer.
 
 | Paramètre | Défaut | Bornes |
 |---|---|---|
-| `limit` | 50 | 1 à 500 (valeur corrigée, pas d'erreur) |
+| `limit` | 50 | 1 à 500 (valeur corrigée, pas d'erreur ; l'outil MCP `queue_peek` est limité à 100) |
 | `offset` | 0 | ≥ 0 |
 | `topic` | tous | motif d'identifiant |
 

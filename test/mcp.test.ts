@@ -261,6 +261,12 @@ describe('MCP stateless', () => {
     }
   })
 
+  it('queue_peek : limit plafonné à 100', async () => {
+    const ctx = setup()
+    expect(data(await call(ctx, 'queue_peek', { limit: 100 })).limit).toBe(100)
+    expect((await call(ctx, 'queue_peek', { limit: 101 })).result.isError).toBe(true)
+  })
+
   it('erreurs de validation des arguments en français', async () => {
     const ctx = setup()
     const body = await call(ctx, 'queue_search', { limit: 1000 })
