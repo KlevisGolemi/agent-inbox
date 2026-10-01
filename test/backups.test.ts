@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -107,6 +107,32 @@ describe('sauvegardes', () => {
     await expect(backups.restore(b.name)).rejects.toMatchObject({ code: 'incompatible_backup' })
     expect(ids()).toEqual(['a', 'b'])
     expect(backups.list()).toHaveLength(1)
+  })
+
+  it('rétention 2 : restaurer la plus ancienne réussit et conserve le fichier source', async () => {
+    settings.set('backup_retention', 2)
+    addMsg('a')
+    const oldest = await backups.run()
+    clock += 1000
+    addMsg('b')
+    await backups.run()
+    clock += 1000
+    addMsg('c')
+    await backups.restore(oldest.name)
+    expect(ids()).toEqual(['a'])
+    const file = backups.path(oldest.name)
+    expect(file).not.toBeNull()
+    const copy = new Database(file!, { readonly: true })
+    expect(copy.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 1 })
+    copy.close()
+  })
+
+  it('refuse un fichier qui n’est pas une base SQLite, sans rien modifier', async () => {
+    addMsg('a')
+    const b = await backups.run()
+    writeFileSync(backups.path(b.name)!, 'pas une base')
+    await expect(backups.restore(b.name)).rejects.toMatchObject({ code: 'incompatible_backup' })
+    expect(ids()).toEqual(['a'])
   })
 
   it('refuse un nom invalide ou inconnu', async () => {

@@ -1,4 +1,14 @@
-import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import type { Settings } from '../settings/index.js'
@@ -18,8 +28,11 @@ export interface Backups {
   path(name: string): string | null
   /** Sauvegarde préalable, puis remplacement du contenu applicatif. */
   restore(name: string): Promise<void>
-  /** Supprime les plus anciennes au-delà de la rétention ; renvoie le nombre supprimé. */
-  prune(): number
+  /**
+   * Supprime les plus anciennes au-delà de la rétention ; renvoie le nombre supprimé.
+   * `keep` (optionnel) n'est jamais supprimé ni compté.
+   */
+  prune(keep?: string): number
 }
 
 export class BackupError extends Error {
@@ -46,6 +59,20 @@ const TABLES = [
   'settings',
   'messages',
 ] as const
+
+const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1')
+
+/** Fichier ordinaire commençant par l'en-tête SQLite (lecture seule, aucun effet de bord). */
+function isSqliteFile(file: string): boolean {
+  if (!existsSync(file) || !statSync(file).isFile()) return false
+  const fd = openSync(file, 'r')
+  try {
+    const head = Buffer.alloc(SQLITE_HEADER.length)
+    return readSync(fd, head, 0, head.length, 0) === head.length && head.equals(SQLITE_HEADER)
+  } finally {
+    closeSync(fd)
+  }
+}
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -93,8 +120,10 @@ export function createBackups(deps: {
       .filter((i): i is BackupInfo => i !== null)
   }
 
-  function prune(): number {
-    const stale = list().slice(settings.get('backup_retention'))
+  function prune(keep?: string): number {
+    const stale = list()
+      .filter((b) => b.name !== keep)
+      .slice(settings.get('backup_retention'))
     for (const b of stale) unlinkSync(join(dir, b.name))
     return stale.length
   }
@@ -103,19 +132,19 @@ export function createBackups(deps: {
    * Instantané synchrone et cohérent (VACUUM INTO) : aucune requête ne peut s'intercaler.
    * Le chemin ne vient que du nom généré (apostrophes échappées par précaution).
    */
-  function snapshot(): BackupInfo {
+  function snapshot(opts: { prune: boolean } = { prune: true }): BackupInfo {
     const base = `queue-${stamp(new Date(now()))}`
     let name = `${base}.db`
     for (let n = 2; existsSync(join(dir, name)); n++) name = `${base}-${n}.db`
     db.exec(`VACUUM INTO '${join(dir, name).replaceAll("'", "''")}'`)
-    prune()
+    if (opts.prune) prune()
     return info(name) as BackupInfo
   }
 
   // Les appels à run() sont sérialisés : sauvegarde manuelle et planifiée ne se chevauchent jamais.
   let chain: Promise<unknown> = Promise.resolve()
   function run(): Promise<BackupInfo> {
-    const next = chain.then(snapshot)
+    const next = chain.then(() => snapshot())
     chain = next.catch(() => undefined)
     return next
   }
@@ -139,6 +168,9 @@ export function createBackups(deps: {
     if (!BACKUP_NAME_REGEX.test(name)) throw new BackupError('invalid_name', 'Nom invalide.')
     const file = path(name)
     if (!file) throw new BackupError('not_found', 'Sauvegarde introuvable.')
+    if (!isSqliteFile(file)) {
+      throw new BackupError('incompatible_backup', 'Ce fichier n’est pas une base SQLite valide.')
+    }
     if (userVersionOf(file) !== (db.pragma('user_version', { simple: true }) as number)) {
       throw new BackupError(
         'incompatible_backup',
@@ -146,7 +178,10 @@ export function createBackups(deps: {
       )
     }
     // Sauvegarde de sécurité puis remplacement dans le même tour : aucune écriture ne peut s'intercaler.
-    snapshot()
+    // Pas de purge ici : elle pourrait supprimer la sauvegarde à restaurer (la plus ancienne).
+    snapshot({ prune: false })
+    // ATTACH créerait un fichier vide s'il manquait : on revérifie juste avant (même tour, synchrone).
+    if (!isSqliteFile(file)) throw new BackupError('not_found', 'Sauvegarde introuvable.')
     db.prepare('ATTACH DATABASE ? AS src').run(file)
     try {
       db.transaction(() => {
@@ -159,6 +194,8 @@ export function createBackups(deps: {
       db.exec('DETACH DATABASE src')
     }
     settings.reload()
+    // Purge seulement après succès, sans jamais toucher la sauvegarde restaurée.
+    prune(name)
   }
 
   return { run, list, path, restore, prune }
