@@ -246,6 +246,14 @@ describe('MCP stateless', () => {
     expect(Date.now() - t0).toBeLessThan(500)
   })
 
+  it('erreurs de validation des arguments en français', async () => {
+    const ctx = setup()
+    const body = await call(ctx, 'queue_search', { limit: 1000 })
+    const text = JSON.stringify(body)
+    expect(text).toContain('Trop grand')
+    expect(text).not.toContain('Too big')
+  })
+
   it('queue_wait : timeout → { empty: true } sans erreur', async () => {
     const ctx = setup()
     const body = await call(ctx, 'queue_wait', { timeout_sec: 1 })

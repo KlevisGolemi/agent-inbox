@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import './zod.js'
 import { DEFAULT_UPDATE_REPO } from './version/index.js'
 
 export interface Env {
