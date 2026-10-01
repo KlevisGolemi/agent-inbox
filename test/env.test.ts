@@ -26,4 +26,36 @@ describe('loadEnv', () => {
       cleanupIntervalMin: undefined,
     })
   })
+
+  it('refuse http avec NODE_ENV=test', () => {
+    expect(() => loadEnv({ PUBLIC_URL: 'http://x.com', NODE_ENV: 'test' })).toThrow(/https/)
+  })
+
+  describe('bornes des graines', () => {
+    const base = { PUBLIC_URL: 'https://q.example.com' }
+    it('WEBHOOK_SECRET : 32 à 256 caractères', () => {
+      expect(loadEnv({ ...base, WEBHOOK_SECRET: 'a'.repeat(32) }).seed.webhookSecret).toHaveLength(
+        32,
+      )
+      expect(loadEnv({ ...base, WEBHOOK_SECRET: 'a'.repeat(256) }).seed.webhookSecret).toHaveLength(
+        256,
+      )
+      expect(() => loadEnv({ ...base, WEBHOOK_SECRET: 'a'.repeat(31) })).toThrow(/WEBHOOK_SECRET/)
+      expect(() => loadEnv({ ...base, WEBHOOK_SECRET: 'a'.repeat(257) })).toThrow(/WEBHOOK_SECRET/)
+    })
+    it('TTL_HOURS : 1 à 8760', () => {
+      expect(loadEnv({ ...base, TTL_HOURS: '1' }).seed.ttlHours).toBe(1)
+      expect(loadEnv({ ...base, TTL_HOURS: '8760' }).seed.ttlHours).toBe(8760)
+      expect(() => loadEnv({ ...base, TTL_HOURS: '0' })).toThrow(/TTL_HOURS/)
+      expect(() => loadEnv({ ...base, TTL_HOURS: '8761' })).toThrow(/TTL_HOURS/)
+    })
+    it('CLEANUP_INTERVAL_MIN : 1 à 1440', () => {
+      expect(loadEnv({ ...base, CLEANUP_INTERVAL_MIN: '1' }).seed.cleanupIntervalMin).toBe(1)
+      expect(loadEnv({ ...base, CLEANUP_INTERVAL_MIN: '1440' }).seed.cleanupIntervalMin).toBe(1440)
+      expect(() => loadEnv({ ...base, CLEANUP_INTERVAL_MIN: '0' })).toThrow(/CLEANUP_INTERVAL_MIN/)
+      expect(() => loadEnv({ ...base, CLEANUP_INTERVAL_MIN: '1441' })).toThrow(
+        /CLEANUP_INTERVAL_MIN/,
+      )
+    })
+  })
 })

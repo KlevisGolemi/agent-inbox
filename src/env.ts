@@ -12,10 +12,16 @@ export interface Env {
 
 // Une variable vide équivaut à une variable absente.
 const optionalString = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional())
-const optionalInt = z.preprocess(
-  (v) => (v === '' ? undefined : v),
-  z.coerce.number().int().positive().optional(),
-)
+const boundedInt = (min: number, max: number) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce
+      .number({ error: `doit être un entier entre ${min} et ${max}` })
+      .int({ error: `doit être un entier entre ${min} et ${max}` })
+      .min(min, { error: `doit être compris entre ${min} et ${max}` })
+      .max(max, { error: `doit être compris entre ${min} et ${max}` })
+      .optional(),
+  )
 
 const schema = z.object({
   PUBLIC_URL: z
@@ -32,9 +38,16 @@ const schema = z.object({
   ),
   ADMIN_EMAIL: optionalString,
   ADMIN_PASSWORD: optionalString,
-  WEBHOOK_SECRET: optionalString,
-  TTL_HOURS: optionalInt,
-  CLEANUP_INTERVAL_MIN: optionalInt,
+  WEBHOOK_SECRET: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z
+      .string()
+      .min(32, { error: 'doit contenir entre 32 et 256 caractères' })
+      .max(256, { error: 'doit contenir entre 32 et 256 caractères' })
+      .optional(),
+  ),
+  TTL_HOURS: boundedInt(1, 8760),
+  CLEANUP_INTERVAL_MIN: boundedInt(1, 1440),
 })
 
 export function loadEnv(raw: Record<string, string | undefined>): Env {
@@ -56,8 +69,10 @@ export function loadEnv(raw: Record<string, string | undefined>): Env {
   if (publicUrl.protocol !== 'https:' && publicUrl.protocol !== 'http:') {
     throw new Error('Configuration invalide : PUBLIC_URL doit utiliser http ou https')
   }
-  if (publicUrl.protocol === 'http:' && e.NODE_ENV === 'production') {
-    throw new Error('Configuration invalide : PUBLIC_URL doit être en https en production')
+  if (publicUrl.protocol === 'http:' && e.NODE_ENV !== 'development') {
+    throw new Error(
+      'Configuration invalide : PUBLIC_URL doit être en https (http n’est accepté qu’avec NODE_ENV=development)',
+    )
   }
   publicUrl.pathname = '/'
   publicUrl.search = ''
