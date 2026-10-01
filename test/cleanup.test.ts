@@ -98,6 +98,18 @@ describe('nettoyage', () => {
     ])
   })
 
+  it('supprime à la frontière exacte expires_at === now', () => {
+    const { job } = start()
+    db.prepare("INSERT INTO oauth_clients VALUES ('c', '{}', 0)").run()
+    db.prepare("INSERT INTO users VALUES (1, 'a@b.c', 'h', 0)").run()
+    db.prepare("INSERT INTO oauth_codes VALUES ('k', 'c', 1, 'ch', 'u', 's', NULL, ?)").run(clock)
+    db.prepare("INSERT INTO oauth_tokens VALUES ('t', 'access', 'c', 1, 's', NULL, ?, 0, 0)").run(
+      clock,
+    )
+    db.prepare('INSERT INTO admin_sessions VALUES (?, 1, ?)').run('s', clock)
+    expect(job.runOnce()).toMatchObject({ oauthDeleted: 2, sessionsDeleted: 1 })
+  })
+
   it('logue en info seulement si quelque chose a été supprimé', () => {
     const { job, log } = start()
     job.runOnce()
@@ -148,6 +160,20 @@ describe('planification', () => {
     const n = timers.length
     settings.set('cleanup_interval_min', 3)
     expect(timers).toHaveLength(n)
+  })
+
+  it('runOnce direct ne lève pas : log error et rapport à zéro', () => {
+    const { job, log } = start()
+    vi.spyOn(repo, 'deleteExpired').mockImplementation(() => {
+      throw new Error('boom')
+    })
+    expect(job.runOnce()).toEqual({
+      readDeleted: 0,
+      pendingExpired: 0,
+      oauthDeleted: 0,
+      sessionsDeleted: 0,
+    })
+    expect(log).toHaveBeenCalledWith('error', expect.any(String), { error: 'boom' })
   })
 
   it('une erreur est loguée et le timer continue', () => {

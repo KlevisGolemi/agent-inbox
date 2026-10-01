@@ -31,11 +31,11 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
   const setTimer = deps.setTimer ?? setTimeout
   const clearTimer = deps.clearTimer ?? clearTimeout
 
-  const delCodes = db.prepare('DELETE FROM oauth_codes WHERE expires_at < ?')
-  const delTokens = db.prepare('DELETE FROM oauth_tokens WHERE expires_at < ? OR revoked = 1')
-  const delSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at < ?')
+  const delCodes = db.prepare('DELETE FROM oauth_codes WHERE expires_at <= ?')
+  const delTokens = db.prepare('DELETE FROM oauth_tokens WHERE expires_at <= ? OR revoked = 1')
+  const delSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?')
 
-  function runOnce(): CleanupReport {
+  function execute(): CleanupReport {
     const t = now()
     const { read, pending } = repo.deleteExpired(
       t - settings.get('ttl_hours') * HOUR_MS,
@@ -52,6 +52,18 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
     return report
   }
 
+  /** Exécution sûre : une erreur est loguée, jamais propagée. */
+  function runOnce(): CleanupReport {
+    try {
+      return execute()
+    } catch (err) {
+      log('error', 'Échec du nettoyage', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return { readDeleted: 0, pendingExpired: 0, oauthDeleted: 0, sessionsDeleted: 0 }
+    }
+  }
+
   let timer: ReturnType<typeof setTimeout> | undefined
   let stopped = false
 
@@ -63,13 +75,7 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
   }
 
   function tick(): void {
-    try {
-      runOnce()
-    } catch (err) {
-      log('error', 'Échec du nettoyage', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
+    runOnce()
     schedule()
   }
 
