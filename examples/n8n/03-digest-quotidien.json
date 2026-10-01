@@ -1,0 +1,197 @@
+{
+  "name": "Cowork Queue - 03 Digest quotidien",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cfce416b-17b3-47fb-b082-5d4350045249",
+      "name": "Chaque matin à 8 h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/n8n-io/n8n/releases?per_page=3",
+        "options": {}
+      },
+      "id": "36cdb46c-8f75-434e-a89e-5bc11a52351c",
+      "name": "Versions n8n",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/repos/modelcontextprotocol/typescript-sdk/releases?per_page=3",
+        "options": {}
+      },
+      "id": "7ac82774-3b3f-4717-8e31-1c5300b9341f",
+      "name": "Versions du SDK MCP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "GET",
+        "url": "={{ $env.COWORK_QUEUE_URL }}/stats",
+        "options": {}
+      },
+      "id": "65ef9025-7bc0-4f1d-911b-3463855ff8d5",
+      "name": "État de la file",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Cowork Queue"
+        }
+      },
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const releases = (name) =>\n  $(name).all().map((i) => `${i.json.name || i.json.tag_name} (${i.json.published_at.slice(0, 10)})`);\nconst stats = $(\"État de la file\").first().json.stats;\nconst date = new Date().toISOString().slice(0, 10);\nreturn [{\n  json: {\n    date,\n    n8n: releases(\"Versions n8n\"),\n    mcp_sdk: releases(\"Versions du SDK MCP\"),\n    queue: { pending: stats.pending, leased: stats.leased, total: stats.total },\n  },\n}];"
+      },
+      "id": "71fb2875-7e9b-4248-805a-90b2bb50169d",
+      "name": "Composer le digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "={{ $env.COWORK_QUEUE_URL }}/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-topic",
+              "value": "digest"
+            },
+            {
+              "name": "x-source",
+              "value": "n8n-digest"
+            },
+            {
+              "name": "x-correlation-id",
+              "value": "=digest-{{ $json.date }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "e1c6d6bf-1433-4253-8172-22433a942176",
+      "name": "Déposer le digest",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Cowork Queue"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Chaque matin à 8 h": {
+      "main": [
+        [
+          {
+            "node": "Versions n8n",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Versions n8n": {
+      "main": [
+        [
+          {
+            "node": "Versions du SDK MCP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Versions du SDK MCP": {
+      "main": [
+        [
+          {
+            "node": "État de la file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "État de la file": {
+      "main": [
+        [
+          {
+            "node": "Composer le digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Composer le digest": {
+      "main": [
+        [
+          {
+            "node": "Déposer le digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

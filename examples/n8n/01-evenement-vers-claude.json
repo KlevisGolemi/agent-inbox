@@ -1,0 +1,151 @@
+{
+  "name": "Cowork Queue - 01 Événement vers Claude",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e7a0f088-be38-46c2-a6d8-7f5f87979054",
+      "name": "Test manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1861a575-d57f-45d1-9a88-2da12c18ae20",
+              "name": "event",
+              "value": "order.created",
+              "type": "string"
+            },
+            {
+              "id": "5d5c1c1e-65aa-4537-90ef-4a9df7686e84",
+              "name": "order_id",
+              "value": 4217,
+              "type": "number"
+            },
+            {
+              "id": "e8da9e7e-82f8-4fac-b075-74c7d6832070",
+              "name": "amount",
+              "value": 129.9,
+              "type": "number"
+            },
+            {
+              "id": "a6510292-a6bb-449b-ac1a-5aa453ddf5e4",
+              "name": "customer",
+              "value": "Alice Martin",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0d11dd66-cfd1-4a4e-9204-c6886e32a3bb",
+      "name": "Exemple d’événement",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cowork-queue-event",
+        "options": {}
+      },
+      "id": "998968bd-7f27-47a0-acb8-db3f5488425b",
+      "name": "Réception d’un événement",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "webhookId": "b37957a1-02a7-4f25-8688-9ba31f6da682"
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "={{ $env.COWORK_QUEUE_URL }}/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-topic",
+              "value": "events"
+            },
+            {
+              "name": "x-source",
+              "value": "n8n"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body ?? $json) }}",
+        "options": {}
+      },
+      "id": "f21c8063-732a-4a43-900b-69b534e5fcb1",
+      "name": "Déposer dans Cowork Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        110
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Cowork Queue"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Test manuel": {
+      "main": [
+        [
+          {
+            "node": "Exemple d’événement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exemple d’événement": {
+      "main": [
+        [
+          {
+            "node": "Déposer dans Cowork Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Réception d’un événement": {
+      "main": [
+        [
+          {
+            "node": "Déposer dans Cowork Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

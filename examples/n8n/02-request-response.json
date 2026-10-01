@@ -1,0 +1,233 @@
+{
+  "name": "Cowork Queue - 02 Request-response (worker)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "1c0e0a1a-625f-4075-8b0f-d5a187aaadce",
+      "name": "Toutes les minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "GET",
+        "url": "={{ $env.COWORK_QUEUE_URL }}/next?topic=requests&ack=manual&wait=30",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "e086fc4a-55dc-47a5-8c27-bcfec06c7267",
+      "name": "Prendre une demande",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Cowork Queue"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e785c34d-26be-4a69-8eae-6ecef3e3f307",
+              "leftValue": "={{ $json.empty }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1f84c3ad-531b-4bd6-9ee3-be92722de830",
+      "name": "Une demande ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Remplacez ce bloc par votre traitement (appel d’API, base de données, calcul…).\nconst { id, correlation_id, lease_id, payload } = $input.first().json.item;\nreturn [{\n  json: {\n    lease_id,\n    // L’identifiant de la réponse doit être unique dans la file : on suffixe celui de la demande.\n    response_id: `${correlation_id ?? id}-response`,\n    body: {\n      request_correlation_id: correlation_id,\n      status: \"done\",\n      result: { received: payload, processed_at: new Date().toISOString() },\n    },\n  },\n}];"
+      },
+      "id": "86749dba-e8a9-433b-b699-761f6451bdc1",
+      "name": "Traiter la demande",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "={{ $env.COWORK_QUEUE_URL }}/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-topic",
+              "value": "responses"
+            },
+            {
+              "name": "x-source",
+              "value": "n8n-worker"
+            },
+            {
+              "name": "x-correlation-id",
+              "value": "={{ $json.response_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "6754d72a-03c3-403d-b17e-521d43dde6b6",
+      "name": "Envoyer la réponse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Cowork Queue"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "={{ $env.COWORK_QUEUE_URL }}/ack/{{ $('Traiter la demande').item.json.lease_id }}",
+        "options": {}
+      },
+      "id": "72d024cc-1692-4481-8428-9b98f86dd6b8",
+      "name": "Acquitter la demande",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Cowork Queue"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Toutes les minutes": {
+      "main": [
+        [
+          {
+            "node": "Prendre une demande",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prendre une demande": {
+      "main": [
+        [
+          {
+            "node": "Une demande ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Une demande ?": {
+      "main": [
+        [
+          {
+            "node": "Traiter la demande",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Traiter la demande": {
+      "main": [
+        [
+          {
+            "node": "Envoyer la réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer la réponse": {
+      "main": [
+        [
+          {
+            "node": "Acquitter la demande",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquitter la demande": {
+      "main": [
+        [
+          {
+            "node": "Prendre une demande",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
