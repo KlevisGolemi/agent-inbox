@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cowork Queue — Admin</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2322C55E'/%3E%3C/svg%3E">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,7 +19,7 @@
 </head>
 
 <body>
-<div x-data="app()" x-init="init()" x-cloak>
+<div x-data="app()" x-cloak>
 
   <!-- ═══ HEADER ════════════════════════════════════════════════════ -->
   <header class="glass sticky top-0 z-50 px-6 py-3.5">
@@ -1187,6 +1188,11 @@ const SETTING_HINTS = {
   update_check_enabled: 'valeur oui / non',
 }
 
+// Instances Chart.js hors de l'état Alpine : un proxy réactif autour d'un Chart
+// provoque une récursion infinie (« Maximum call stack size exceeded »).
+let sparkChart = null
+let arrivalChart = null
+
 function app() {
   return {
     // ── State ──────────────────────────────────────────────────────
@@ -1195,7 +1201,6 @@ function app() {
     autoRefresh: true,
     refreshSec: 30,
     _timer: null,
-    _chart: null,
     sparkData: [],
 
     // Aperçu serveur (overview) et jeton CSRF
@@ -1219,7 +1224,6 @@ function app() {
     explorerStatusFilter: 'all',
     explorerSearched: false,
     explorerPeriod: 5,
-    _arrivalChart: null,
     clearConfirm: false,
     explorerOffset: 0,
     explorerPageSize: 50,
@@ -1763,8 +1767,8 @@ function app() {
     initArrivalChart() {
       const canvas = document.getElementById('arrivalChart')
       if (!canvas || !window.Chart) return
-      if (this._arrivalChart) { this._arrivalChart.destroy(); this._arrivalChart = null }
-      this._arrivalChart = new Chart(canvas, {
+      if (arrivalChart) { arrivalChart.destroy(); arrivalChart = null }
+      arrivalChart = new Chart(canvas, {
         type: 'bar',
         data: {
           labels: Array(6).fill(''),
@@ -1791,7 +1795,7 @@ function app() {
     },
 
     updateArrivalChart() {
-      if (!this._arrivalChart) return
+      if (!arrivalChart) return
       const BUCKETS = 6
       const now = Date.now()
       const periodMs = this.explorerPeriod * 60 * 1000
@@ -1804,8 +1808,8 @@ function app() {
         const idx = Math.min(BUCKETS - 1, Math.floor(age / bucketSize))
         counts[BUCKETS - 1 - idx]++
       })
-      this._arrivalChart.data.datasets[0].data = counts
-      this._arrivalChart.update('none')
+      arrivalChart.data.datasets[0].data = counts
+      arrivalChart.update('none')
     },
 
     // ── Clear + delete ─────────────────────────────────────────────
@@ -1834,7 +1838,8 @@ function app() {
     initChart() {
       const canvas = document.getElementById('sparkChart')
       if (!canvas || !window.Chart) return
-      this._chart = new Chart(canvas, {
+      if (sparkChart) { sparkChart.destroy(); sparkChart = null }
+      sparkChart = new Chart(canvas, {
         type: 'line',
         data: {
           labels: Array(20).fill(''),
@@ -1884,9 +1889,9 @@ function app() {
       })
     },
     updateChart() {
-      if (!this._chart) return
-      this._chart.data.datasets[0].data = [...this.sparkData]
-      this._chart.update('none')
+      if (!sparkChart) return
+      sparkChart.data.datasets[0].data = [...this.sparkData]
+      sparkChart.update('none')
     },
   }
 }
