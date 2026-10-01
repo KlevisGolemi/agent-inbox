@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import type { Response } from 'supertest'
 import { createApp, type AppDeps } from '../../src/app.js'
+import { createBackups } from '../../src/backups/index.js'
 import { createApiKeys } from '../../src/auth/apiKeys.js'
 import { SqliteOAuthProvider } from '../../src/auth/oauth/provider.js'
 import { createAdminSessions } from '../../src/auth/sessions.js'
@@ -65,7 +66,9 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     setupCode: over.setupCode ?? { value: null },
     apiKeys: over.apiKeys ?? createApiKeys(db),
     oauthProvider: over.oauthProvider ?? new SqliteOAuthProvider({ db, sessions, env }),
-    backupsDir: over.backupsDir ?? mkdtempSync(join(tmpdir(), 'cq-backups-')),
+    backups:
+      over.backups ??
+      createBackups({ db, dir: mkdtempSync(join(tmpdir(), 'cq-backups-')), settings }),
   }
 }
 

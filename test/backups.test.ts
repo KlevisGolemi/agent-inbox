@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -21,9 +21,12 @@ let backups: Backups
 
 const addMsg = (id: string) =>
   db
-    .prepare("INSERT INTO messages (id, source, payload, status, created_at) VALUES (?, 't', '{}', 'pending', 1)")
+    .prepare(
+      "INSERT INTO messages (id, source, payload, status, created_at) VALUES (?, 't', '{}', 'pending', 1)",
+    )
     .run(id)
-const ids = () => (db.prepare('SELECT id FROM messages ORDER BY id').all() as { id: string }[]).map((r) => r.id)
+const ids = () =>
+  (db.prepare('SELECT id FROM messages ORDER BY id').all() as { id: string }[]).map((r) => r.id)
 
 beforeEach(() => {
   db = openDb(':memory:')
@@ -116,6 +119,34 @@ describe('sauvegardes', () => {
   })
 })
 
+describe('robustesse', () => {
+  it.skipIf(process.platform === 'win32')('resserre un dossier préexistant en 0700', () => {
+    const d = mkdtempSync(join(tmpdir(), 'cq-bk-perm-'))
+    chmodSync(d, 0o755)
+    createBackups({ db, dir: d, settings })
+    expect(statSync(d).mode & 0o777).toBe(0o700)
+  })
+
+  it('deux run() concurrents produisent deux fichiers distincts', async () => {
+    const [a, b] = await Promise.all([backups.run(), backups.run()])
+    expect(a.name).not.toBe(b.name)
+    expect(readdirSync(dir)).toHaveLength(2)
+  })
+
+  it('une écriture juste avant restore figure dans la sauvegarde de sécurité', async () => {
+    const b = await backups.run()
+    clock += 1000
+    addMsg('late')
+    await backups.restore(b.name)
+    const safety = backups.list()[0]!
+    const copy = new Database(backups.path(safety.name)!, { readonly: true })
+    expect(copy.prepare("SELECT COUNT(*) AS n FROM messages WHERE id='late'").get()).toEqual({
+      n: 1,
+    })
+    copy.close()
+  })
+})
+
 describe('planification', () => {
   let timers: { fn: () => void; ms: number; cleared: boolean }[]
   const setTimer = ((fn: () => void, ms: number) => {
@@ -142,7 +173,12 @@ describe('planification', () => {
 
   it('intervalle 0 : aucun minuteur ; réactivé à chaud par un changement de réglage', () => {
     settings.set('backup_interval_hours', 0)
-    startBackups({ backups: { run: vi.fn() } as unknown as Backups, settings, setTimer, clearTimer })
+    startBackups({
+      backups: { run: vi.fn() } as unknown as Backups,
+      settings,
+      setTimer,
+      clearTimer,
+    })
     expect(live()).toHaveLength(0)
     settings.set('backup_interval_hours', 6)
     expect(live()).toHaveLength(1)
@@ -153,7 +189,10 @@ describe('planification', () => {
 
   it('exécute, replanifie avec l’intervalle courant et survit à une erreur', async () => {
     const log = vi.fn()
-    const run = vi.fn().mockRejectedValueOnce(new Error('disque plein')).mockResolvedValue({ name: 'n', size: 1 })
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('disque plein'))
+      .mockResolvedValue({ name: 'n', size: 1 })
     startBackups({ backups: { run } as unknown as Backups, settings, log, setTimer, clearTimer })
     settings.set('backup_interval_hours', 12)
     live()[0]!.fn()
@@ -163,7 +202,12 @@ describe('planification', () => {
   })
 
   it('stop() annule le minuteur', () => {
-    const job = startBackups({ backups: { run: vi.fn() } as unknown as Backups, settings, setTimer, clearTimer })
+    const job = startBackups({
+      backups: { run: vi.fn() } as unknown as Backups,
+      settings,
+      setTimer,
+      clearTimer,
+    })
     job.stop()
     expect(live()).toHaveLength(0)
   })
@@ -198,7 +242,11 @@ describe('API d’administration', () => {
   it('restaure avec confirm:true, refuse sans confirmation', async () => {
     const { api, db: appDb } = await setup()
     const name = (await api('post', '/backups')).body.backup.name as string
-    appDb.prepare("INSERT INTO messages (id, source, payload, status, created_at) VALUES ('z','t','{}','pending',1)").run()
+    appDb
+      .prepare(
+        "INSERT INTO messages (id, source, payload, status, created_at) VALUES ('z','t','{}','pending',1)",
+      )
+      .run()
     expect((await api('post', `/backups/${name}/restore`).send({})).status).toBe(400)
     expect(appDb.prepare('SELECT COUNT(*) AS n FROM messages').get()).toEqual({ n: 1 })
     const ok = await api('post', `/backups/${name}/restore`).send({ confirm: true })

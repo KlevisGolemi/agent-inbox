@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import type Database from 'better-sqlite3'
-import { BackupError, BACKUP_NAME_REGEX, createBackups } from '../backups/index.js'
+import { BackupError, BACKUP_NAME_REGEX, type Backups } from '../backups/index.js'
 import type { ApiKeys } from '../auth/apiKeys.js'
 import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
@@ -27,7 +27,7 @@ export interface AdminDeps {
   users: Users
   sessions: AdminSessions
   apiKeys: ApiKeys
-  backupsDir: string
+  backups: Backups
 }
 
 const MASK = '••••'
@@ -61,7 +61,7 @@ function intParam(req: Request, name: string, fallback: number, min: number, max
 export function createAdminRouter(deps: AdminDeps): Router {
   const { db, settings, repo, env, users, sessions, apiKeys } = deps
   const router = Router()
-  const backups = createBackups({ db, dir: deps.backupsDir, settings })
+  const { backups } = deps
 
   router.use(requireAdminSession(sessions, { json: true }))
   // Réponses sensibles (secret, clés, jeton CSRF) : jamais mises en cache.

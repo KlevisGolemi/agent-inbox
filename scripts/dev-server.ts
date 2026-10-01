@@ -42,7 +42,7 @@ const users = createUsers(db)
 if (users.count() === 0) await users.create(ADMIN_EMAIL, ADMIN_PASSWORD)
 
 const sessions = createAdminSessions(db)
-const backupsDir = join(dirname(env.dbPath), 'backups')
+const backups = createBackups({ db, dir: join(dirname(env.dbPath), 'backups'), settings })
 const app = createApp({
   db,
   settings,
@@ -60,10 +60,10 @@ const app = createApp({
   setupCode: { value: null },
   apiKeys: createApiKeys(db),
   oauthProvider: new SqliteOAuthProvider({ db, sessions, env }),
-  backupsDir,
+  backups,
 })
 
-startBackups({ backups: createBackups({ db, dir: backupsDir, settings }), settings })
+startBackups({ backups, settings })
 
 app.listen(env.port, () => {
   log('info', 'Interface d’administration prête', {

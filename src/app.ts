@@ -10,6 +10,7 @@ import type { SqliteOAuthProvider } from './auth/oauth/provider.js'
 import { createAuthPagesRouter } from './auth/pages.js'
 import { requireAdminSession, type AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
+import type { Backups } from './backups/index.js'
 import type { Env } from './env.js'
 import { createMcpRouter } from './mcp/server.js'
 import { createQueueRouter } from './queue/routes.js'
@@ -32,8 +33,8 @@ export interface AppDeps {
   setupCode: { value: string | null }
   apiKeys: ApiKeys
   oauthProvider: SqliteOAuthProvider
-  /** Dossier des sauvegardes (créé au besoin). */
-  backupsDir: string
+  /** Instance unique, partagée avec la planification. */
+  backups: Backups
 }
 
 /** Dossier de l'interface (même chemin relatif depuis src/admin et dist/admin). */

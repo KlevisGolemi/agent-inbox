@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import type { Settings } from '../settings/index.js'
@@ -32,7 +32,8 @@ export class BackupError extends Error {
   }
 }
 
-export const BACKUP_NAME_REGEX = /^queue-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-(\d+))?\.db$/
+export const BACKUP_NAME_REGEX =
+  /^queue-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(?:-(\d+))?\.db$/
 
 /** Enfants avant parents : ordre de suppression ; l'insertion suit l'ordre inverse. */
 const TABLES = [
@@ -75,6 +76,8 @@ export function createBackups(deps: {
   const { db, dir, settings } = deps
   const now = deps.now ?? Date.now
   mkdirSync(dir, { recursive: true, mode: 0o700 })
+  // `mode` ne s'applique qu'à la création : on resserre aussi un dossier préexistant.
+  if (process.platform !== 'win32') chmodSync(dir, 0o700)
 
   function info(name: string): BackupInfo | null {
     const parsed = parseName(name)
@@ -96,13 +99,25 @@ export function createBackups(deps: {
     return stale.length
   }
 
-  async function run(): Promise<BackupInfo> {
+  /**
+   * Instantané synchrone et cohérent (VACUUM INTO) : aucune requête ne peut s'intercaler.
+   * Le chemin ne vient que du nom généré (apostrophes échappées par précaution).
+   */
+  function snapshot(): BackupInfo {
     const base = `queue-${stamp(new Date(now()))}`
     let name = `${base}.db`
     for (let n = 2; existsSync(join(dir, name)); n++) name = `${base}-${n}.db`
-    await db.backup(join(dir, name))
+    db.exec(`VACUUM INTO '${join(dir, name).replaceAll("'", "''")}'`)
     prune()
     return info(name) as BackupInfo
+  }
+
+  // Les appels à run() sont sérialisés : sauvegarde manuelle et planifiée ne se chevauchent jamais.
+  let chain: Promise<unknown> = Promise.resolve()
+  function run(): Promise<BackupInfo> {
+    const next = chain.then(snapshot)
+    chain = next.catch(() => undefined)
+    return next
   }
 
   function path(name: string): string | null {
@@ -130,7 +145,8 @@ export function createBackups(deps: {
         'Cette sauvegarde provient d’une autre version du schéma.',
       )
     }
-    await run() // sauvegarde de sécurité de l'état courant
+    // Sauvegarde de sécurité puis remplacement dans le même tour : aucune écriture ne peut s'intercaler.
+    snapshot()
     db.prepare('ATTACH DATABASE ? AS src').run(file)
     try {
       db.transaction(() => {
