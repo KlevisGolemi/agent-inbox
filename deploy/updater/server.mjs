@@ -6,6 +6,9 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 
+/** Durée maximale d'une mise à jour : au-delà, le processus docker est tué. */
+export const UPDATE_TIMEOUT_MS = 10 * 60_000
+
 const defaultLog = (level, msg, fields = {}) => {
   process.stdout.write(
     JSON.stringify({ ts: new Date().toISOString(), level, msg, ...fields }) + '\n',
@@ -21,10 +24,16 @@ function secretMatches(given, expected) {
   return timingSafeEqual(a, b)
 }
 
-function sh(args, env) {
+function sh(args, env, signal) {
   return new Promise((resolve, reject) => {
-    // Sans shell : les arguments ne sont jamais interprétés.
-    const child = spawn('docker', args, { cwd: '/project', env, stdio: 'inherit' })
+    // Sans shell : les arguments ne sont jamais interprétés. `signal` annulé → processus tué.
+    const child = spawn('docker', args, {
+      cwd: '/project',
+      env,
+      stdio: 'inherit',
+      signal,
+      killSignal: 'SIGKILL',
+    })
     child.on('error', reject)
     child.on('close', (code) =>
       code === 0 ? resolve() : reject(new Error(`docker ${args.join(' ')} : code ${code}`)),
@@ -42,30 +51,53 @@ export function dockerEnv(source = process.env) {
 }
 
 /** Exécution réelle : pull puis up -d, projet Compose repris de l'environnement. */
-export async function runCompose(env = dockerEnv()) {
-  await sh(['compose', 'pull', 'app'], env)
-  await sh(['compose', 'up', '-d', 'app'], env)
+export async function runCompose(env = dockerEnv(), signal = undefined) {
+  await sh(['compose', 'pull', 'app'], env, signal)
+  await sh(['compose', 'up', '-d', 'app'], env, signal)
 }
 
-export function createUpdaterServer({ secret, run, log = defaultLog }) {
+export function createUpdaterServer({
+  secret,
+  run,
+  log = defaultLog,
+  timeoutMs = UPDATE_TIMEOUT_MS,
+}) {
   if (typeof secret !== 'string' || secret.length < 32) {
     throw new Error('Updater : le secret doit être une chaîne d’au moins 32 caractères')
   }
   let running = false
+  // Génération de l'exécution en cours : une exécution abandonnée (délai dépassé) qui se termine
+  // plus tard ne libère pas le verrou d'une exécution plus récente.
+  let generation = 0
 
   async function execute() {
+    const current = ++generation
     const startedAt = Date.now()
+    const ctrl = new AbortController()
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      ctrl.abort()
+      log('error', 'Mise à jour interrompue : délai dépassé', {
+        duration_ms: Date.now() - startedAt,
+        timeout_ms: timeoutMs,
+      })
+      if (generation === current) running = false
+    }, timeoutMs)
     log('info', 'Mise à jour démarrée')
     try {
-      await run()
-      log('info', 'Mise à jour terminée', { duration_ms: Date.now() - startedAt })
+      await run(ctrl.signal)
+      if (!timedOut) log('info', 'Mise à jour terminée', { duration_ms: Date.now() - startedAt })
     } catch (err) {
-      log('error', 'Mise à jour en échec', {
-        duration_ms: Date.now() - startedAt,
-        error: err instanceof Error ? err.message : String(err),
-      })
+      if (!timedOut) {
+        log('error', 'Mise à jour en échec', {
+          duration_ms: Date.now() - startedAt,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
     } finally {
-      running = false
+      clearTimeout(timer)
+      if (generation === current) running = false
     }
   }
 
@@ -94,7 +126,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1)
   }
   const port = Number(process.env.PORT || 8081)
-  createUpdaterServer({ secret, run: () => runCompose() }).listen(port, '0.0.0.0', () =>
-    defaultLog('info', 'Updater prêt', { port }),
+  createUpdaterServer({ secret, run: (signal) => runCompose(dockerEnv(), signal) }).listen(
+    port,
+    '0.0.0.0',
+    () => defaultLog('info', 'Updater prêt', { port }),
   )
 }

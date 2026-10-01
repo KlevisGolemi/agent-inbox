@@ -1,6 +1,6 @@
 import request from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
-import { createUpdaterServer, dockerEnv } from '../deploy/updater/server.mjs'
+import { createUpdaterServer, dockerEnv, UPDATE_TIMEOUT_MS } from '../deploy/updater/server.mjs'
 
 const SECRET = 'u'.repeat(32)
 
@@ -75,6 +75,31 @@ describe('updater sidecar', () => {
     release()
     await flush()
     expect((await request(server).post('/update').set(auth)).status).toBe(202)
+  })
+
+  it('délai dépassé : processus interrompu, erreur journalisée, nouvelle exécution possible', async () => {
+    expect(UPDATE_TIMEOUT_MS).toBe(10 * 60_000)
+    const log = vi.fn()
+    let received: AbortSignal | undefined
+    // Exécution factice qui ne se termine jamais (seule l'annulation est observée).
+    const run = vi.fn((signal: AbortSignal) => {
+      received = signal
+      return new Promise<void>(() => {})
+    })
+    const server = createUpdaterServer({ secret: SECRET, run, log, timeoutMs: 50 })
+    const auth = { 'x-updater-secret': SECRET }
+    expect((await request(server).post('/update').set(auth)).status).toBe(202)
+    expect((await request(server).post('/update').set(auth)).status).toBe(409)
+    await vi.waitFor(() =>
+      expect(log).toHaveBeenCalledWith(
+        'error',
+        expect.stringContaining('délai'),
+        expect.anything(),
+      ),
+    )
+    expect(received?.aborted).toBe(true)
+    expect((await request(server).post('/update').set(auth)).status).toBe(202)
+    expect(run).toHaveBeenCalledTimes(2)
   })
 
   it('refuse un secret absent ou trop court à la création', () => {

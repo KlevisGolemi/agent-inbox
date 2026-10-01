@@ -131,6 +131,8 @@ UPDATER_SECRET=<openssl rand -hex 32>
   mais n'activez cette option que si vous acceptez ce risque (voir [SECURITY.md](../SECURITY.md)).
 - `UPDATER_URL` est une **URL racine** (`http://updater:8081`, sans chemin) : l'application y ajoute
   `/update` elle-même. `UPDATER_URL` et `UPDATER_SECRET` vont ensemble ; le secret fait 32 caractères au minimum.
+- Une mise à jour qui dure plus de 10 minutes est interrompue (processus `docker` arrêté, erreur dans les
+  logs du service `updater`) ; le bouton redevient alors utilisable.
 - Le bouton ne fait pas de `git pull` : il récupère l'image. Pour mettre aussi à jour les fichiers
   (Compose, scripts), lancez `./update.sh`.
 
