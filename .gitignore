@@ -9,3 +9,4 @@ dist/
 coverage/
 public/app.css
 .dev/
+.claude/settings.local.json
