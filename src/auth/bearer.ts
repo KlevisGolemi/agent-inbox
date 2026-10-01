@@ -1,5 +1,4 @@
 import type { RequestHandler } from 'express'
-import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js'
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js'
 import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js'
 import { getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js'
@@ -22,7 +21,7 @@ const API_KEY_HEADER = /^Bearer\s+(cwk_\S*)$/i
 
 /**
  * `Authorization: Bearer cwk_…` → clé API (clientId `api-key:<id>`, scope `queue`) ;
- * tout autre Bearer → jeton OAuth vérifié par le SDK. Tout refus → 401 avec
+ * sinon → jeton OAuth vérifié par le SDK. Tout refus → 401 (SDK) avec
  * `WWW-Authenticate: Bearer … resource_metadata="…"` pour la découverte OAuth.
  */
 export function createBearerMiddleware({
@@ -36,20 +35,12 @@ export function createBearerMiddleware({
     resourceMetadataUrl,
   })
   return (req, res, next) => {
-    const m = API_KEY_HEADER.exec(req.headers.authorization ?? '')
-    if (!m) {
+    // Un jeton OAuth (base64url) peut lui aussi commencer par `cwk_` : si ce n'est pas une
+    // clé API valide, on passe au vérificateur OAuth, seule source des 401.
+    const token = API_KEY_HEADER.exec(req.headers.authorization ?? '')?.[1]
+    const key = token === undefined ? null : apiKeys.verify(token)
+    if (token === undefined || !key) {
       void oauth(req, res, next)
-      return
-    }
-    const token = m[1]!
-    const key = apiKeys.verify(token)
-    if (!key) {
-      // En-tête en ASCII ; le corps JSON porte le message complet.
-      res.set(
-        'WWW-Authenticate',
-        `Bearer error="invalid_token", error_description="Cle API invalide ou revoquee", scope="${SUPPORTED_SCOPES.join(' ')}", resource_metadata="${resourceMetadataUrl}"`,
-      )
-      res.status(401).json(new InvalidTokenError('Clé API invalide ou révoquée').toResponseObject())
       return
     }
     req.auth = { token, clientId: `api-key:${key.id}`, scopes: [...SUPPORTED_SCOPES] }

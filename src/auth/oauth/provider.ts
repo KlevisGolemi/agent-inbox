@@ -88,6 +88,8 @@ export class SqliteOAuthProvider implements OAuthServerProvider {
   readonly clientsStore: SqliteClientsStore
   private readonly now: () => number
   private readonly sessions: AdminSessions
+  // Demandes de consentement en mémoire, propres à ce processus : conception mono-instance
+  // (un redémarrage oblige seulement à relancer la connexion depuis le client).
   private readonly pending = new Map<string, PendingAuthorization>()
   private readonly stmts
 

@@ -54,13 +54,14 @@ export function createOAuthRouter({ provider, sessions, env }: OAuthRouterDeps):
 
   router.get('/oauth/consent', (req, res) => {
     const id = reqId(req.query.req)
-    if (!sessionUser(req)) {
-      toLogin(res, id)
-      return
-    }
+    // Demande invalide ou inconnue : 400 tout de suite, inutile de passer par /login.
     const pending = id ? provider.getPending(id) : undefined
     if (!pending) {
       sendPage(res, 400, 'Autorisation impossible', INVALID_REQUEST)
+      return
+    }
+    if (!sessionUser(req)) {
+      toLogin(res, id)
       return
     }
     const redirect = new URL(pending.redirectUri)

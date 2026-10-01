@@ -324,6 +324,33 @@ describe('POST /oauth/consent', () => {
     expect(res.headers.location).toBeUndefined()
   })
 
+  it('req absent, mal formé ou inconnu → 400 immédiat, avec ou sans session', async () => {
+    const cookie = await adminCookie()
+    for (const path of [
+      '/oauth/consent',
+      '/oauth/consent?req=../../evil',
+      `/oauth/consent?req=${randomToken(16)}`,
+    ]) {
+      for (const c of ['', cookie]) {
+        const r = request(t.app).get(path).set('Accept', 'text/html')
+        const res = await (c ? r.set('Cookie', c) : r)
+        expect(res.status, `${path} session=${Boolean(c)}`).toBe(400)
+        expect(res.headers.location).toBeUndefined()
+      }
+    }
+  })
+
+  it('req valide sans session → /login puis retour au consentement', async () => {
+    const clientId = await registerClient()
+    const cookie = await adminCookie()
+    const c = await openConsent(cookie, authorizeQuery(clientId, pkce().challenge))
+    const res = await request(t.app).get(`/oauth/consent?req=${c.req}`).set('Accept', 'text/html')
+    expect(res.status).toBe(302)
+    expect(res.headers.location).toBe(
+      `/login?next=${encodeURIComponent(`/oauth/consent?req=${c.req}`)}`,
+    )
+  })
+
   it('sans session → pas de code (redirection vers /login)', async () => {
     const clientId = await registerClient()
     const cookie = await adminCookie()
@@ -530,6 +557,20 @@ describe('middleware Bearer', () => {
     const res = await call(`Bearer ${key}`)
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ clientId: `api-key:${id}`, scopes: ['queue'] })
+  })
+
+  it('jeton OAuth commençant par cwk_ → authentifié par le vérificateur OAuth', async () => {
+    const clientId = await registerClient()
+    const token = `cwk_${randomToken(32).slice(4)}`
+    t.db
+      .prepare(
+        `INSERT INTO oauth_tokens (token_hash, kind, client_id, user_id, scopes, resource, expires_at, created_at)
+         VALUES (?, 'access', ?, 1, 'queue', NULL, ?, ?)`,
+      )
+      .run(sha256(token), clientId, now() + 3600_000, now())
+    const res = await call(`Bearer ${token}`)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ clientId, scopes: ['queue'] })
   })
 
   it('clé API révoquée → 401 + WWW-Authenticate', async () => {
