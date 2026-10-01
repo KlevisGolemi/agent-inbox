@@ -32,6 +32,8 @@ export interface AppDeps {
   setupCode: { value: string | null }
   apiKeys: ApiKeys
   oauthProvider: SqliteOAuthProvider
+  /** Dossier des sauvegardes (créé au besoin). */
+  backupsDir: string
 }
 
 /** Dossier de l'interface (même chemin relatif depuis src/admin et dist/admin). */

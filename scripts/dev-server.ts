@@ -4,10 +4,13 @@
  * Remplacé par src/index.ts pour la production (Task 12).
  */
 import { mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { createApp } from '../src/app.js'
 import { createApiKeys } from '../src/auth/apiKeys.js'
 import { SqliteOAuthProvider } from '../src/auth/oauth/provider.js'
+import { createBackups } from '../src/backups/index.js'
+import { startBackups } from '../src/jobs/backup.js'
 import { createAdminSessions } from '../src/auth/sessions.js'
 import { createUsers } from '../src/auth/users.js'
 import { openDb } from '../src/db/index.js'
@@ -39,6 +42,7 @@ const users = createUsers(db)
 if (users.count() === 0) await users.create(ADMIN_EMAIL, ADMIN_PASSWORD)
 
 const sessions = createAdminSessions(db)
+const backupsDir = join(dirname(env.dbPath), 'backups')
 const app = createApp({
   db,
   settings,
@@ -56,7 +60,10 @@ const app = createApp({
   setupCode: { value: null },
   apiKeys: createApiKeys(db),
   oauthProvider: new SqliteOAuthProvider({ db, sessions, env }),
+  backupsDir,
 })
+
+startBackups({ backups: createBackups({ db, dir: backupsDir, settings }), settings })
 
 app.listen(env.port, () => {
   log('info', 'Interface d’administration prête', {

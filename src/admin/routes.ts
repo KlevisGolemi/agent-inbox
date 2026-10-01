@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import type Database from 'better-sqlite3'
+import { BackupError, BACKUP_NAME_REGEX, createBackups } from '../backups/index.js'
 import type { ApiKeys } from '../auth/apiKeys.js'
 import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
@@ -26,6 +27,7 @@ export interface AdminDeps {
   users: Users
   sessions: AdminSessions
   apiKeys: ApiKeys
+  backupsDir: string
 }
 
 const MASK = '••••'
@@ -59,6 +61,7 @@ function intParam(req: Request, name: string, fallback: number, min: number, max
 export function createAdminRouter(deps: AdminDeps): Router {
   const { db, settings, repo, env, users, sessions, apiKeys } = deps
   const router = Router()
+  const backups = createBackups({ db, dir: deps.backupsDir, settings })
 
   router.use(requireAdminSession(sessions, { json: true }))
   // Réponses sensibles (secret, clés, jeton CSRF) : jamais mises en cache.
@@ -335,6 +338,57 @@ export function createAdminRouter(deps: AdminDeps): Router {
     }
     log('info', 'Mise à jour demandée depuis l’administration')
     res.status(202).json({ ok: true, started: true })
+  })
+
+  // ── Sauvegardes ───────────────────────────────────────────────────
+  /** Nom validé par regex avant tout accès au disque ; répond 400 sinon. */
+  function backupName(req: Request, res: Response): string | null {
+    const name = String(req.params.name)
+    if (BACKUP_NAME_REGEX.test(name)) return name
+    fail(res, 400, 'invalid_name', 'Nom de sauvegarde invalide.')
+    return null
+  }
+
+  router.get('/backups', (_req, res) => {
+    res.json({ ok: true, backups: backups.list() })
+  })
+
+  router.post('/backups', async (_req, res) => {
+    const backup = await backups.run()
+    log('info', 'Sauvegarde créée depuis l’administration', { name: backup.name })
+    res.status(201).json({ ok: true, backup })
+  })
+
+  router.get('/backups/:name/download', (req, res) => {
+    const name = backupName(req, res)
+    if (name === null) return
+    const file = backups.path(name)
+    if (!file) {
+      fail(res, 404, 'not_found', 'Sauvegarde introuvable.')
+      return
+    }
+    res.download(file, name)
+  })
+
+  router.post('/backups/:name/restore', async (req, res) => {
+    const name = backupName(req, res)
+    if (name === null) return
+    const body: unknown = req.body
+    if (!isPlainObject(body) || body.confirm !== true) {
+      fail(res, 400, 'confirmation_required', 'Confirmation requise : { "confirm": true }.')
+      return
+    }
+    try {
+      await backups.restore(name)
+    } catch (err) {
+      if (err instanceof BackupError) {
+        fail(res, err.code === 'not_found' ? 404 : 400, err.code, err.message)
+        return
+      }
+      throw err
+    }
+    log('warn', 'Base restaurée depuis une sauvegarde', { name })
+    res.json({ ok: true })
   })
 
   // ── Maintenance et compte ─────────────────────────────────────────

@@ -52,6 +52,8 @@ export interface Settings {
   /** Tout ou rien : si une valeur est invalide, rien n'est écrit. */
   update(patch: Partial<Record<SettingKey, unknown>>): SettingValues
   onChange(listener: (key: SettingKey) => void): () => void
+  /** Vide le cache et prévient les écouteurs (après un remplacement du contenu de la base). */
+  reload(): void
 }
 
 function parse<K extends SettingKey>(key: K, value: unknown): SettingValues[K] {
@@ -113,6 +115,10 @@ export function createSettings(db: Database.Database): Settings {
       return get(key)
     },
     update,
+    reload() {
+      cache.clear()
+      for (const key of SETTING_KEYS) for (const l of listeners) l(key)
+    },
     onChange(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)

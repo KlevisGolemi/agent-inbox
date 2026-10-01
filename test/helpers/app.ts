@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import type { Response } from 'supertest'
 import { createApp, type AppDeps } from '../../src/app.js'
@@ -62,6 +65,7 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     setupCode: over.setupCode ?? { value: null },
     apiKeys: over.apiKeys ?? createApiKeys(db),
     oauthProvider: over.oauthProvider ?? new SqliteOAuthProvider({ db, sessions, env }),
+    backupsDir: over.backupsDir ?? mkdtempSync(join(tmpdir(), 'cq-backups-')),
   }
 }
 
