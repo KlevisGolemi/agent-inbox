@@ -1,172 +1,245 @@
 #!/usr/bin/env bash
-# ═══════════════════════════════════════════════════════════════
-#  install.sh — Configuration interactive de la Webhook Queue
+# Installe Cowork Queue : génère .env, démarre les conteneurs et attend que le service réponde.
 #
-#  Génère un .env, vérifie les prérequis, crée le réseau Traefik
-#  si besoin, et (optionnellement) lance `docker compose up -d`.
-#
-#  Usage :
-#    ./install.sh
-# ═══════════════════════════════════════════════════════════════
-
+# Usage : ./install.sh [--force] [--help]
+# Non interactif : CQ_YES=1 CQ_PUBLIC_URL=https://queue.example.com ./install.sh
+#   CQ_PUBLIC_URL       domaine ou URL publique (ou IPv4 : converti en <ip-avec-tirets>.sslip.io)
+#   CQ_MODE             caddy (défaut) | traefik
+#   CQ_TRAEFIK_HOSTS    domaines Traefik séparés par des virgules (défaut : l'hôte de CQ_PUBLIC_URL)
+#   CQ_TRAEFIK_NETWORK  réseau Traefik externe (défaut : traefik_proxy)
+#   CQ_TRAEFIK_CERTRESOLVER  certresolver Traefik (défaut : letsencrypt)
+#   CQ_ADMIN_EMAIL, CQ_ADMIN_PASSWORD   compte administrateur (facultatif, 12 caractères min.)
+#   CQ_UPDATER          yes | no (défaut : no) — mise à jour en un clic depuis l'interface
+#   CQ_YES=1            n'interroge jamais : valeurs par défaut pour tout ce qui n'est pas fourni
 set -euo pipefail
 
-# ─── Sortie colorée ───────────────────────────────────────────
-RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; BLUE=$'\033[0;34m'; NC=$'\033[0m'
-info() { echo "${BLUE}▶${NC} $*"; }
-ok()   { echo "${GREEN}✓${NC} $*"; }
-warn() { echo "${YELLOW}⚠${NC} $*"; }
-fail() { echo "${RED}✗${NC} $*" >&2; exit 1; }
+if [ -t 1 ]; then
+  RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[0;33m'; BLUE=$'\033[0;34m'; NC=$'\033[0m'
+else
+  RED=''; GREEN=''; YELLOW=''; BLUE=''; NC=''
+fi
+info() { printf '%s\n' "${BLUE}→${NC} $*"; }
+ok() { printf '%s\n' "${GREEN}✓${NC} $*"; }
+warn() { printf '%s\n' "${YELLOW}!${NC} $*" >&2; }
+fail() { printf '%s\n' "${RED}✗${NC} $*" >&2; exit 1; }
 
-# Se placer dans le répertoire du script
+FORCE=false
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=true ;;
+    -h | --help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) fail "Option inconnue : $arg (voir --help)" ;;
+  esac
+done
+
 cd "$(dirname "$0")"
 
-# ─── Prérequis ────────────────────────────────────────────────
-command -v docker  >/dev/null 2>&1 || fail "Docker requis (https://docs.docker.com/engine/install/)"
-docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 requis (docker compose)"
-command -v openssl >/dev/null 2>&1 || fail "openssl requis pour générer le secret"
+NON_INTERACTIVE=false
+[ "${CQ_YES:-0}" = "1" ] && NON_INTERACTIVE=true
+[ -t 0 ] || NON_INTERACTIVE=true
 
-# ─── Garde-fou sur un .env existant ───────────────────────────
-if [ -f .env ]; then
-  warn "Un fichier .env existe déjà."
-  read -rp "    Écraser la configuration ? [y/N] " yn
-  case "$yn" in
-    [yY]*) ;;
-    *) info "Installation annulée — .env conservé."; exit 0 ;;
+# ask <variable> <question> [défaut] : lit une valeur, ou garde le défaut en mode non interactif.
+ask() {
+  local var="$1" question="$2" default="${3:-}" reply
+  if $NON_INTERACTIVE; then
+    printf -v "$var" '%s' "$default"
+    return
+  fi
+  if [ -n "$default" ]; then
+    read -r -p "  $question [$default] " reply || reply=""
+  else
+    read -r -p "  $question " reply || reply=""
+  fi
+  printf -v "$var" '%s' "${reply:-$default}"
+}
+
+# confirm <question> <défaut y|n> : succès si oui.
+confirm() {
+  local question="$1" default="${2:-n}" reply
+  if $NON_INTERACTIVE; then
+    [ "$default" = "y" ]
+    return
+  fi
+  read -r -p "  $question [$([ "$default" = "y" ] && echo 'O/n' || echo 'o/N')] " reply || reply=""
+  reply="${reply:-$default}"
+  [[ "$reply" =~ ^[YyOo] ]]
+}
+
+# ─── 1. Prérequis ─────────────────────────────────────────────
+for cmd in docker openssl curl; do
+  command -v "$cmd" >/dev/null 2>&1 || fail "« $cmd » est requis mais introuvable."
+done
+docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 est requis (commande « docker compose »)."
+docker info >/dev/null 2>&1 || fail "Le démon Docker ne répond pas (est-il démarré ? droits suffisants ?)."
+
+if [ -f .env ] && ! $FORCE; then
+  fail "Un fichier .env existe déjà : installation annulée pour ne rien écraser. Relancez avec --force pour le régénérer (sauvegardez-le d'abord)."
+fi
+
+echo
+info "Installation de Cowork Queue"
+
+# ─── 2. Domaine ou IP ─────────────────────────────────────────
+INPUT="${CQ_PUBLIC_URL:-}"
+if [ -z "$INPUT" ]; then
+  $NON_INTERACTIVE && fail "CQ_PUBLIC_URL est obligatoire en mode non interactif."
+  ask INPUT "Domaine (ex. queue.example.com) ou IP publique du serveur :"
+fi
+[ -n "$INPUT" ] || fail "Aucun domaine ni IP fournis."
+
+HOST="${INPUT#*://}"   # sans schéma
+HOST="${HOST%%/*}"     # sans chemin
+HOST="${HOST%%:*}"     # sans port
+HOST="$(printf '%s' "$HOST" | tr '[:upper:]' '[:lower:]')"
+[[ "$HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "Nom d'hôte invalide : « $HOST »."
+
+if [[ "$HOST" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
+  SSLIP_HOST="${HOST//./-}.sslip.io"
+  info "Let's Encrypt ne délivre pas de certificat pour une IP : sslip.io fournit $SSLIP_HOST (résolu vers $HOST)."
+  if confirm "Utiliser $SSLIP_HOST ?" y; then
+    HOST="$SSLIP_HOST"
+  else
+    fail "Un nom de domaine est nécessaire pour obtenir un certificat HTTPS."
+  fi
+fi
+PUBLIC_URL="https://$HOST"
+
+# Vérification DNS (avertissement seulement : l'enregistrement peut être en cours de propagation).
+resolve_host() {
+  if command -v getent >/dev/null 2>&1; then
+    getent hosts "$1" | awk '{print $1; exit}'
+  elif command -v dscacheutil >/dev/null 2>&1; then
+    dscacheutil -q host -a name "$1" | awk '/^ip_address:/ {print $2; exit}'
+  elif command -v host >/dev/null 2>&1; then
+    host "$1" | awk '/has address/ {print $4; exit}'
+  fi
+}
+RESOLVED="$(resolve_host "$HOST" 2>/dev/null || true)"
+if [ -z "$RESOLVED" ]; then
+  warn "$HOST ne se résout pas encore : créez l'enregistrement DNS vers ce serveur avant la première visite (sinon pas de certificat)."
+else
+  ok "$HOST → $RESOLVED"
+fi
+
+# ─── 3. Mode de reverse proxy ─────────────────────────────────
+MODE="${CQ_MODE:-}"
+if [ -z "$MODE" ]; then
+  if confirm "Utiliser un Traefik déjà installé au lieu de Caddy (inclus) ?" n; then MODE=traefik; else MODE=caddy; fi
+fi
+case "$MODE" in caddy | traefik) ;; *) fail "CQ_MODE doit valoir « caddy » ou « traefik » (reçu : $MODE)." ;; esac
+
+TRAEFIK_NETWORK="${CQ_TRAEFIK_NETWORK:-traefik_proxy}"
+TRAEFIK_CERTRESOLVER="${CQ_TRAEFIK_CERTRESOLVER:-letsencrypt}"
+TRAEFIK_RULE=""
+if [ "$MODE" = "traefik" ]; then
+  HOSTS_INPUT="${CQ_TRAEFIK_HOSTS:-}"
+  [ -n "$HOSTS_INPUT" ] || ask HOSTS_INPUT "Domaines servis par Traefik (séparés par des virgules) :" "$HOST"
+  IFS=',' read -r -a HOST_LIST <<<"$HOSTS_INPUT"
+  for h in "${HOST_LIST[@]}"; do
+    h="$(printf '%s' "$h" | tr -d '[:space:]')"
+    [ -n "$h" ] || continue
+    [[ "$h" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]] || fail "Domaine Traefik invalide : « $h »."
+    TRAEFIK_RULE="${TRAEFIK_RULE:+$TRAEFIK_RULE || }Host(\`$h\`)"
+  done
+  [ -n "$TRAEFIK_RULE" ] || fail "Aucun domaine Traefik valide."
+  docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
+    || fail "Le réseau Docker « $TRAEFIK_NETWORK » n'existe pas (créez-le ou indiquez CQ_TRAEFIK_NETWORK)."
+fi
+
+# ─── 4. Compte administrateur (facultatif) ────────────────────
+ADMIN_EMAIL="${CQ_ADMIN_EMAIL:-}"
+ADMIN_PASSWORD="${CQ_ADMIN_PASSWORD:-}"
+if [ -z "$ADMIN_EMAIL" ] && [ -z "$ADMIN_PASSWORD" ] && ! $NON_INTERACTIVE; then
+  echo "  Compte administrateur : laissez vide pour le créer plus tard avec un code de setup."
+  ask ADMIN_EMAIL "E-mail administrateur :"
+  if [ -n "$ADMIN_EMAIL" ]; then
+    read -r -s -p "  Mot de passe (12 caractères min.) : " ADMIN_PASSWORD || ADMIN_PASSWORD=""
+    echo
+  fi
+fi
+if [ -n "$ADMIN_EMAIL$ADMIN_PASSWORD" ]; then
+  [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASSWORD" ] || fail "E-mail et mot de passe administrateur vont ensemble."
+  [[ "$ADMIN_EMAIL" =~ ^[^[:space:]@\'\"]+@[^[:space:]@\'\"]+$ ]] || fail "E-mail administrateur invalide."
+  [ "${#ADMIN_PASSWORD}" -ge 12 ] || fail "Le mot de passe administrateur doit contenir au moins 12 caractères."
+  case "$ADMIN_PASSWORD" in
+    *\'* | *$'\n'* | *$'\r'*) fail "Le mot de passe ne peut contenir ni apostrophe ni saut de ligne (limite du fichier .env)." ;;
   esac
 fi
 
-# ─── Helper prompt avec valeur par défaut ─────────────────────
-ask() {
-  local label="$1" default="${2:-}" __var="$3" reply=""
-  if [ -n "$default" ]; then
-    read -rp "    $label [$default]: " reply
-    reply="${reply:-$default}"
-  else
-    while [ -z "$reply" ]; do
-      read -rp "    $label: " reply
-    done
-  fi
-  printf -v "$__var" '%s' "$reply"
-}
-
-# ─── Collecte config ──────────────────────────────────────────
-echo
-info "Configuration de la Webhook Queue"
-echo
-
-info "Domaine public"
-ask "Sous-domaine" "queue" SUBDOMAIN
-ask "Domaine racine (ex: exemple.com)" "" ROOT_DOMAIN
-DOMAIN="$SUBDOMAIN.$ROOT_DOMAIN"
-echo "    → URL complète : https://$DOMAIN"
-echo
-
-info "Domaine MCP (serveur Model Context Protocol pour Claude)"
-echo "    → Crée un DNS A record pour ce sous-domaine vers l'IP de ton VPS."
-echo "    → Suggestion : mcp.$ROOT_DOMAIN"
-ask "Sous-domaine MCP" "mcp" MCP_SUBDOMAIN
-MCP_DOMAIN="$MCP_SUBDOMAIN.$ROOT_DOMAIN"
-echo "    → URL MCP complète : https://$MCP_DOMAIN"
-echo
-
-info "Token MCP"
-MCP_TOKEN="$(openssl rand -hex 16)"
-ok "MCP_TOKEN généré (32 caractères hex)"
-echo
-
-info "Secret d'authentification"
-read -rp "    Générer automatiquement un secret fort ? [Y/n] " yn
-if [[ "${yn:-Y}" =~ ^[nN] ]]; then
-  SECRET=""
-  while [ ${#SECRET} -lt 32 ]; do
-    read -rp "    WEBHOOK_SECRET (32+ caractères) : " SECRET
-    [ ${#SECRET} -lt 32 ] && warn "trop court (${#SECRET} caractères)"
-  done
-else
-  SECRET="$(openssl rand -hex 32)"
-  ok "Secret généré (64 caractères hex)"
+# ─── 5. Mise à jour en un clic (facultatif) ───────────────────
+UPDATER="${CQ_UPDATER:-}"
+if [ -z "$UPDATER" ]; then
+  if confirm "Activer la mise à jour en un clic depuis l'interface (monte le socket Docker) ?" n; then UPDATER=yes; else UPDATER=no; fi
 fi
-echo
+case "$UPDATER" in yes | no) ;; *) fail "CQ_UPDATER doit valoir « yes » ou « no »." ;; esac
 
-info "Réglages avancés (laisser vide pour accepter)"
-ask "Port interne du container" "3333" PORT
-ask "Rétention messages (heures)" "48" TTL
-ask "Fréquence cleanup (minutes)" "60" CLEAN
-echo
-
-# ─── Écriture du .env ─────────────────────────────────────────
-cat > .env <<EOF
-# Généré par install.sh — $(date -u +%Y-%m-%dT%H:%M:%SZ)
-
-DOMAIN=$DOMAIN
-WEBHOOK_SECRET=$SECRET
-PORT=$PORT
-DB_PATH=/data/queue.db
-TTL_HOURS=$TTL
-CLEANUP_INTERVAL_MIN=$CLEAN
-
-# ── MCP Server distant ───────────────────────────────────
-MCP_DOMAIN=$MCP_DOMAIN
-MCP_TOKEN=$MCP_TOKEN
-EOF
+# ─── 6. Écriture de .env ──────────────────────────────────────
+info "Écriture de .env"
+umask 077
+{
+  echo "# Généré par install.sh le $(date -u +%Y-%m-%dT%H:%M:%SZ). Voir .env.example pour toutes les options."
+  echo "PUBLIC_URL=$PUBLIC_URL"
+  echo "SITE_HOST=$HOST"
+  echo "COMPOSE_PROJECT_NAME=cowork-queue"
+  if [ -n "$ADMIN_EMAIL" ]; then
+    echo "ADMIN_EMAIL=$ADMIN_EMAIL"
+    echo "ADMIN_PASSWORD='$ADMIN_PASSWORD'"
+  fi
+  if [ "$MODE" = "traefik" ]; then
+    echo "COMPOSE_FILE=deploy/docker-compose.traefik.yml"
+    echo "TRAEFIK_NETWORK=$TRAEFIK_NETWORK"
+    echo "TRAEFIK_CERTRESOLVER=$TRAEFIK_CERTRESOLVER"
+    echo "TRAEFIK_RULE='$TRAEFIK_RULE'"
+  fi
+  if [ "$UPDATER" = "yes" ]; then
+    echo "COMPOSE_PROFILES=updater"
+    echo "UPDATER_URL=http://updater:8081"
+    echo "UPDATER_SECRET=$(openssl rand -hex 32)"
+  fi
+} >.env
 chmod 600 .env
-ok ".env créé (chmod 600)"
+ok ".env créé (droits 600)"
 
-# ─── Réseau Traefik ───────────────────────────────────────────
-if ! docker network inspect traefik_proxy >/dev/null 2>&1; then
-  warn "Le réseau Docker 'traefik_proxy' n'existe pas."
-  read -rp "    Le créer ? [y/N] " yn
-  if [[ "${yn:-N}" =~ ^[yY] ]]; then
-    docker network create traefik_proxy >/dev/null
-    ok "Réseau 'traefik_proxy' créé"
-    warn "Rappel : Traefik doit tourner sur ce réseau avec un certresolver 'letsencrypt'."
-  else
-    warn "Sans ce réseau, 'docker compose up' échouera — à créer avant le lancement."
+# ─── 7. Démarrage ─────────────────────────────────────────────
+info "Démarrage des conteneurs (le premier lancement télécharge l'image)"
+docker compose up -d
+
+info "Attente du service (120 s max)"
+healthy=false
+for _ in $(seq 1 60); do
+  if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    healthy=true
+    break
   fi
-else
-  ok "Réseau 'traefik_proxy' détecté"
+  sleep 2
+done
+if ! $healthy; then
+  docker compose logs --tail=40 app >&2 || true
+  fail "Le service ne répond pas sur /healthz après 120 s. Consultez : docker compose logs app"
 fi
-echo
+ok "Le service répond"
 
-# ─── Build & start ────────────────────────────────────────────
-read -rp "$(info "Lancer 'docker compose up -d --build' maintenant ? [Y/n]") " yn
-if [[ ! "${yn:-Y}" =~ ^[nN] ]]; then
-  docker compose up -d --build
+# Joignabilité publique : informatif (le certificat peut demander quelques instants).
+public_ok=false
+for _ in $(seq 1 15); do
+  if curl -fsS --max-time 5 -o /dev/null "$PUBLIC_URL/healthz" 2>/dev/null; then public_ok=true; break; fi
+  sleep 2
+done
+if $public_ok; then
+  ok "$PUBLIC_URL/healthz est joignable"
+else
+  warn "$PUBLIC_URL n'est pas encore joignable (DNS, ports 80/443 ou émission du certificat en cours). Réessayez dans une minute."
+fi
+
+# ─── 8. Résumé ────────────────────────────────────────────────
+echo
+ok "Cowork Queue est installé."
+echo "  Interface d'administration : $PUBLIC_URL/admin"
+echo "  Adresse MCP (Claude, ChatGPT) : $PUBLIC_URL/mcp"
+if [ -z "$ADMIN_EMAIL" ]; then
   echo
-  ok "Service lancé."
-  info "Test rapide (depuis le serveur) :"
-  echo "    curl -s https://$DOMAIN/status"
-else
-  info "Pour lancer plus tard : docker compose up -d --build"
+  echo "  Aucun compte administrateur : ouvrez $PUBLIC_URL/setup et saisissez le code de setup :"
+  echo "    docker compose logs app | grep -i setup"
 fi
-
-# ─── Récap ────────────────────────────────────────────────────
 echo
-info "═══ Récapitulatif ═══════════════════════════════════════"
-echo "    URL publique  : https://$DOMAIN"
-echo "    Secret        : $SECRET"
-echo "    Fichier .env  : $(pwd)/.env"
-echo
-info "Pour le consommateur (Cowork), exporte :"
-echo "    export QUEUE_URL=https://$DOMAIN"
-echo "    export WEBHOOK_SECRET=$SECRET"
-echo
-warn "Pré-requis côté infrastructure :"
-echo "    • DNS : $DOMAIN → IP de ce serveur"
-echo "    • DNS : $MCP_DOMAIN → IP de ce serveur"
-echo "    • Traefik actif avec entrypoint 'websecure' et certresolver 'letsencrypt'"
-echo "    • Port 443 ouvert sur le firewall"
-echo
-
-ok "Installation terminée."
-echo
-echo "    Queue webhook : https://$DOMAIN"
-echo "    MCP endpoint  : https://$MCP_DOMAIN/t/$MCP_TOKEN/mcp"
-echo
-info "Pour connecter Claude → Paramètres → Connecteurs personnalisés :"
-echo "    Nom : Cowork Queue"
-echo "    URL : https://$MCP_DOMAIN/t/$MCP_TOKEN/mcp"
-echo
-warn "N'oublie pas de créer un DNS A record pour $MCP_DOMAIN vers ton IP VPS."
-echo
+echo "  Mise à jour : ./update.sh   ·   Désinstallation : ./uninstall.sh"
