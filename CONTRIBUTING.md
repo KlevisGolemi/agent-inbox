@@ -12,7 +12,7 @@ npm ci
 npm run dev:ui   # http://localhost:3000/admin, base SQLite dans .dev/
 ```
 
-Le serveur de développement crée un compte de test ; ses identifiants sont dans `scripts/dev-server.ts`.
+Le serveur de développement crée un compte de test : identifiants de développement local uniquement, définis dans `scripts/dev-server.ts`.
 
 ## Avant d'ouvrir une pull request
 

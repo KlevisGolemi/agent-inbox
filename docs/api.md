@@ -7,7 +7,7 @@ Les assistants (Claude, ChatGPT) passent plutôt par [MCP](connecter-un-client.m
 
 - **Authentification** : en-tête `x-webhook-secret` (Admin → Réglages). Absent ou faux : `401 {"ok":false,"error":"Unauthorized"}`.
   La rotation du secret est immédiate, sans redémarrage. Sans authentification : `/healthz` et `/status`.
-- **Corps** : JSON, 1 Mo maximum (`413 payload_too_large` au-delà, `400 invalid_json` si illisible).
+- **Corps** : JSON, 1 Mo (1 048 576 octets) au maximum (`413 payload_too_large` au-delà, `400 invalid_json` si illisible).
 - **Réponses** : toujours du JSON avec `ok: true|false`. En cas d'erreur, `error` est un code stable.
 - **Identifiants** : `correlation_id` et `topic` suivent le motif `^[A-Za-z0-9_-]{1,128}$`.
 - **Limite de débit** : `POST /webhook` seulement, 100 requêtes par minute et par IP par défaut
@@ -80,7 +80,7 @@ File vide : `{"ok":true,"empty":true,"item":null}` (avec `wait`, après l'attent
 ### Bail et acquittement
 
 Avec `?ack=manual`, le message passe en `leased` pour `lease_timeout_sec` secondes (300 par défaut, réglable).
-La réponse ajoute `lease_id`, `lease_until` et `attempts` à la place de `read_at` et `delete_at`.
+La réponse de `/next` contient `id`, `source`, `correlation_id`, `topic`, `created_at`, `read_at` (toujours `null`), `lease_until`, `lease_id`, `attempts` et `payload` ; `delete_at` est absent.
 
 - `POST /ack/:lease_id` : le message devient `read`.
 - `POST /nack/:lease_id` : il redevient `pending` et sera servi à nouveau.

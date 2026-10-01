@@ -76,7 +76,7 @@ est **emprunté** (statut `leased`) : acquittez-le avec `queue_ack`, sinon il es
 | `queue_nack` | Remet un message emprunté en file (statut `pending`) | `lease_id` |
 | `queue_send` | Dépose un message (réponse ou tâche pour n8n) | `payload`, `correlation_id`, `source` (`claude`), `topic` |
 | `queue_delete` | Supprime un message (irréversible) | `id` (UUID) |
-| `queue_clear` | Vide toute la file (irréversible) | `confirm: true` |
+| `queue_clear` | Vide toute la file (irréversible) ; renvoie `{ ok, deleted }` (nombre de messages supprimés) | `confirm: true` |
 
 ## Documentation
 

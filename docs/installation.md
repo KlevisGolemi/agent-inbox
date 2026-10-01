@@ -163,10 +163,10 @@ comptes, clés et réglages sont créés par la v2.
 
 1. **Arrêtez la v1 sans supprimer le volume** : dans l'ancien dossier, `docker compose down` (sans `-v`).
 2. **Sauvegardez le volume** avec la commande `tar` ci-dessus (remplacez `cowork-queue-data` par le nom du
-   volume de la v1, visible avec `docker volume ls`, souvent `webhook-queue_queue_data`).
+   volume de la v1, visible avec `docker volume ls | grep queue` ; par défaut `webhook-queue_queue_data`).
 3. **Préparez la v2** : clonez le dépôt, puis `cp .env.example .env` et renseignez :
    - `PUBLIC_URL` et `SITE_HOST` (le domaine de l'ancienne file garde l'adresse de `/webhook` pour n8n) ;
-   - `QUEUE_VOLUME_NAME=webhook-queue_queue_data` (le nom exact du volume existant) ;
+   - `QUEUE_VOLUME_NAME=webhook-queue_queue_data` (le nom exact du volume existant : confirmez-le avec `docker volume ls | grep queue`) ;
    - `WEBHOOK_SECRET` et `TTL_HOURS` repris de l'ancien `.env` : ils sont importés **une seule fois** comme
      valeurs initiales, puis gérés dans l'interface. Un `WEBHOOK_SECRET` de moins de 32 caractères est
      refusé au démarrage : retirez-le, un secret est généré, et mettez à jour n8n.

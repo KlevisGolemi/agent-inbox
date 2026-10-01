@@ -14,7 +14,7 @@ pour `/admin`. Version courante : 2.x ; la v1 (`server.js`, `mcp/`) n'existe plu
 
 ```bash
 npm ci
-npm run dev:ui      # http://localhost:3000/admin, base dans .dev/ (identifiants : scripts/dev-server.ts)
+npm run dev:ui      # http://localhost:3000/admin, base dans .dev/ (identifiants de développement local uniquement, définis dans scripts/dev-server.ts)
 npm run check       # eslint + tsc --noEmit + vitest : à passer avant chaque commit
 npm test            # vitest run
 npm run build       # build:css (Tailwind → public/app.css) puis tsc → dist/
