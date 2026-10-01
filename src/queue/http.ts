@@ -100,9 +100,38 @@ export function parseSearch(req: Request): { filter: SearchFilter } | { invalid:
 
 /**
  * Tente `claim` ; si rien n'est disponible et que `waitSec` est fourni, attend un enqueue du bon
- * topic (jusqu'à `waitSec` secondes) puis réessaie. Écouteur et minuteur sont libérés dès que la
- * réponse part ou que le client se déconnecte.
+ * topic (jusqu'à `waitSec` secondes) puis réessaie. Écouteur et minuteur sont libérés dès qu'un
+ * message est obtenu, à l'échéance, ou quand `signal` est annulé (client déconnecté).
  */
+export function waitForClaim(opts: {
+  repo: QueueRepo
+  signal?: AbortSignal | undefined
+  topic: string | undefined
+  waitSec: number | undefined
+  claim: () => QueueItem | null
+}): Promise<QueueItem | null> {
+  const { repo, signal, topic, waitSec, claim } = opts
+  const first = claim()
+  if (first || waitSec === undefined || signal?.aborted) return Promise.resolve(first)
+  return new Promise((resolve) => {
+    const finish = (item: QueueItem | null) => {
+      off()
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      resolve(item)
+    }
+    const onAbort = () => finish(null)
+    const off = repo.onEnqueue((added) => {
+      if (topic !== undefined && added.topic !== topic) return
+      const item = claim()
+      if (item) finish(item)
+    })
+    const timer = setTimeout(() => finish(null), waitSec * 1000)
+    signal?.addEventListener('abort', onAbort)
+  })
+}
+
+/** Variante HTTP de `waitForClaim` : l'attente s'arrête quand la réponse `res` est fermée. */
 export function claimWithWait(opts: {
   repo: QueueRepo
   res: Response
@@ -110,24 +139,10 @@ export function claimWithWait(opts: {
   waitSec: number | undefined
   claim: () => QueueItem | null
 }): Promise<QueueItem | null> {
-  const { repo, res, topic, waitSec, claim } = opts
-  const first = claim()
-  if (first || waitSec === undefined) return Promise.resolve(first)
-  return new Promise((resolve) => {
-    const finish = (item: QueueItem | null) => {
-      off()
-      clearTimeout(timer)
-      res.off('close', onClose)
-      resolve(item)
-    }
-    // `res` (et non `req`) : `req` émet « close » dès que le corps est lu, pas à la déconnexion.
-    const onClose = () => finish(null)
-    const off = repo.onEnqueue((added) => {
-      if (topic !== undefined && added.topic !== topic) return
-      const item = claim()
-      if (item) finish(item)
-    })
-    const timer = setTimeout(() => finish(null), waitSec * 1000)
-    res.on('close', onClose)
-  })
+  const { res, ...rest } = opts
+  const ctrl = new AbortController()
+  // `res` (et non `req`) : `req` émet « close » dès que le corps est lu, pas à la déconnexion.
+  const onClose = () => ctrl.abort()
+  res.on('close', onClose)
+  return waitForClaim({ ...rest, signal: ctrl.signal }).finally(() => res.off('close', onClose))
 }

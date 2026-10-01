@@ -2,12 +2,14 @@ import cookieParser from 'cookie-parser'
 import express, { type ErrorRequestHandler, type Express } from 'express'
 import type Database from 'better-sqlite3'
 import type { ApiKeys } from './auth/apiKeys.js'
+import { createBearerMiddleware, mcpResourceMetadataUrl } from './auth/bearer.js'
 import { createOAuthRouter } from './auth/oauth/router.js'
 import type { SqliteOAuthProvider } from './auth/oauth/provider.js'
 import { createAuthPagesRouter } from './auth/pages.js'
 import type { AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
 import type { Env } from './env.js'
+import { createMcpRouter } from './mcp/server.js'
 import { createQueueRouter } from './queue/routes.js'
 import type { QueueRepo } from './queue/repo.js'
 import type { Settings } from './settings/index.js'
@@ -58,6 +60,18 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()), version: deps.version })
   })
   app.use(createQueueRouter({ repo: deps.repo, settings: deps.settings }))
+  app.use(
+    createMcpRouter({
+      repo: deps.repo,
+      settings: deps.settings,
+      version: deps.version,
+      bearer: createBearerMiddleware({
+        provider: deps.oauthProvider,
+        apiKeys: deps.apiKeys,
+        resourceMetadataUrl: mcpResourceMetadataUrl(deps.env),
+      }),
+    }),
+  )
   app.use(
     createOAuthRouter({ provider: deps.oauthProvider, sessions: deps.sessions, env: deps.env }),
   )
