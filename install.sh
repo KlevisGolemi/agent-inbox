@@ -156,7 +156,12 @@ if [ "$MODE" = "traefik" ]; then
   if [ -z "$TRAEFIK_NETWORK" ] && [ -z "${CQ_TRAEFIK_NETWORK+x}" ]; then
     ask TRAEFIK_NETWORK "Réseau Docker partagé avec Traefik (vide = aucun, ex. Traefik en mode host) :"
   fi
+  # Valeurs écrites telles quelles dans .env (et reprises dans les labels) : caractères sûrs uniquement.
+  [[ "$TRAEFIK_CERTRESOLVER" =~ ^[A-Za-z0-9_.-]+$ ]] \
+    || fail "CQ_TRAEFIK_CERTRESOLVER invalide : « $TRAEFIK_CERTRESOLVER » (lettres, chiffres, . _ - uniquement)."
   if [ -n "$TRAEFIK_NETWORK" ]; then
+    [[ "$TRAEFIK_NETWORK" =~ ^[A-Za-z0-9_.-]+$ ]] \
+      || fail "CQ_TRAEFIK_NETWORK invalide : « $TRAEFIK_NETWORK » (lettres, chiffres, . _ - uniquement)."
     docker network inspect "$TRAEFIK_NETWORK" >/dev/null 2>&1 \
       || fail "Le réseau Docker « $TRAEFIK_NETWORK » n'existe pas (créez-le ou laissez CQ_TRAEFIK_NETWORK vide)."
   fi
