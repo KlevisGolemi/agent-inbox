@@ -21,6 +21,13 @@ export interface Users {
   setPassword(email: string, pw: string): Promise<boolean>
 }
 
+/** Forme minimale d'une adresse email (une seule source : setup, create-admin, ADMIN_EMAIL). */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+$/
+
+export function isValidEmail(email: string): boolean {
+  return email.length <= 254 && EMAIL_RE.test(email)
+}
+
 export function assertPasswordStrength(pw: string): void {
   if (pw.length < MIN_PASSWORD_LENGTH) throw new Error(PASSWORD_TOO_SHORT)
 }

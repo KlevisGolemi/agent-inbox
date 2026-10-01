@@ -4,7 +4,7 @@ import { hashPassword, verifyPassword } from '../src/auth/password.js'
 import { createAdminSessions } from '../src/auth/sessions.js'
 import { createSetupCode, ensureAdmin } from '../src/auth/setup.js'
 import { randomToken, sha256 } from '../src/auth/tokens.js'
-import { createUsers } from '../src/auth/users.js'
+import { createUsers, isValidEmail } from '../src/auth/users.js'
 import { escapeHtml, renderPage } from '../src/auth/views.js'
 import { testDb, testEnv } from './helpers/app.js'
 
@@ -176,6 +176,35 @@ describe('createAdmin (cli)', () => {
     await createAdmin(db, 'a@example.com', PW)
     await expect(createAdmin(db, 'b@example.com', PW)).rejects.toThrow(/existe déjà/)
     expect(createUsers(db).count()).toBe(1)
+  })
+})
+
+describe('validation de l’email', () => {
+  it('isValidEmail : forme a@b, sans espace, 254 caractères au plus', () => {
+    expect(isValidEmail('a@example.com')).toBe(true)
+    for (const bad of ['', 'pas-un-email', 'a b@example.com', '@example.com', 'a@', 'a@b@c']) {
+      expect(isValidEmail(bad)).toBe(false)
+    }
+    expect(isValidEmail(`${'a'.repeat(250)}@b.c`)).toBe(true)
+    expect(isValidEmail(`${'a'.repeat(251)}@b.c`)).toBe(false)
+  })
+
+  it('create-admin refuse un email invalide sans créer de compte', async () => {
+    const db = testDb()
+    await expect(createAdmin(db, 'pas-un-email', PW)).rejects.toThrow(/email invalide/i)
+    expect(createUsers(db).count()).toBe(0)
+  })
+
+  it('ensureAdmin refuse un ADMIN_EMAIL invalide', async () => {
+    const users = createUsers(testDb())
+    await expect(
+      ensureAdmin({
+        users,
+        env: testEnv({ adminEmail: 'admin', adminPassword: PW }),
+        log: vi.fn(),
+      }),
+    ).rejects.toThrow(/ADMIN_EMAIL/)
+    expect(users.count()).toBe(0)
   })
 })
 

@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import type Database from 'better-sqlite3'
-import { assertPasswordStrength, createUsers } from './auth/users.js'
+import { assertPasswordStrength, createUsers, isValidEmail } from './auth/users.js'
 import { openDb } from './db/index.js'
 import { migrate } from './db/migrations.js'
 
@@ -24,6 +24,7 @@ export async function createAdmin(
   email: string,
   password: string,
 ): Promise<void> {
+  if (!isValidEmail(email)) throw new Error(`Adresse email invalide : ${email}`)
   const users = createUsers(db)
   if (users.count() > 0) throw new Error('Un compte administrateur existe déjà.')
   assertPasswordStrength(password)

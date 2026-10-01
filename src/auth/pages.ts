@@ -12,7 +12,7 @@ import {
 } from './sessions.js'
 import { normalizeSetupCode } from './setup.js'
 import { safeEqual } from './tokens.js'
-import type { Users } from './users.js'
+import { isValidEmail, type Users } from './users.js'
 import { loginBody, sendPage, setupBody } from './views.js'
 
 export interface AuthPagesDeps {
@@ -49,8 +49,6 @@ const cookieOf = (req: Request, name: string): string | undefined => {
   const v = (req.cookies as Record<string, unknown> | undefined)?.[name]
   return typeof v === 'string' ? v : undefined
 }
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+$/
 
 export function createAuthPagesRouter({ users, sessions, setupCode, env }: AuthPagesDeps): Router {
   const router = Router()
@@ -108,7 +106,7 @@ export function createAuthPagesRouter({ users, sessions, setupCode, env }: AuthP
       fail(403, 'Code de configuration invalide.')
       return
     }
-    if (email.length > 254 || !EMAIL_RE.test(email)) {
+    if (!isValidEmail(email)) {
       fail(400, 'Adresse email invalide.')
       return
     }

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { Env } from '../env.js'
 import type { LogLevel } from '../log.js'
 import { MIN_PASSWORD_LENGTH } from './password.js'
-import type { Users } from './users.js'
+import { isValidEmail, type Users } from './users.js'
 
 type LogFn = (level: LogLevel, msg: string, fields?: Record<string, unknown>) => void
 
@@ -39,6 +39,9 @@ export async function ensureAdmin({
 }): Promise<{ setupCode: string | null }> {
   if (users.count() > 0) return { setupCode: null }
   if (env.adminEmail && env.adminPassword) {
+    if (!isValidEmail(env.adminEmail)) {
+      throw new Error('Configuration invalide : ADMIN_EMAIL n’est pas une adresse email valide')
+    }
     if (env.adminPassword.length < MIN_PASSWORD_LENGTH) {
       throw new Error(
         `Configuration invalide : ADMIN_PASSWORD doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères`,
