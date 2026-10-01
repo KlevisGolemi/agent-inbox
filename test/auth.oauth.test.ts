@@ -6,6 +6,7 @@ import { createBearerMiddleware, mcpResourceMetadataUrl } from '../src/auth/bear
 import { SqliteOAuthProvider } from '../src/auth/oauth/provider.js'
 import { SESSION_COOKIE } from '../src/auth/sessions.js'
 import { randomToken, sha256 } from '../src/auth/tokens.js'
+import { startCleanup } from '../src/jobs/cleanup.js'
 import { getSetCookie, makeAppDeps, makeTestApp, testEnv } from './helpers/app.js'
 
 const REDIRECT = 'https://claude.ai/api/mcp/auth_callback'
@@ -469,6 +470,24 @@ describe('POST /token', () => {
     await expect(t.oauthProvider.verifyAccessToken(r1.body.access_token)).rejects.toThrow()
     const r2 = await refresh(clientId, r1.body.refresh_token as string)
     expect(r2.body.error).toBe('invalid_grant')
+  })
+
+  it('après un nettoyage, rejouer l’ancien refresh → invalid_grant et famille révoquée', async () => {
+    const { clientId, tokens } = await fullTokens()
+    const r1 = await refresh(clientId, tokens.refresh_token as string)
+    expect(r1.status).toBe(200)
+
+    const job = startCleanup({ db: t.db, repo: t.repo, settings: t.settings, now, log: () => {} })
+    job.runOnce()
+    job.stop()
+
+    const reuse = await refresh(clientId, tokens.refresh_token as string)
+    expect(reuse.status).toBe(400)
+    expect(reuse.body.error).toBe('invalid_grant')
+    await expect(t.oauthProvider.verifyAccessToken(r1.body.access_token)).rejects.toThrow()
+    expect((await refresh(clientId, r1.body.refresh_token as string)).body.error).toBe(
+      'invalid_grant',
+    )
   })
 
   it('refresh expiré (30 j) → invalid_grant', async () => {

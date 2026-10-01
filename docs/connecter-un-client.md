@@ -85,6 +85,8 @@ curl -sS -X POST https://queue.example.com/mcp \
 
 Admin → Connexions liste les clés API (préfixe, dernière utilisation) et les clients OAuth enregistrés
 (nombre de jetons actifs). Révoquer une clé ou supprimer un client coupe l'accès immédiatement pour les
-clés ; pour un client OAuth, ses codes et jetons sont supprimés avec lui.
+clés ; pour un client OAuth, ses codes et jetons sont supprimés avec lui. Le nettoyage périodique
+supprime aussi les clients OAuth enregistrés depuis plus de 30 jours qui n'ont plus aucun jeton actif
+(il suffit de reconnecter le client pour qu'il se réenregistre).
 
 Le connecteur ne s'affiche pas ou n'a aucun outil ? Voir le [dépannage](installation.md#dépannage).

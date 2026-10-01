@@ -73,7 +73,7 @@ describe('nettoyage', () => {
     expect(job.runOnce().pendingExpired).toBe(1)
   })
 
-  it('supprime codes, jetons expirés ou révoqués et sessions expirées', () => {
+  it('supprime codes et jetons expirés et sessions expirées ; garde les jetons révoqués non expirés', () => {
     const { job } = start()
     db.prepare("INSERT INTO oauth_clients VALUES ('c', '{}', 0)").run()
     db.prepare("INSERT INTO users VALUES (1, 'a@b.c', 'h', 0)").run()
@@ -84,6 +84,7 @@ describe('nettoyage', () => {
       "INSERT INTO oauth_tokens VALUES (?, 'access', 'c', 1, 's', NULL, ?, ?, 0)",
     )
     tok.run('expired', clock - 1, 0)
+    // Révoqué mais non expiré : conservé, nécessaire à la détection de réutilisation du refresh.
     tok.run('revoked', clock + 1000, 1)
     tok.run('valid', clock + 1000, 0)
     const sess = db.prepare('INSERT INTO admin_sessions VALUES (?, 1, ?)')
@@ -91,11 +92,41 @@ describe('nettoyage', () => {
     sess.run('new', clock + 1000)
 
     const report = job.runOnce()
-    expect(report).toMatchObject({ oauthDeleted: 3, sessionsDeleted: 1 })
+    expect(report).toMatchObject({ oauthDeleted: 2, sessionsDeleted: 1 })
     const left = (t: string) => db.prepare(`SELECT count(*) AS n FROM ${t}`).get() as { n: number }
     expect([left('oauth_codes').n, left('oauth_tokens').n, left('admin_sessions').n]).toEqual([
-      1, 1, 1,
+      1, 2, 1,
     ])
+  })
+
+  it('supprime les clients OAuth de plus de 30 jours sans jeton actif (cascade)', () => {
+    const { job } = start()
+    db.prepare("INSERT INTO users VALUES (1, 'a@b.c', 'h', 0)").run()
+    const DAY = 24 * HOUR
+    const client = db.prepare("INSERT INTO oauth_clients VALUES (?, '{}', ?)")
+    client.run('old-idle', clock - 31 * DAY)
+    client.run('old-revoked', clock - 31 * DAY)
+    client.run('old-active', clock - 31 * DAY)
+    client.run('recent', clock - 29 * DAY)
+    const tok = db.prepare(
+      "INSERT INTO oauth_tokens VALUES (?, 'refresh', ?, 1, 's', NULL, ?, ?, 0)",
+    )
+    tok.run('r1', 'old-revoked', clock + DAY, 1)
+    tok.run('a1', 'old-active', clock + DAY, 0)
+    db.prepare("INSERT INTO oauth_codes VALUES ('k', 'old-idle', 1, 'ch', 'u', 's', NULL, ?)").run(
+      clock + 1000,
+    )
+
+    expect(job.runOnce()).toMatchObject({ clientsDeleted: 2 })
+    const ids = (
+      db.prepare('SELECT client_id FROM oauth_clients ORDER BY client_id').all() as {
+        client_id: string
+      }[]
+    ).map((r) => r.client_id)
+    expect(ids).toEqual(['old-active', 'recent'])
+    // Jetons et codes des clients supprimés partis avec eux (ON DELETE CASCADE).
+    expect(db.prepare('SELECT token_hash FROM oauth_tokens').all()).toEqual([{ token_hash: 'a1' }])
+    expect(db.prepare('SELECT count(*) AS n FROM oauth_codes').get()).toEqual({ n: 0 })
   })
 
   it('supprime à la frontière exacte expires_at === now', () => {
@@ -171,6 +202,7 @@ describe('planification', () => {
       readDeleted: 0,
       pendingExpired: 0,
       oauthDeleted: 0,
+      clientsDeleted: 0,
       sessionsDeleted: 0,
     })
     expect(log).toHaveBeenCalledWith('error', expect.any(String), { error: 'boom' })
