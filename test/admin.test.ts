@@ -25,6 +25,20 @@ async function setupWith(over: Partial<AppDeps> = {}) {
   return { ...ctx, user, session, base, csrf, cookies, api }
 }
 
+describe('messages : lease_id masqué', () => {
+  it('GET /admin/api/messages (liste et par correlation_id) sans lease_id', async () => {
+    const { api, repo } = await setup()
+    repo.enqueue({ payload: {}, source: 't', correlationId: 'c1' })
+    repo.claimNext({ lease: true })
+    const list = await api('get', '/messages')
+    const one = await api('get', '/messages?correlation_id=c1')
+    for (const item of [list.body.items[0], one.body.items[0]]) {
+      expect(item.status).toBe('leased')
+      expect(item).not.toHaveProperty('lease_id')
+    }
+  })
+})
+
 describe('accès et CSRF', () => {
   it('renvoie 401 JSON sans session', async () => {
     const { app } = makeTestApp()

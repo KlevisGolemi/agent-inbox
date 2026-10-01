@@ -9,7 +9,7 @@ import { requireAdminSession, SESSION_COOKIE, type AdminSessions } from '../auth
 import type { User, Users } from '../auth/users.js'
 import type { Env } from '../env.js'
 import { log } from '../log.js'
-import { queryString } from '../queue/http.js'
+import { itemView, queryString } from '../queue/http.js'
 import type { QueueRepo } from '../queue/repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 import { SETTING_KEYS, SettingValidationError, type Settings } from '../settings/index.js'
@@ -132,7 +132,13 @@ export function createAdminRouter(deps: AdminDeps): Router {
     const cid = queryString(req, 'correlation_id')
     if (cid !== undefined) {
       const item = CORRELATION_ID_REGEX.test(cid) ? repo.findByCorrelation(cid) : null
-      res.json({ ok: true, items: item ? [item] : [], total: item ? 1 : 0, limit: 1, offset: 0 })
+      res.json({
+        ok: true,
+        items: item ? [itemView(item)] : [],
+        total: item ? 1 : 0,
+        limit: 1,
+        offset: 0,
+      })
       return
     }
     const limit = intParam(req, 'limit', 50, 1, MAX_LIMIT)
@@ -148,7 +154,7 @@ export function createAdminRouter(deps: AdminDeps): Router {
     }
     res.json({
       ok: true,
-      items: repo.peek(limit, offset, { topic }),
+      items: repo.peek(limit, offset, { topic }).map(itemView),
       total: repo.stats({ topic }).total,
       limit,
       offset,

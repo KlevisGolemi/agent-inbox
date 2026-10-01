@@ -88,6 +88,8 @@ La réponse de `/next` contient `id`, `source`, `correlation_id`, `topic`, `crea
 - Sans réponse avant `lease_until`, il est servi à nouveau (`attempts` augmente) : un consommateur qui plante ne perd rien.
 - `lease_id` a la forme `<uuid>.<attempts>` : un nouvel emprunt invalide l'ancien `lease_id`. Un bail expiré
   mais pas encore ré-emprunté reste acquittable.
+- `lease_id` n'apparaît que dans la réponse d'emprunt (`/next`, `/by-id` avec `ack=manual`) ; `/peek`,
+  `/search` et `/by-id?peek=true` montrent le statut `leased` et `lease_until`, sans `lease_id`.
 
 | Code | `error` | Cause |
 |---|---|---|
@@ -131,7 +133,7 @@ Liste du plus récent au plus ancien, sans consommer.
 { "ok": true, "limit": 50, "offset": 0,
   "stats": { "total": 3, "pending": 2, "leased": 0, "read_count": 1, "topics": { "events": 3 } },
   "items": [ { "id": "…", "source": "n8n", "correlation_id": null, "topic": "events", "status": "pending",
-               "created_at": "…", "read_at": null, "lease_until": null, "lease_id": null,
+               "created_at": "…", "read_at": null, "lease_until": null,
                "attempts": 0, "payload": {} } ] }
 ```
 

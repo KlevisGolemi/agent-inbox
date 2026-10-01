@@ -305,6 +305,21 @@ describe('wait : déconnexion du client', () => {
   })
 })
 
+describe('lease_id : seulement dans les réponses d’emprunt', () => {
+  it('présent dans /next?ack=manual, absent de /peek, /search et /by-id?peek', async () => {
+    await post({ n: 1 }, { 'x-correlation-id': 'c1' })
+    const claimed = (await request(app).get('/next?ack=manual').set(H)).body.item
+    expect(claimed.lease_id).toMatch(/\.1$/)
+    const peek = (await request(app).get('/peek').set(H)).body.items[0]
+    const search = (await request(app).get('/search').set(H)).body.items[0]
+    const byId = (await request(app).get('/by-id/c1?peek=true').set(H)).body.item
+    for (const view of [peek, search, byId]) {
+      expect(view.status).toBe('leased')
+      expect(view).not.toHaveProperty('lease_id')
+    }
+  })
+})
+
 describe('wait : plafond des attentes simultanées', () => {
   it('MAX_WAITERS vaut 100 ; au-delà du plafond : 429 too_many_waiters', async () => {
     expect(MAX_WAITERS).toBe(100)

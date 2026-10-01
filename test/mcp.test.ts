@@ -246,6 +246,21 @@ describe('MCP stateless', () => {
     expect(Date.now() - t0).toBeLessThan(500)
   })
 
+  it('lease_id absent de queue_peek, queue_search et queue_by_id (peek)', async () => {
+    const ctx = setup()
+    await call(ctx, 'queue_send', { payload: { a: 1 }, correlation_id: 'c1' })
+    expect(data(await call(ctx, 'queue_next')).item.lease_id).toBeTruthy()
+    const views = [
+      data(await call(ctx, 'queue_peek')).items[0],
+      data(await call(ctx, 'queue_search')).items[0],
+      data(await call(ctx, 'queue_by_id', { correlation_id: 'c1' })).item,
+    ]
+    for (const view of views) {
+      expect(view.status).toBe('leased')
+      expect(view).not.toHaveProperty('lease_id')
+    }
+  })
+
   it('erreurs de validation des arguments en français', async () => {
     const ctx = setup()
     const body = await call(ctx, 'queue_search', { limit: 1000 })

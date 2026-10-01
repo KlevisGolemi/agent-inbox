@@ -11,7 +11,10 @@ export function queryString(req: Request, name: string): string | undefined {
   return typeof v === 'string' ? v : undefined
 }
 
-/** Vue d'un message pour peek / by-id?peek / search (champs v1 + topic, tentatives, bail). */
+/**
+ * Vue d'un message pour peek / by-id?peek / search et l'administration (champs v1 + topic,
+ * tentatives, échéance du bail). Sans `lease_id` : il n'est remis qu'à l'emprunt (`claimedView`).
+ */
 export function itemView(m: QueueItem) {
   return {
     id: m.id,
@@ -22,7 +25,6 @@ export function itemView(m: QueueItem) {
     created_at: m.created_at,
     read_at: m.read_at,
     lease_until: m.lease_until,
-    lease_id: m.lease_id,
     attempts: m.attempts,
     payload: m.payload,
   }
