@@ -3,11 +3,27 @@
 [![CI](https://github.com/KlevisGolemi/cowork-communication/actions/workflows/ci.yml/badge.svg)](https://github.com/KlevisGolemi/cowork-communication/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/KlevisGolemi/cowork-communication)](https://github.com/KlevisGolemi/cowork-communication/releases)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![Node 24](https://img.shields.io/badge/node-24-339933.svg)](package.json)
 
-File d'attente auto-hébergée : vos automatisations (n8n, scripts, outils sans MCP) y déposent des
+**Votre IA ne voit que ce qu'on lui donne. Cowork Queue lui donne les événements de vos outils.**
+
+Une file d'attente auto-hébergée : vos automatisations (n8n, scripts, outils sans MCP) y déposent des
 événements, Claude et ChatGPT les lisent via MCP, et leur répondent par la même voie.
+Un conteneur, une base SQLite, douze outils MCP, une interface d'administration.
 
-![Tableau de bord d'administration](docs/images/admin-dashboard.png)
+![Démo : navigation dans l'administration, des messages arrivent en direct](docs/images/demo.gif)
+
+## Le problème
+
+n8n sait que la facture F-2026-1042 est en retard. Claude, lui, n'en sait rien.
+
+Votre CRM, votre support, votre monitoring ne parlent pas MCP : ce qu'ils savent, c'est appeler une URL.
+Leurs événements n'arrivent donc jamais jusqu'à votre assistant. Une file entre les deux règle cela :
+une URL pour déposer, un connecteur pour lire.
+
+## Comment ça marche
+
+Pensez à une **boîte aux lettres** entre vos automatisations et votre IA.
 
 ```mermaid
 flowchart LR
@@ -17,22 +33,19 @@ flowchart LR
   Q -- "GET /next" --> P
 ```
 
-## Pourquoi
+| Geste                 | Ce qui se passe                                                      | Côté technique                                  |
+| --------------------- | -------------------------------------------------------------------- | ----------------------------------------------- |
+| **Déposer**           | Un outil poste un événement, avec un secret en en-tête               | `POST /webhook`                                 |
+| **Relever**           | Claude prend le plus ancien message en attente                       | `queue_next` : le message est _emprunté_ (bail) |
+| **Accuser réception** | Claude confirme qu'il a traité le message ; sinon il revient en file | `queue_ack` / `queue_nack`                      |
 
-- **Outils sans MCP.** Un workflow n8n, un cron ou une application SaaS ne parlent pas MCP : ils savent
-  en revanche appeler une URL. La file fait le pont.
-- **Événements asynchrones.** L'assistant n'est pas toujours là quand l'événement arrive. La file le garde
-  (48 h par défaut) jusqu'à ce que quelqu'un le traite.
-- **Dans les deux sens.** L'assistant peut aussi déposer une demande (`queue_send`) que n8n récupère,
-  puis attendre la réponse par `correlation_id`.
-- **Fiable.** Prise de message atomique, bail avec acquittement (`ack`), serveur MCP sans état :
-  un redémarrage du conteneur ne casse pas les connecteurs.
+L'assistant peut aussi écrire dans la boîte (`queue_send`) : n8n relève sa demande, puis la réponse revient
+par `correlation_id`.
 
-## Démarrage en 5 minutes
+## Essayer en 2 minutes
 
-Prérequis : un serveur Linux avec Docker (Compose v2), les ports 80 et 443 ouverts, et soit un nom de domaine
-pointant vers le serveur, soit rien (une adresse `sslip.io` est alors générée). HTTPS est obligatoire :
-Claude et ChatGPT refusent un connecteur en HTTP.
+Prérequis : un serveur Linux avec Docker (Compose v2) et les ports 80 et 443 ouverts. Sans nom de domaine,
+une adresse `sslip.io` est générée. HTTPS est obligatoire : Claude et ChatGPT refusent un connecteur en HTTP.
 
 ```bash
 git clone https://github.com/KlevisGolemi/cowork-communication.git
@@ -40,56 +53,134 @@ cd cowork-communication
 ./install.sh
 ```
 
-1. **Créer le compte administrateur.** Ouvrez `https://<votre-hôte>/setup` et saisissez le code affiché par
-   `docker compose logs app | grep -i setup` (ou renseignez l'e-mail et le mot de passe quand `install.sh` les demande).
-2. **Connecter un client.** Dans Claude : Paramètres → Connecteurs → Ajouter un connecteur personnalisé,
-   URL `https://<votre-hôte>/mcp`. Détails pour Claude Code, ChatGPT et les autres clients :
-   [docs/connecter-un-client.md](docs/connecter-un-client.md).
-3. **Envoyer un premier événement.** Copiez le secret du webhook depuis Admin → Réglages, puis :
+Ensuite : créez le compte administrateur sur `https://<votre-hôte>/setup`, puis ajoutez
+`https://<votre-hôte>/mcp` comme connecteur personnalisé dans Claude
+([détails pour Claude, ChatGPT et les clés API](docs/connecter-un-client.md)).
 
-   ```bash
-   curl -X POST https://<votre-hôte>/webhook \
-     -H "x-webhook-secret: <secret>" -H "x-topic: events" -H "Content-Type: application/json" \
-     -d '{"event":"hello"}'
-   ```
+Pour simplement regarder, en local, sans Docker :
 
-   Demandez ensuite à Claude de lister la file : il appelle `queue_next` et reçoit le message.
+```bash
+npm ci && npm run dev:ui   # http://localhost:3000/admin
+```
 
-Pour développer en local : `npm ci && npm run dev:ui` (voir [CONTRIBUTING.md](CONTRIBUTING.md)).
-
-## Outils MCP
+## Ce que Claude peut faire
 
 Douze outils, tous sur `POST /mcp`. Un message lu par `queue_next`, `queue_wait` ou `queue_by_id(peek: false)`
 est **emprunté** (statut `leased`) : acquittez-le avec `queue_ack`, sinon il est servi à nouveau après
 `lease_timeout_sec` (300 s par défaut).
 
-| Outil | Rôle | Paramètres |
-|---|---|---|
-| `queue_status` | Vérifie que le serveur répond (`uptime_s`, `version`) | — |
-| `queue_stats` | Compte les messages (`total`, `pending`, `leased`, `read_count`) et leur répartition par topic | `topic` |
-| `queue_peek` | Liste les messages, du plus récent au plus ancien, sans les consommer | `limit` (1–500, 50), `offset`, `topic` |
-| `queue_search` | Cherche par topic, source, statut, période ou texte du payload, sans consommer | `topic`, `source`, `status`, `since`, `until`, `text`, `limit` (1–100, 50) |
-| `queue_by_id` | Lit le message d'un `correlation_id` ; `peek: false` l'emprunte | `correlation_id`, `peek` (défaut `true`) |
-| `queue_next` | Emprunte le plus ancien message en attente | `topic` |
-| `queue_wait` | Attend un message (attente longue) puis l'emprunte | `topic` ou `correlation_id`, `timeout_sec` (1–50, 30) |
-| `queue_ack` | Confirme qu'un message emprunté est traité (statut `read`) | `lease_id` |
-| `queue_nack` | Remet un message emprunté en file (statut `pending`) | `lease_id` |
-| `queue_send` | Dépose un message (réponse ou tâche pour n8n) | `payload`, `correlation_id`, `source` (`claude`), `topic` |
-| `queue_delete` | Supprime un message (irréversible) | `id` (UUID) |
-| `queue_clear` | Vide toute la file (irréversible) ; renvoie `{ ok, deleted }` (nombre de messages supprimés) | `confirm: true` |
+| Outil          | Rôle                                                                                           | Paramètres                                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `queue_status` | Vérifie que le serveur répond (`uptime_s`, `version`)                                          | —                                                                          |
+| `queue_stats`  | Compte les messages (`total`, `pending`, `leased`, `read_count`) et leur répartition par topic | `topic`                                                                    |
+| `queue_peek`   | Liste les messages, du plus récent au plus ancien, sans les consommer                          | `limit` (1–500, 50), `offset`, `topic`                                     |
+| `queue_search` | Cherche par topic, source, statut, période ou texte du payload, sans consommer                 | `topic`, `source`, `status`, `since`, `until`, `text`, `limit` (1–100, 50) |
+| `queue_by_id`  | Lit le message d'un `correlation_id` ; `peek: false` l'emprunte                                | `correlation_id`, `peek` (défaut `true`)                                   |
+| `queue_next`   | Emprunte le plus ancien message en attente                                                     | `topic`                                                                    |
+| `queue_wait`   | Attend un message (attente longue) puis l'emprunte                                             | `topic` ou `correlation_id`, `timeout_sec` (1–50, 30)                      |
+| `queue_ack`    | Confirme qu'un message emprunté est traité (statut `read`)                                     | `lease_id`                                                                 |
+| `queue_nack`   | Remet un message emprunté en file (statut `pending`)                                           | `lease_id`                                                                 |
+| `queue_send`   | Dépose un message (réponse ou tâche pour n8n)                                                  | `payload`, `correlation_id`, `source` (`claude`), `topic`                  |
+| `queue_delete` | Supprime un message (irréversible)                                                             | `id` (UUID)                                                                |
+| `queue_clear`  | Vide toute la file (irréversible) ; renvoie `{ ok, deleted }` (nombre de messages supprimés)   | `confirm: true`                                                            |
+
+Ce que vous écrivez à Claude, tout simplement :
+
+> « Qu'est-ce qui est arrivé dans la file depuis ce matin ? »
+
+> « Prends les alertes du topic `monitoring`, résume-les, puis confirme-les. »
+
+> « Cherche les messages qui mentionnent la facture F-2026-1042 et prépare une relance. »
+
+## Vos données restent chez vous
+
+Un événement isolé est anodin. Mis bout à bout, des événements de CRM, de facturation ou de monitoring
+racontent votre activité : clients, chiffre d'affaires, incidents. Voici ce qui est protégé, comment, et
+combien de temps.
+
+- **Où.** Les payloads restent dans la base SQLite de _votre_ serveur. Aucun service tiers ne les reçoit.
+- **Comment.** Connexion MCP en OAuth 2.1 avec PKCE, ou clé API `cwk_…` dont seul le hash SHA-256 est stocké.
+  L'administration est derrière une session avec protection CSRF. Les logs ne reçoivent ni secret, ni jeton,
+  ni contenu de message.
+- **Combien de temps.** Durée de conservation (TTL) réglable globalement et **par topic** : par exemple
+  12 h pour le monitoring et 168 h pour un digest. Nettoyage automatique, sauvegardes avec rétention
+  configurable (7 par défaut).
+- **Ce qui sort.** Uniquement ce que l'assistant lit explicitement via un outil MCP (`queue_peek`,
+  `queue_next`, `queue_search`…). Seule autre requête sortante : la vérification des nouvelles versions
+  auprès de GitHub, désactivable dans Réglages.
+
+Détails et signalement d'une faille : [SECURITY.md](SECURITY.md).
+
+## En images
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/admin-dashboard.png" alt="Tableau de bord"><br><sub>Le tableau de bord : état de la file d'un coup d'œil.</sub></td>
+    <td width="50%"><img src="docs/images/admin-explorer.png" alt="Queue Explorer"><br><sub>Queue Explorer : lecture seule, filtres par topic et statut, aucun message consommé.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/admin-reglages.png" alt="Réglages"><br><sub>Réglages appliqués sans redémarrage : secret du webhook, bail, TTL par topic.</sub></td>
+    <td><img src="docs/images/admin-connexions.png" alt="Connexions"><br><sub>Connexions : URL MCP, URL du webhook et clés API révocables.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/admin-sauvegardes.png" alt="Sauvegardes"><br><sub>Sauvegardes de la base : télécharger ou restaurer en un clic.</sub></td>
+    <td><img src="docs/images/consentement.png" alt="Écran de consentement OAuth"><br><sub>Consentement OAuth : vous autorisez chaque client, et seulement lui.</sub></td>
+  </tr>
+</table>
+
+## Pour les développeurs
+
+- **MCP sans état** : un serveur et un transport par `POST /mcp`, aucune session en mémoire ; un redémarrage
+  du conteneur ne casse pas les connecteurs.
+- **Prise atomique** : un seul `UPDATE … RETURNING` pour prendre un message, jamais `SELECT` puis `UPDATE`.
+- **Bail et acquittement** : consommer emprunte le message ; sans `ack`, il revient après le délai du bail.
+- **Réglages en base, relus à chaud** : modifiés dans l'admin, appliqués sans redémarrage.
+- **OAuth 2.1** via le SDK MCP, ou clé API pour les clients sans navigateur.
+- **286 tests** (Vitest + Supertest), ESLint et `tsc` dans la CI : `npm run check`.
+
+Stack : Node 24, TypeScript, Express 5, better-sqlite3. Plan du code et invariants :
+[CLAUDE.md](CLAUDE.md) et [AGENTS.md](AGENTS.md) ; API HTTP des producteurs : [docs/api.md](docs/api.md).
+
+**Positionnement.** Ce n'est pas Kafka ni RabbitMQ : une seule instance, pas de cluster, pas de débit
+industriel. En revanche, un seul conteneur, une base SQLite, et votre IA branchée en deux minutes.
+
+## Templates n8n
+
+Trois workflows prêts à importer, avec des nœuds standard : un événement vers Claude, un worker
+requête/réponse, un digest quotidien. Voir [examples/n8n/](examples/n8n/README.md).
 
 ## Documentation
 
-| Document | Contenu |
-|---|---|
-| [docs/installation.md](docs/installation.md) | Domaine, sslip.io, Traefik, mise à jour, sauvegardes, migration depuis la v1, dépannage |
-| [docs/connecter-un-client.md](docs/connecter-un-client.md) | Claude (Web, Desktop, Cowork, Code), ChatGPT, clés API |
-| [docs/api.md](docs/api.md) | API HTTP des producteurs : routes, topics, `ack`, `wait`, `search`, exemples |
-| [docs/cas-d-usage.md](docs/cas-d-usage.md) | Trois recettes complètes avec n8n et Claude |
-| [examples/n8n/](examples/n8n/README.md) | Workflows n8n importables |
-| [AGENTS.md](AGENTS.md) | Procédure d'installation pour un agent IA, guide pour contribuer au code |
-| [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) · [CONTRIBUTING.md](CONTRIBUTING.md) | Sécurité, historique, contribution |
+| Document                                                   | Contenu                                                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [docs/installation.md](docs/installation.md)               | Domaine, sslip.io, Traefik, mise à jour, sauvegardes, migration depuis la v1, dépannage |
+| [docs/connecter-un-client.md](docs/connecter-un-client.md) | Claude (Web, Desktop, Cowork, Code), ChatGPT, clés API                                  |
+| [docs/api.md](docs/api.md)                                 | API HTTP des producteurs : routes, topics, `ack`, `wait`, `search`, exemples            |
+| [docs/cas-d-usage.md](docs/cas-d-usage.md)                 | Trois recettes complètes avec n8n et Claude                                             |
+| [AGENTS.md](AGENTS.md)                                     | Procédure d'installation pour un agent IA, guide pour contribuer au code                |
+| [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md)  | Sécurité, historique                                                                    |
+
+## Contribuer
+
+Les issues et pull requests sont bienvenues. Lancez `npm run check` avant chaque commit ; le guide est dans
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
 [MIT](LICENSE) © 2026 Klevis Golemi
+
+## Premier pas
+
+Une fois installé, envoyez votre premier événement (le secret se copie dans Admin → Réglages) :
+
+```bash
+curl -X POST https://<votre-hôte>/webhook \
+  -H "x-webhook-secret: <secret>" -H "x-topic: events" -H "Content-Type: application/json" \
+  -d '{"event":"hello"}'
+```
+
+Puis demandez à Claude : « Qu'est-ce qui est arrivé dans la file ? » Il appelle `queue_next` et vous
+répond avec le message.
+
+Si Cowork Queue vous a fait gagner du temps, une étoile sur GitHub aide d'autres personnes à le trouver.
+Et si vous hésitez sur la suite, ouvrez une issue : « quel conseil pour la suite ? » est une vraie question.
