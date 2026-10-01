@@ -19,7 +19,7 @@ describe('clés API', () => {
   it('génère une clé au bon format et ne stocke que son hachage', () => {
     const keys = createApiKeys(db, now)
     const { id, key, prefix } = keys.create('  Claude Desktop  ')
-    expect(key).toMatch(/^cwk_[A-Za-z0-9]{32}$/)
+    expect(key).toMatch(/^aik_[A-Za-z0-9]{32}$/)
     expect(prefix).toBe(key.slice(0, 8))
     const row = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(id) as Record<string, unknown>
     expect(row.key_hash).toBe(sha256(key))
@@ -44,8 +44,8 @@ describe('clés API', () => {
   it('verify renvoie null pour clé inconnue, mal formée ou révoquée', () => {
     const keys = createApiKeys(db, now)
     const { id, key } = keys.create('a')
-    expect(keys.verify('cwk_' + 'A'.repeat(32))).toBeNull()
-    expect(keys.verify('cwk_court')).toBeNull()
+    expect(keys.verify('aik_' + 'A'.repeat(32))).toBeNull()
+    expect(keys.verify('aik_court')).toBeNull()
     expect(keys.verify(key + 'x')).toBeNull()
     expect(keys.verify('')).toBeNull()
     expect(keys.revoke(id)).toBe(true)

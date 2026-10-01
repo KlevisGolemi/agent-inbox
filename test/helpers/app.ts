@@ -24,7 +24,7 @@ export function testEnv(over: Partial<Env> = {}): Env {
     dbPath: ':memory:',
     nodeEnv: 'test',
     trustProxy: 1,
-    updateRepo: 'KlevisGolemi/cowork-communication',
+    updateRepo: 'KlevisGolemi/agent-inbox',
     seed: {},
     ...over,
   }

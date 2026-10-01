@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Désinstalle Cowork Queue : propose une sauvegarde des données, puis supprime conteneurs,
+# Désinstalle Agent Inbox : propose une sauvegarde des données, puis supprime conteneurs,
 # volumes, image et .env.
 #
 # Usage : ./uninstall.sh [--yes] [--no-backup] [--help]
@@ -51,17 +51,17 @@ docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 est requis."
 docker info >/dev/null 2>&1 || fail "Le démon Docker ne répond pas."
 
 VOLUME="$(env_get QUEUE_VOLUME_NAME)"
-VOLUME="${VOLUME:-cowork-queue-data}"
+VOLUME="${VOLUME:-agent-inbox-data}"
 
 echo
-info "Désinstallation de Cowork Queue"
+info "Désinstallation de Agent Inbox"
 warn "Opération destructive : la base (messages, comptes, clés API, réglages) sera supprimée."
 confirm "Continuer ?" n || { info "Annulé."; exit 0; }
 
 # ─── 1. Sauvegarde du volume de données ───────────────────────
 if ! $NO_BACKUP && docker volume inspect "$VOLUME" >/dev/null 2>&1; then
   if confirm "Sauvegarder d'abord le volume « $VOLUME » dans le dossier courant ?" y; then
-    ARCHIVE="cowork-queue-backup-$(date +%Y%m%d-%H%M%S).tgz"
+    ARCHIVE="agent-inbox-backup-$(date +%Y%m%d-%H%M%S).tgz"
     info "Création de $ARCHIVE"
     docker run --rm -v "$VOLUME":/data:ro -v "$PWD":/b alpine tar czf "/b/$ARCHIVE" -C /data . \
       || fail "La sauvegarde a échoué : rien n'a été supprimé."
@@ -79,8 +79,8 @@ if docker volume inspect "$VOLUME" >/dev/null 2>&1; then
 fi
 
 # ─── 3. Images ────────────────────────────────────────────────
-IMAGES="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^ghcr\.io/klevisgolemi/cowork-queue:' || true)"
-if [ -n "$IMAGES" ] && confirm "Supprimer l'image Docker de Cowork Queue ?" y; then
+IMAGES="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^ghcr\.io/klevisgolemi/agent-inbox:' || true)"
+if [ -n "$IMAGES" ] && confirm "Supprimer l'image Docker de Agent Inbox ?" y; then
   # shellcheck disable=SC2086 # une image par ligne, sans espace dans les noms
   docker rmi $IMAGES >/dev/null 2>&1 && ok "Image supprimée" || warn "Image non supprimée (encore utilisée ?)"
 fi

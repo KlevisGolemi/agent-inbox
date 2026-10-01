@@ -246,7 +246,7 @@ describe('API d’administration', () => {
     const base = `${SESSION_COOKIE}=${ctx.sessions.create(user.id)}`
     const csrf = (await request(ctx.app).get('/admin/api/overview').set('Cookie', base)).body
       .csrfToken as string
-    const cookies = `${base}; cq_csrf=${csrf}`
+    const cookies = `${base}; inbox_csrf=${csrf}`
     const api = (m: 'get' | 'post', path: string) =>
       request(ctx.app)[m](`/admin/api${path}`).set('Cookie', cookies).set('x-csrf-token', csrf)
     return { ...ctx, api }

@@ -61,7 +61,7 @@ export function createMcpRouter({ repo, settings, bearer, version, waits }: McpR
   })
 
   router.post('/mcp', mcpLimiter, bearer, async (req, res) => {
-    const server = new McpServer({ name: 'cowork-queue', version })
+    const server = new McpServer({ name: 'agent-inbox', version })
     registerTools(server, { repo, settings, version, waits })
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {

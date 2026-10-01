@@ -17,10 +17,10 @@ export function mcpResourceMetadataUrl(env: Env): string {
   return getOAuthProtectedResourceMetadataUrl(new URL('/mcp', env.publicUrl))
 }
 
-const API_KEY_HEADER = /^Bearer\s+(cwk_\S*)$/i
+const API_KEY_HEADER = /^Bearer\s+(aik_\S*)$/i
 
 /**
- * `Authorization: Bearer cwk_…` → clé API (clientId `api-key:<id>`, scope `queue`) ;
+ * `Authorization: Bearer aik_…` → clé API (clientId `api-key:<id>`, scope `queue`) ;
  * sinon → jeton OAuth vérifié par le SDK. Tout refus → 401 (SDK) avec
  * `WWW-Authenticate: Bearer … resource_metadata="…"` pour la découverte OAuth.
  */
@@ -35,7 +35,7 @@ export function createBearerMiddleware({
     resourceMetadataUrl,
   })
   return (req, res, next) => {
-    // Un jeton OAuth (base64url) peut lui aussi commencer par `cwk_` : si ce n'est pas une
+    // Un jeton OAuth (base64url) peut lui aussi commencer par `aik_` : si ce n'est pas une
     // clé API valide, on passe au vérificateur OAuth, seule source des 401.
     const token = API_KEY_HEADER.exec(req.headers.authorization ?? '')?.[1]
     const key = token === undefined ? null : apiKeys.verify(token)

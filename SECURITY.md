@@ -4,7 +4,7 @@
 
 Ne créez pas d'issue publique. Utilisez le signalement privé de GitHub :
 **Security → Report a vulnerability** sur
-[KlevisGolemi/cowork-communication](https://github.com/KlevisGolemi/cowork-communication/security/advisories/new).
+[KlevisGolemi/agent-inbox](https://github.com/KlevisGolemi/agent-inbox/security/advisories/new).
 
 Indiquez la version, les étapes de reproduction et l'impact. Le projet est maintenu par une seule personne :
 comptez quelques jours pour un premier retour.
@@ -24,10 +24,10 @@ Seule la dernière version publiée reçoit des correctifs.
 | Surface | Protection |
 |---|---|
 | `POST /webhook`, `/next`, `/peek`… | Secret partagé `x-webhook-secret` (comparaison en temps constant), relu à chaque requête : une rotation est immédiate. Limite de débit sur `/webhook` et `/next`. |
-| `/mcp` | Jeton OAuth 2.1 (PKCE S256, expiration 1 h, refresh 30 jours) ou clé API `cwk_…`. Seul le condensé SHA-256 est stocké. Limite de 600 requêtes par minute et par IP. |
+| `/mcp` | Jeton OAuth 2.1 (PKCE S256, expiration 1 h, refresh 30 jours) ou clé API `aik_…`. Seul le condensé SHA-256 est stocké. Limite de 600 requêtes par minute et par IP. |
 | Attentes longues (`GET /next?wait`, `queue_wait`) | 100 attentes simultanées au plus (au-delà : `429 too_many_waiters` / erreur MCP) ; `GET /next` limité à 600 requêtes par minute et par IP. |
 | `/admin`, `/admin/api` | Session par cookie (7 jours), jeton CSRF sur toutes les écritures, mot de passe haché avec `scrypt` (12 caractères minimum). Page servie avec une CSP restrictive ; scripts CDN à version épinglée et contrôle d'intégrité (SRI). |
-| Changement de mot de passe | Depuis l'interface ou avec `reset-password` : les autres sessions sont fermées et tous les jetons OAuth du compte sont révoqués (les connecteurs doivent se reconnecter). Les clés API `cwk_…` restent valides : révoquez-les dans Admin → Connexions si elles ont pu fuiter. |
+| Changement de mot de passe | Depuis l'interface ou avec `reset-password` : les autres sessions sont fermées et tous les jetons OAuth du compte sont révoqués (les connecteurs doivent se reconnecter). Les clés API `aik_…` restent valides : révoquez-les dans Admin → Connexions si elles ont pu fuiter. |
 | `/login`, `/setup`, `/token`, `/register` | Limite de 10 requêtes par minute et par IP. |
 | Logs | Une ligne JSON par événement, sans secret, jeton ni payload. Seule exception : le code de setup, affiché tant qu'aucun compte n'existe. |
 

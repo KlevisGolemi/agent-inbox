@@ -3,7 +3,7 @@ import type Database from 'better-sqlite3'
 import { sha256 } from './tokens.js'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-const KEY_RE = /^cwk_[A-Za-z0-9]{32}$/
+const KEY_RE = /^aik_[A-Za-z0-9]{32}$/
 const NAME_MAX = 100
 const LAST_USED_THROTTLE_MS = 60_000
 
@@ -52,7 +52,7 @@ export function createApiKeys(db: Database.Database, now: () => number = Date.no
       if (trimmed.length < 1 || trimmed.length > NAME_MAX) {
         throw new Error(`Le nom de la clé doit contenir entre 1 et ${NAME_MAX} caractères.`)
       }
-      const key = `cwk_${randomBase62(32)}`
+      const key = `aik_${randomBase62(32)}`
       const prefix = key.slice(0, 8)
       const { lastInsertRowid } = insert.run(trimmed, prefix, sha256(key), now())
       return { id: Number(lastInsertRowid), key, prefix }

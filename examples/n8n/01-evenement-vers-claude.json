@@ -1,5 +1,5 @@
 {
-  "name": "Cowork Queue - 01 Événement vers Claude",
+  "name": "Agent Inbox - 01 Événement vers Claude",
   "nodes": [
     {
       "parameters": {},
@@ -56,7 +56,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "cowork-queue-event",
+        "path": "agent-inbox-event",
         "options": {}
       },
       "id": "998968bd-7f27-47a0-acb8-db3f5488425b",
@@ -74,7 +74,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
-        "url": "={{ $env.COWORK_QUEUE_URL }}/webhook",
+        "url": "={{ $env.AGENT_INBOX_URL }}/webhook",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -94,7 +94,7 @@
         "options": {}
       },
       "id": "f21c8063-732a-4a43-900b-69b534e5fcb1",
-      "name": "Déposer dans Cowork Queue",
+      "name": "Déposer dans Agent Inbox",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -103,7 +103,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "Cowork Queue"
+          "name": "Agent Inbox"
         }
       }
     }
@@ -124,7 +124,7 @@
       "main": [
         [
           {
-            "node": "Déposer dans Cowork Queue",
+            "node": "Déposer dans Agent Inbox",
             "type": "main",
             "index": 0
           }
@@ -135,7 +135,7 @@
       "main": [
         [
           {
-            "node": "Déposer dans Cowork Queue",
+            "node": "Déposer dans Agent Inbox",
             "type": "main",
             "index": 0
           }

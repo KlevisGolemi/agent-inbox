@@ -23,7 +23,7 @@ function setup(
     settings: { get: (() => opts.enabled ?? true) as Settings['get'] },
     fetch: fetchMock,
     current: opts.current ?? '2.0.0',
-    repo: 'KlevisGolemi/cowork-communication',
+    repo: 'KlevisGolemi/agent-inbox',
     now: opts.now,
   })
   return { service, fetchMock }
@@ -76,11 +76,11 @@ describe('createVersionService', () => {
     await service.check()
     const [url, init] = fetchMock.mock.calls[0]!
     expect(String(url)).toBe(
-      'https://api.github.com/repos/KlevisGolemi/cowork-communication/releases/latest',
+      'https://api.github.com/repos/KlevisGolemi/agent-inbox/releases/latest',
     )
     const headers = new Headers(init?.headers)
     expect(headers.get('accept')).toBe('application/vnd.github+json')
-    expect(headers.get('user-agent')).toBe('cowork-queue/2.0.0')
+    expect(headers.get('user-agent')).toBe('agent-inbox/2.0.0')
     expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 

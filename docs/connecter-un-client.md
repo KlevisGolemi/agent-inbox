@@ -8,12 +8,12 @@ Deux modes d'authentification, au choix du client :
 | Mode | Pour qui | Fonctionnement |
 |---|---|---|
 | **OAuth 2.1** | Claude, ChatGPT, tout client qui sait ouvrir un navigateur | Le client s'enregistre seul, vous vous connectez avec votre compte administrateur, puis vous autorisez l'accès sur une page de consentement. |
-| **Clé API** `cwk_…` | Scripts, agents, CI, clients sans OAuth | En-tête `Authorization: Bearer cwk_…`. Créée dans Admin → Connexions ; affichée une seule fois, révocable. |
+| **Clé API** `aik_…` | Scripts, agents, CI, clients sans OAuth | En-tête `Authorization: Bearer aik_…`. Créée dans Admin → Connexions ; affichée une seule fois, révocable. |
 
-## Claude (Web, Desktop, Cowork)
+## Claude (Web, Desktop)
 
 1. Ouvrez **Paramètres → Connecteurs → Ajouter un connecteur personnalisé**.
-2. Nom : `Cowork Queue`. URL : `https://queue.example.com/mcp`. Validez.
+2. Nom : `Agent Inbox`. URL : `https://queue.example.com/mcp`. Validez.
 3. Claude ouvre la page de connexion de votre instance : saisissez l'e-mail et le mot de passe du compte
    administrateur.
 4. Sur la page de consentement, vérifiez le nom du client et l'hôte de redirection, puis **Autoriser**.
@@ -28,17 +28,17 @@ le serveur MCP ne garde aucune session en mémoire. Un jeton d'accès dure 1 heu
 ## Claude Code
 
 ```bash
-claude mcp add --transport http cowork-queue https://queue.example.com/mcp
+claude mcp add --transport http agent-inbox https://queue.example.com/mcp
 ```
 
-Puis, dans Claude Code, tapez `/mcp`, choisissez `cowork-queue` et **Authenticate** : le navigateur s'ouvre
+Puis, dans Claude Code, tapez `/mcp`, choisissez `agent-inbox` et **Authenticate** : le navigateur s'ouvre
 sur la page de connexion, puis de consentement.
 
 Variante avec une clé API (sans navigateur) :
 
 ```bash
-claude mcp add --transport http cowork-queue https://queue.example.com/mcp \
-  --header "Authorization: Bearer cwk_…"
+claude mcp add --transport http agent-inbox https://queue.example.com/mcp \
+  --header "Authorization: Bearer aik_…"
 ```
 
 ## ChatGPT
@@ -57,10 +57,10 @@ configurez le client. La forme courante est :
 ```json
 {
   "mcpServers": {
-    "cowork-queue": {
+    "agent-inbox": {
       "type": "http",
       "url": "https://queue.example.com/mcp",
-      "headers": { "Authorization": "Bearer cwk_…" }
+      "headers": { "Authorization": "Bearer aik_…" }
     }
   }
 }
@@ -76,7 +76,7 @@ curl -i -X POST https://queue.example.com/mcp
 
 # Avec une clé API : la liste des 12 outils
 curl -sS -X POST https://queue.example.com/mcp \
-  -H "Authorization: Bearer cwk_…" \
+  -H "Authorization: Bearer aik_…" \
   -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```

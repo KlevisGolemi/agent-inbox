@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cowork Queue — Admin</title>
+  <title>Agent Inbox — Admin</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2322C55E'/%3E%3C/svg%3E">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,7 +34,7 @@
           </svg>
         </div>
         <div>
-          <p class="font-heading font-semibold text-sm text-white leading-tight">Cowork Queue</p>
+          <p class="font-heading font-semibold text-sm text-white leading-tight">Agent Inbox</p>
           <p style="font-size:0.7rem; color:#94A3B8; line-height:1.2" class="mt-0.5">Admin · v<span x-text="ov.version || ''"></span></p>
         </div>
       </div>
@@ -124,7 +124,7 @@
         <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
           <div>
             <h2 class="font-heading text-xl font-semibold text-white">Dashboard</h2>
-            <p class="text-sm mt-0.5" style="color:#94A3B8">Vue temps réel de la queue Cowork</p>
+            <p class="text-sm mt-0.5" style="color:#94A3B8">Vue temps réel de la file</p>
           </div>
           <div class="flex items-center gap-2.5">
             <label class="toggle" @click="toggleAutoRefresh()">
@@ -846,7 +846,7 @@
               <p class="text-sm font-medium text-white mb-1">Mode 2 — Clé API</p>
               <p class="text-xs" style="color:#94A3B8">
                 Pour Claude Code, les scripts et les clients sans navigateur : créez une clé ci-dessous puis envoyez-la
-                dans l'en-tête <code class="px-1 rounded" style="background:rgba(59,130,246,0.1); color:#93C5FD">Authorization: Bearer cwk_…</code>
+                dans l'en-tête <code class="px-1 rounded" style="background:rgba(59,130,246,0.1); color:#93C5FD">Authorization: Bearer aik_…</code>
                 sur la même URL.
               </p>
             </div>

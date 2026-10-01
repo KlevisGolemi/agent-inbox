@@ -69,7 +69,7 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
     {
       title: 'État du serveur',
       description:
-        'Vérifie que la file Cowork Queue répond. Renvoie { ok, uptime_s, version }. ' +
+        'Vérifie que la file Agent Inbox répond. Renvoie { ok, uptime_s, version }. ' +
         'Lecture seule, sans effet de bord.',
       annotations: { readOnlyHint: true },
     },

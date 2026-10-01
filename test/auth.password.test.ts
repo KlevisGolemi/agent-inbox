@@ -229,7 +229,7 @@ describe('vues', () => {
   it('renderPage : document autonome, titre échappé, sans ressource externe', () => {
     const html = renderPage('<T>', '<p>corps</p>')
     expect(html).toContain('<html lang="fr">')
-    expect(html).toContain('<title>&lt;T&gt; · Cowork Queue</title>')
+    expect(html).toContain('<title>&lt;T&gt; · Agent Inbox</title>')
     expect(html).toContain('<p>corps</p>')
     expect(html).not.toMatch(/<(link|script)\b/)
   })

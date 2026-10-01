@@ -65,7 +65,7 @@ describe('loadEnv : mise à jour', () => {
   const secret = 's'.repeat(32)
 
   it('updateRepo vaut le dépôt par défaut, surchargeable par UPDATE_REPO', () => {
-    expect(loadEnv(base).updateRepo).toBe('KlevisGolemi/cowork-communication')
+    expect(loadEnv(base).updateRepo).toBe('KlevisGolemi/agent-inbox')
     expect(loadEnv({ ...base, UPDATE_REPO: 'acme/fork' }).updateRepo).toBe('acme/fork')
     expect(() => loadEnv({ ...base, UPDATE_REPO: 'pas un depot' })).toThrow(/UPDATE_REPO/)
   })

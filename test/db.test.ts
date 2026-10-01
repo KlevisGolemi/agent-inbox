@@ -32,7 +32,7 @@ function tableNames(db: Database.Database): string[] {
 describe('migrations', () => {
   let dir: string
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'cowork-db-'))
+    dir = mkdtempSync(join(tmpdir(), 'agent-inbox-db-'))
   })
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
@@ -132,7 +132,7 @@ describe('migrations', () => {
 
 describe('openDb', () => {
   it('active foreign_keys, busy_timeout et WAL (fichier)', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cowork-db-'))
+    const dir = mkdtempSync(join(tmpdir(), 'agent-inbox-db-'))
     try {
       const db = openDb(join(dir, 'q.db'))
       expect(db.pragma('foreign_keys', { simple: true })).toBe(1)

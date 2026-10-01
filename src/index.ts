@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   const runtime = await buildRuntime(env)
   const jobs = runtime.start()
   const server = runtime.app.listen(env.port, () => {
-    log('info', 'Cowork Queue démarré', { port: env.port, public_url: env.publicUrl.href })
+    log('info', 'Agent Inbox démarré', { port: env.port, public_url: env.publicUrl.href })
   })
 
   const shutdown = createShutdown({

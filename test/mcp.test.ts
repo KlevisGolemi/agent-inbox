@@ -68,7 +68,7 @@ describe('MCP stateless', () => {
     })
     expect(res.status).toBe(200)
     expect(res.headers['mcp-session-id']).toBeUndefined()
-    expect(body.result.serverInfo).toMatchObject({ name: 'cowork-queue', version: '0.0.0-test' })
+    expect(body.result.serverInfo).toMatchObject({ name: 'agent-inbox', version: '0.0.0-test' })
   })
 
   it('tools/list sans initialize préalable : 12 outils', async () => {

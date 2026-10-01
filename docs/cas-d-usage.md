@@ -1,7 +1,7 @@
 # Cas d'usage
 
 Trois recettes, alignées sur les workflows de [`examples/n8n/`](../examples/n8n/README.md). Préparation
-commune : connecter Claude ([guide](connecter-un-client.md)) et créer le credential n8n `Cowork Queue`
+commune : connecter Claude ([guide](connecter-un-client.md)) et créer le credential n8n `Agent Inbox`
 (voir le [README des templates](../examples/n8n/README.md#préparer-n8n-une-seule-fois)).
 
 ## 1. n8n pousse un événement, Claude l'analyse
@@ -11,7 +11,7 @@ commune : connecter Claude ([guide](connecter-un-client.md)) et créer le creden
 ```mermaid
 sequenceDiagram
   participant N as n8n
-  participant Q as Cowork Queue
+  participant Q as Agent Inbox
   participant C as Claude
   N->>Q: POST /webhook (x-topic: events)
   C->>Q: queue_next(topic: events)
@@ -39,7 +39,7 @@ attend le résultat.
 ```mermaid
 sequenceDiagram
   participant C as Claude
-  participant Q as Cowork Queue
+  participant Q as Agent Inbox
   participant N as n8n (worker)
   C->>Q: queue_send(topic: requests, correlation_id: req-42)
   N->>Q: GET /next?topic=requests&ack=manual&wait=30

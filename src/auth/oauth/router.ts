@@ -34,7 +34,7 @@ export function createOAuthRouter({ provider, sessions, env }: OAuthRouterDeps):
       issuerUrl: env.publicUrl,
       resourceServerUrl: new URL('/mcp', env.publicUrl),
       scopesSupported: SUPPORTED_SCOPES,
-      resourceName: 'Cowork Queue',
+      resourceName: 'Agent Inbox',
       tokenOptions: { rateLimit: STRICT_RATE_LIMIT },
       // Secret client sans expiration : un connecteur n'a aucun moyen de se réenregistrer seul.
       clientRegistrationOptions: { rateLimit: STRICT_RATE_LIMIT, clientSecretExpirySeconds: 0 },

@@ -1,5 +1,5 @@
 {
-  "name": "Cowork Queue - 03 Digest quotidien",
+  "name": "Agent Inbox - 03 Digest quotidien",
   "nodes": [
     {
       "parameters": {
@@ -58,7 +58,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "GET",
-        "url": "={{ $env.COWORK_QUEUE_URL }}/stats",
+        "url": "={{ $env.AGENT_INBOX_URL }}/stats",
         "options": {}
       },
       "id": "65ef9025-7bc0-4f1d-911b-3463855ff8d5",
@@ -71,7 +71,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "Cowork Queue"
+          "name": "Agent Inbox"
         }
       },
       "executeOnce": true
@@ -94,7 +94,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
-        "url": "={{ $env.COWORK_QUEUE_URL }}/webhook",
+        "url": "={{ $env.AGENT_INBOX_URL }}/webhook",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -127,7 +127,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "Cowork Queue"
+          "name": "Agent Inbox"
         }
       }
     }

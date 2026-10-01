@@ -1,7 +1,7 @@
 import type { Settings } from '../settings/index.js'
 
 /** Dépôt GitHub dont on suit les releases (surchargeable par UPDATE_REPO). */
-export const DEFAULT_UPDATE_REPO = 'KlevisGolemi/cowork-communication'
+export const DEFAULT_UPDATE_REPO = 'KlevisGolemi/agent-inbox'
 
 const CACHE_MS = 6 * 3600_000
 /** Un échec réseau n'est retenu que brièvement, pour ne pas marteler GitHub. */
@@ -93,7 +93,7 @@ export function createVersionService(deps: VersionDeps): VersionService {
       const res = await deps.fetch(`https://api.github.com/repos/${deps.repo}/releases/latest`, {
         headers: {
           accept: 'application/vnd.github+json',
-          'user-agent': `cowork-queue/${deps.current}`,
+          'user-agent': `agent-inbox/${deps.current}`,
         },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       })

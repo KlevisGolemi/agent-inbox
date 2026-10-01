@@ -4,7 +4,7 @@ import { baseCookieOptions } from './sessions.js'
 import { randomToken, safeEqual } from './tokens.js'
 import { sendPage } from './views.js'
 
-export const CSRF_COOKIE = 'cq_csrf'
+export const CSRF_COOKIE = 'inbox_csrf'
 export const CSRF_FIELD = '_csrf'
 export const CSRF_HEADER = 'x-csrf-token'
 
@@ -23,7 +23,7 @@ export function issueCsrfToken(req: Request, res: Response, env: Env): string {
 
 /**
  * Vérifie le jeton CSRF : champ `_csrf` du corps (formulaires) ou en-tête `x-csrf-token` (API),
- * comparé à temps constant au cookie `cq_csrf`. Sinon 403.
+ * comparé à temps constant au cookie `inbox_csrf`. Sinon 403.
  */
 function csrfMatches(req: Request): boolean {
   const cookie = (req.cookies as Record<string, unknown> | undefined)?.[CSRF_COOKIE]

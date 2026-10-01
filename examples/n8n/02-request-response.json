@@ -1,5 +1,5 @@
 {
-  "name": "Cowork Queue - 02 Request-response (worker)",
+  "name": "Agent Inbox - 02 Request-response (worker)",
   "nodes": [
     {
       "parameters": {
@@ -26,7 +26,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "GET",
-        "url": "={{ $env.COWORK_QUEUE_URL }}/next?topic=requests&ack=manual&wait=30",
+        "url": "={{ $env.AGENT_INBOX_URL }}/next?topic=requests&ack=manual&wait=30",
         "options": {
           "timeout": 45000
         }
@@ -41,7 +41,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "Cowork Queue"
+          "name": "Agent Inbox"
         }
       }
     },
@@ -96,7 +96,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
-        "url": "={{ $env.COWORK_QUEUE_URL }}/webhook",
+        "url": "={{ $env.AGENT_INBOX_URL }}/webhook",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -129,7 +129,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "Cowork Queue"
+          "name": "Agent Inbox"
         }
       }
     },
@@ -138,7 +138,7 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "method": "POST",
-        "url": "={{ $env.COWORK_QUEUE_URL }}/ack/{{ $('Traiter la demande').item.json.lease_id }}",
+        "url": "={{ $env.AGENT_INBOX_URL }}/ack/{{ $('Traiter la demande').item.json.lease_id }}",
         "options": {}
       },
       "id": "72d024cc-1692-4481-8428-9b98f86dd6b8",
@@ -151,7 +151,7 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "name": "Cowork Queue"
+          "name": "Agent Inbox"
         }
       }
     }

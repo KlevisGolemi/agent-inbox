@@ -4,6 +4,21 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-01
+
+### Changed
+
+- Projet renommé Agent Inbox (le préfixe « Cowork » est réservé par Claude Desktop).
+
+### Breaking
+
+- Préfixe des clés API : `cwk_…` devient `aik_…` ; les anciennes clés `cwk_…` sont invalides, recréez-les.
+- Cookies renommés (`cq_session` → `inbox_session`, `cq_csrf` → `inbox_csrf`) : reconnexion de l'administrateur.
+- Image `ghcr.io/klevisgolemi/agent-inbox` et projet Compose `agent-inbox` (nouveau nom de conteneur) ; gardez
+  `QUEUE_VOLUME_NAME` pointé vers le volume existant (voir « Migration 2.0 → 2.1 » dans `docs/installation.md`).
+- Modèles n8n : credential `Agent Inbox` et variable d'environnement `AGENT_INBOX_URL` (ex-`COWORK_QUEUE_URL`).
+- Dépôt GitHub : `KlevisGolemi/agent-inbox`.
+
 ## [2.0.0] - 2026-10-01
 
 Réécriture complète : une seule application TypeScript, authentification OAuth 2.1, réglages à chaud.
@@ -52,5 +67,6 @@ L'API HTTP des producteurs (`/webhook`, `/next`, `/peek`…) reste compatible av
 
 - `server.js`, `mcp/`, `poll.sh`, `API_REFERENCE.md` et `COWORK_INSTRUCTIONS.md` (code et documentation de la v1).
 
-[Unreleased]: https://github.com/KlevisGolemi/cowork-communication/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/KlevisGolemi/agent-inbox/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/KlevisGolemi/agent-inbox/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/KlevisGolemi/cowork-communication/releases/tag/v2.0.0

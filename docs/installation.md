@@ -15,8 +15,8 @@ refuse de démarrer avec une `PUBLIC_URL` en `http://` hors `NODE_ENV=developmen
 Créez l'enregistrement DNS (`A` ou `AAAA`) de `queue.example.com` vers le serveur, puis :
 
 ```bash
-git clone https://github.com/KlevisGolemi/cowork-communication.git
-cd cowork-communication
+git clone https://github.com/KlevisGolemi/agent-inbox.git
+cd agent-inbox
 ./install.sh
 ```
 
@@ -152,14 +152,14 @@ sécurité et refuse une sauvegarde d'une autre version du schéma.
 
 ```bash
 # Sauvegarde
-docker run --rm -v cowork-queue-data:/data:ro -v "$PWD":/b alpine tar czf /b/cowork-queue-backup.tgz -C /data .
+docker run --rm -v agent-inbox-data:/data:ro -v "$PWD":/b alpine tar czf /b/agent-inbox-backup.tgz -C /data .
 
 # Restauration dans un volume vide (application arrêtée : docker compose down)
-docker run --rm -v cowork-queue-data:/data -v "$PWD":/b alpine tar xzf /b/cowork-queue-backup.tgz -C /data
-docker run --rm -v cowork-queue-data:/data alpine chown -R 1000:1000 /data
+docker run --rm -v agent-inbox-data:/data -v "$PWD":/b alpine tar xzf /b/agent-inbox-backup.tgz -C /data
+docker run --rm -v agent-inbox-data:/data alpine chown -R 1000:1000 /data
 ```
 
-Le volume s'appelle `cowork-queue-data`, ou la valeur de `QUEUE_VOLUME_NAME` (`docker volume ls`).
+Le volume s'appelle `agent-inbox-data`, ou la valeur de `QUEUE_VOLUME_NAME` (`docker volume ls`).
 Les sauvegardes de l'interface contiennent comptes, clés API (condensés) et secret du webhook : protégez-les.
 
 ## Migration depuis la v1
@@ -168,7 +168,7 @@ La v2 reprend la base de la v1 telle quelle : messages, `correlation_id` et sch�
 comptes, clés et réglages sont créés par la v2.
 
 1. **Arrêtez la v1 sans supprimer le volume** : dans l'ancien dossier, `docker compose down` (sans `-v`).
-2. **Sauvegardez le volume** avec la commande `tar` ci-dessus (remplacez `cowork-queue-data` par le nom du
+2. **Sauvegardez le volume** avec la commande `tar` ci-dessus (remplacez `agent-inbox-data` par le nom du
    volume de la v1, visible avec `docker volume ls | grep queue` ; par défaut `webhook-queue_queue_data`).
 3. **Préparez la v2** : clonez le dépôt, puis `cp .env.example .env` et renseignez :
    - `PUBLIC_URL` et `SITE_HOST` (le domaine de l'ancienne file garde l'adresse de `/webhook` pour n8n) ;
@@ -189,13 +189,25 @@ comptes, clés et réglages sont créés par la v2.
 Les workflows n8n qui appellent `/webhook`, `/next` ou `/peek` fonctionnent sans modification.
 Autres changements : [CHANGELOG.md](../CHANGELOG.md#200---2026-10-01).
 
+## Migration 2.0 → 2.1
+
+La 2.1 renomme le projet en Agent Inbox (le préfixe « Cowork » est réservé par Claude Desktop).
+
+- `COMPOSE_PROJECT_NAME` passe de `cowork-queue` à `agent-inbox` : Docker Compose crée un nouveau conteneur
+  (et un nouveau réseau). Arrêtez l'ancien projet (`docker compose down`, sans `-v`) avant de démarrer le nouveau.
+- Gardez `QUEUE_VOLUME_NAME` pointé vers le volume existant (par défaut, l'ancien `cowork-queue-data`) :
+  sans cela, une base vide serait créée dans `agent-inbox-data`.
+- Les clés API `cwk_…` ne sont plus acceptées : recréez-les (préfixe `aik_`) dans Admin → Connexions.
+- Les cookies de session sont renommés : reconnectez-vous à l'administration.
+- Image `ghcr.io/klevisgolemi/agent-inbox` ; dans n8n, credential `Agent Inbox` et variable `AGENT_INBOX_URL`.
+
 ## Désinstallation
 
 ```bash
 ./uninstall.sh
 ```
 
-Le script demande confirmation, propose d'archiver le volume (`cowork-queue-backup-<date>.tgz` dans le dossier
+Le script demande confirmation, propose d'archiver le volume (`agent-inbox-backup-<date>.tgz` dans le dossier
 courant), supprime conteneurs, volumes et image, puis `.env`. Options : `--yes` (aucune question, sauvegarde
 incluse) et `--no-backup`. Opération destructive : la base entière est supprimée.
 
@@ -205,7 +217,7 @@ incluse) et `--no-backup`. Opération destructive : la base entière est supprim
 |---|---|
 | Le connecteur apparaît mais n'expose **aucun outil** | L'URL doit se terminer par `/mcp`. Vérifiez : `curl -i -X POST https://<hôte>/mcp` doit répondre **401** avec un en-tête `WWW-Authenticate: Bearer … resource_metadata=…`. Si ce n'est pas le cas, le proxy ne route pas vers l'application ou l'URL est mauvaise. Supprimez puis rajoutez le connecteur. |
 | **401** sur `/webhook` ou `/next` | Le header `x-webhook-secret` est absent ou différent du secret courant (Admin → Réglages). Une rotation du secret invalide l'ancien immédiatement. |
-| **401** sur `/mcp` avec une clé API | Clé révoquée, mal copiée, ou en-tête qui n'est pas `Authorization: Bearer cwk_…`. Créez-en une dans Admin → Connexions. |
+| **401** sur `/mcp` avec une clé API | Clé révoquée, mal copiée, ou en-tête qui n'est pas `Authorization: Bearer aik_…`. Créez-en une dans Admin → Connexions. |
 | **429** | Limite de débit atteinte (`webhook_rate_limit_per_min`, 100 par défaut ; 10 par minute sur `/login`, `/token`). Si elle frappe tout le monde à la fois, `TRUST_PROXY` ne correspond pas au nombre de proxys. |
 | Pas de certificat, navigateur en erreur | Le DNS doit pointer vers le serveur et les ports 80/443 être joignables avant la première visite. Voir `docker compose logs caddy` (ou les logs de Traefik). |
 | Code de setup introuvable | `docker compose logs app \| grep -i setup`. Il n'existe que tant qu'aucun compte n'a été créé et change à chaque redémarrage. |

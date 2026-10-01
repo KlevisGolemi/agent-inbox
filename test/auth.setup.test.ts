@@ -15,14 +15,14 @@ beforeEach(() => {
   t = makeTestApp({ setupCode: { value: CODE } })
 })
 
-/** GET d'une page : renvoie le cookie cq_csrf et le jeton du champ caché. */
+/** GET d'une page : renvoie le cookie inbox_csrf et le jeton du champ caché. */
 async function csrfFrom(app: Express, path: string) {
   const res = await request(app).get(path).set('Accept', 'text/html')
-  const cookie = getSetCookie(res, 'cq_csrf')
+  const cookie = getSetCookie(res, 'inbox_csrf')
   const field = /name="_csrf" value="([^"]+)"/.exec(res.text)?.[1]
   expect(cookie).toBeTruthy()
   expect(field).toBe(cookie)
-  return { cookie: `cq_csrf=${cookie}`, token: field! }
+  return { cookie: `inbox_csrf=${cookie}`, token: field! }
 }
 
 async function postForm(
@@ -48,7 +48,7 @@ describe('/setup', () => {
     expect(r.status).toBe(200)
     expect(r.headers['content-type']).toMatch(/text\/html/)
     expect(r.text).toContain('<label for="code"')
-    const line = setCookieLines(r, 'cq_csrf')[0]!
+    const line = setCookieLines(r, 'inbox_csrf')[0]!
     expect(line).toMatch(/HttpOnly/i)
     expect(line).toMatch(/SameSite=Strict/i)
     expect(line).toMatch(/Secure/i)
@@ -81,13 +81,13 @@ describe('/setup', () => {
     expect(r.headers.location).toBe('/admin')
     expect(t.users.count()).toBe(1)
     expect(t.setupCode.value).toBeNull()
-    const line = setCookieLines(r, 'cq_session')[0]!
+    const line = setCookieLines(r, 'inbox_session')[0]!
     expect(line).toMatch(/HttpOnly/i)
     expect(line).toMatch(/Secure/i)
     expect(line).toMatch(/SameSite=Lax/i)
     expect(line).toMatch(/Path=\//)
     expect(line).toMatch(/Max-Age=604800/)
-    const session = getSetCookie(r, 'cq_session')!
+    const session = getSetCookie(r, 'inbox_session')!
     expect(t.sessions.resolve(session)).toMatchObject({ email: 'admin@example.com' })
 
     expect((await request(app()).get('/setup')).status).toBe(404)
@@ -141,7 +141,7 @@ describe('/login', () => {
     })
     expect(r.status).toBe(401)
     expect(r.text).toContain('Email ou mot de passe incorrect')
-    expect(setCookieLines(r, 'cq_session')).toHaveLength(0)
+    expect(setCookieLines(r, 'inbox_session')).toHaveLength(0)
     const r2 = await postForm(app(), '/login', { email: 'nobody@example.com', password: PW })
     expect(r2.status).toBe(401)
     expect(r2.text).toContain('Email ou mot de passe incorrect')
@@ -166,7 +166,7 @@ describe('/login', () => {
     })
     expect(r.status).toBe(302)
     expect(r.headers.location).toBe('/authorize?client_id=abc&state=x')
-    expect(t.sessions.resolve(getSetCookie(r, 'cq_session'))).not.toBeNull()
+    expect(t.sessions.resolve(getSetCookie(r, 'inbox_session'))).not.toBeNull()
   })
 
   it.each(['//evil.com', '/\\evil.com', 'https://evil.com', '/\t/evil.com', ''])(
@@ -188,7 +188,7 @@ describe('/login', () => {
     const session = t.sessions.create(1)
     const r = await request(app())
       .get('/login?next=%2Fadmin%2Fkeys')
-      .set('Cookie', `cq_session=${session}`)
+      .set('Cookie', `inbox_session=${session}`)
     expect(r.status).toBe(302)
     expect(r.headers.location).toBe('/admin/keys')
   })
@@ -214,7 +214,7 @@ describe('/login', () => {
       .type('form')
       .send({ email: 'admin@example.com', password: PW })
     expect(r.status).toBe(403)
-    expect(setCookieLines(r, 'cq_session')).toHaveLength(0)
+    expect(setCookieLines(r, 'inbox_session')).toHaveLength(0)
   })
 })
 
@@ -222,11 +222,11 @@ describe('/logout', () => {
   it('détruit la session et efface le cookie', async () => {
     await t.users.create('admin@example.com', PW)
     const session = t.sessions.create(1)
-    const r = await postForm(app(), '/logout', {}, `cq_session=${session}`)
+    const r = await postForm(app(), '/logout', {}, `inbox_session=${session}`)
     expect(r.status).toBe(302)
     expect(r.headers.location).toBe('/login')
     expect(t.sessions.resolve(session)).toBeNull()
-    expect(setCookieLines(r, 'cq_session')[0]).toMatch(/cq_session=;/)
+    expect(setCookieLines(r, 'inbox_session')[0]).toMatch(/inbox_session=;/)
   })
 })
 
@@ -248,7 +248,7 @@ describe('requireAdminSession', () => {
   it('session valide → passe et expose l’utilisateur', async () => {
     await t.users.create('admin@example.com', PW)
     const s = t.sessions.create(1)
-    const r = await request(protectedApp).get('/admin/x').set('Cookie', `cq_session=${s}`)
+    const r = await request(protectedApp).get('/admin/x').set('Cookie', `inbox_session=${s}`)
     expect(r.status).toBe(200)
     expect(r.body).toEqual({ ok: true, email: 'admin@example.com' })
   })
@@ -260,13 +260,13 @@ describe('requireAdminSession', () => {
     const html = await request(protectedApp)
       .get('/admin/x?a=1')
       .set('Accept', 'text/html')
-      .set('Cookie', `cq_session=${s}`)
+      .set('Cookie', `inbox_session=${s}`)
     expect(html.status).toBe(302)
     expect(html.headers.location).toBe('/login?next=%2Fadmin%2Fx%3Fa%3D1')
     const json = await request(protectedApp)
       .get('/admin/x')
       .set('Accept', 'application/json')
-      .set('Cookie', `cq_session=${s}`)
+      .set('Cookie', `inbox_session=${s}`)
     expect(json.status).toBe(401)
     expect(json.body).toEqual({ ok: false, error: 'unauthorized', message: 'Session requise' })
   })
@@ -276,7 +276,7 @@ describe('cookies en développement', () => {
   it('pas de Secure si NODE_ENV=development', async () => {
     const dev = makeTestApp({ env: testEnv({ nodeEnv: 'development' }) })
     const r = await request(dev.app).get('/login')
-    expect(setCookieLines(r, 'cq_csrf')[0]).not.toMatch(/Secure/i)
+    expect(setCookieLines(r, 'inbox_csrf')[0]).not.toMatch(/Secure/i)
   })
 })
 

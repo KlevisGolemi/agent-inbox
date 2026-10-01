@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installe Cowork Queue : génère .env, démarre les conteneurs et attend que le service réponde.
+# Installe Agent Inbox : génère .env, démarre les conteneurs et attend que le service réponde.
 #
 # Usage : ./install.sh [--force] [--help]
 # Non interactif : CQ_YES=1 CQ_PUBLIC_URL=https://queue.example.com ./install.sh
@@ -78,7 +78,7 @@ if [ -f .env ] && ! $FORCE; then
 fi
 
 echo
-info "Installation de Cowork Queue"
+info "Installation de Agent Inbox"
 
 # ─── 2. Domaine ou IP ─────────────────────────────────────────
 INPUT="${CQ_PUBLIC_URL:-}"
@@ -207,7 +207,7 @@ umask 077
   echo "# Généré par install.sh le $(date -u +%Y-%m-%dT%H:%M:%SZ). Voir .env.example pour toutes les options."
   echo "PUBLIC_URL=$PUBLIC_URL"
   echo "SITE_HOST=$HOST"
-  echo "COMPOSE_PROJECT_NAME=cowork-queue"
+  echo "COMPOSE_PROJECT_NAME=agent-inbox"
   if [ "$MODE" = "traefik" ]; then
     if [ -n "$TRAEFIK_NETWORK" ]; then
       echo "COMPOSE_FILE=deploy/docker-compose.traefik.yml:deploy/docker-compose.traefik-network.yml"
@@ -272,7 +272,7 @@ fi
 
 # ─── 9. Résumé ────────────────────────────────────────────────
 echo
-ok "Cowork Queue est installé."
+ok "Agent Inbox est installé."
 echo "  Interface d'administration : $PUBLIC_URL/admin"
 echo "  Adresse MCP (Claude, ChatGPT) : $PUBLIC_URL/mcp"
 if ! $ADMIN_CREATED; then

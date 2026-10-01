@@ -38,7 +38,7 @@ export function renderPage(title: string, bodyHtml: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(title)} · Cowork Queue</title>
+<title>${escapeHtml(title)} · Agent Inbox</title>
 <style>${STYLE}</style>
 </head>
 <body>
@@ -121,7 +121,7 @@ export function consentBody(o: {
   redirectHost: string
   scopes: string[]
 }): string {
-  return `<p><strong>${escapeHtml(o.clientName)}</strong> demande l’accès à votre file Cowork Queue.</p>
+  return `<p><strong>${escapeHtml(o.clientName)}</strong> demande l’accès à votre file Agent Inbox.</p>
 <p class="hint">Autorisations : ${escapeHtml(o.scopes.join(', '))} (lire, envoyer et supprimer des messages).</p>
 <p class="hint">Vous serez renvoyé vers <strong>${escapeHtml(o.redirectHost)}</strong>. N’autorisez que si vous venez de lancer cette connexion.</p>
 <form method="post" action="/oauth/consent">

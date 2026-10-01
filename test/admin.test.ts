@@ -19,7 +19,7 @@ async function setupWith(over: Partial<AppDeps> = {}) {
   const base = `${SESSION_COOKIE}=${session}`
   const overview = await request(ctx.app).get('/admin/api/overview').set('Cookie', base)
   const csrf = overview.body.csrfToken as string
-  const cookies = `${base}; cq_csrf=${csrf}`
+  const cookies = `${base}; inbox_csrf=${csrf}`
   const api = (method: 'post' | 'patch' | 'delete' | 'get', path: string) =>
     request(ctx.app)[method](`/admin/api${path}`).set('Cookie', cookies).set('x-csrf-token', csrf)
   return { ...ctx, user, session, base, csrf, cookies, api }
@@ -90,7 +90,7 @@ describe('accès et CSRF', () => {
     const ok = await request(app).get('/admin').set('Cookie', base).set('Accept', 'text/html')
     expect(ok.status).toBe(200)
     expect(ok.headers['content-type']).toMatch(/text\/html/)
-    expect(ok.text).toContain('Cowork Queue')
+    expect(ok.text).toContain('Agent Inbox')
     expect(ok.text).not.toContain('/t/')
     expect(ok.text).not.toContain('cdn.tailwindcss.com')
   })
@@ -175,7 +175,7 @@ describe('overview', () => {
     expect(res.body.settings.webhook_secret).toBe('••••gggg')
     expect(JSON.stringify(res.body)).not.toContain(settings.get('webhook_secret'))
     expect(res.body.csrfToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
-    expect(getSetCookie(res, 'cq_csrf')).toBe(res.body.csrfToken)
+    expect(getSetCookie(res, 'inbox_csrf')).toBe(res.body.csrfToken)
     expect(res.headers['cache-control']).toBe('no-store')
   })
 })
@@ -320,7 +320,7 @@ describe('clés API', () => {
     const { api, apiKeys } = await setup()
     const created = await api('post', '/api-keys').send({ name: 'Claude' })
     expect(created.status).toBe(201)
-    expect(created.body.key).toMatch(/^cwk_[A-Za-z0-9]{32}$/)
+    expect(created.body.key).toMatch(/^aik_[A-Za-z0-9]{32}$/)
     expect(apiKeys.verify(created.body.key)).not.toBeNull()
 
     const list = await api('get', '/api-keys')

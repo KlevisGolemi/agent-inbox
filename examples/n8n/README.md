@@ -12,11 +12,11 @@ sont dans [docs/cas-d-usage.md](../../docs/cas-d-usage.md).
 
 ## Préparer n8n (une seule fois)
 
-1. **Credential.** *Credentials → Create → Header Auth*, nommé exactement `Cowork Queue` :
-   *Name* `x-webhook-secret`, *Value* le secret du webhook (Admin → Réglages de Cowork Queue).
-2. **Variable d'environnement.** Sur l'instance n8n, définissez `COWORK_QUEUE_URL` avec l'URL publique de
-   Cowork Queue, sans barre oblique finale (par exemple `https://queue.example.com`). Les nœuds la lisent
-   avec `{{ $env.COWORK_QUEUE_URL }}`. Si votre n8n bloque l'accès à `$env` (`N8N_BLOCK_ENV_ACCESS_IN_NODE`),
+1. **Credential.** *Credentials → Create → Header Auth*, nommé exactement `Agent Inbox` :
+   *Name* `x-webhook-secret`, *Value* le secret du webhook (Admin → Réglages de Agent Inbox).
+2. **Variable d'environnement.** Sur l'instance n8n, définissez `AGENT_INBOX_URL` avec l'URL publique de
+   Agent Inbox, sans barre oblique finale (par exemple `https://queue.example.com`). Les nœuds la lisent
+   avec `{{ $env.AGENT_INBOX_URL }}`. Si votre n8n bloque l'accès à `$env` (`N8N_BLOCK_ENV_ACCESS_IN_NODE`),
    autorisez-le ou remplacez l'expression par l'URL en clair dans chaque nœud HTTP Request.
 
 Aucun fichier ne contient de secret : les workflows désignent le credential par son nom.
@@ -24,7 +24,7 @@ Aucun fichier ne contient de secret : les workflows désignent le credential par
 ## Importer
 
 *Workflows → ⋯ → Import from file*, choisissez un fichier. Ouvrez chaque nœud HTTP Request qui porte un
-avertissement et sélectionnez le credential `Cowork Queue` s'il n'est pas déjà relié. Les workflows sont
+avertissement et sélectionnez le credential `Agent Inbox` s'il n'est pas déjà relié. Les workflows sont
 importés **inactifs**.
 
 ## Tester

@@ -1,11 +1,11 @@
-# Cowork Queue
+# Agent Inbox
 
-[![CI](https://github.com/KlevisGolemi/cowork-communication/actions/workflows/ci.yml/badge.svg)](https://github.com/KlevisGolemi/cowork-communication/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/KlevisGolemi/cowork-communication)](https://github.com/KlevisGolemi/cowork-communication/releases)
+[![CI](https://github.com/KlevisGolemi/agent-inbox/actions/workflows/ci.yml/badge.svg)](https://github.com/KlevisGolemi/agent-inbox/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/KlevisGolemi/agent-inbox)](https://github.com/KlevisGolemi/agent-inbox/releases)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Node 24](https://img.shields.io/badge/node-24-339933.svg)](package.json)
 
-**Votre IA ne voit que ce qu'on lui donne. Cowork Queue lui donne les événements de vos outils.**
+**Votre IA ne voit que ce qu'on lui donne. Agent Inbox lui donne les événements de vos outils.**
 
 Une file d'attente auto-hébergée : vos automatisations (n8n, scripts, outils sans MCP) y déposent des
 événements, Claude et ChatGPT les lisent via MCP, et leur répondent par la même voie.
@@ -27,7 +27,7 @@ Pensez à une **boîte aux lettres** entre vos automatisations et votre IA.
 
 ```mermaid
 flowchart LR
-  P["Producteurs<br/>n8n, scripts, cron"] -- "POST /webhook<br/>x-webhook-secret" --> Q[("Cowork Queue<br/>SQLite")]
+  P["Producteurs<br/>n8n, scripts, cron"] -- "POST /webhook<br/>x-webhook-secret" --> Q[("Agent Inbox<br/>SQLite")]
   Q -- "MCP /mcp<br/>OAuth 2.1 ou clé API" --> A["Claude, ChatGPT"]
   A -- "queue_send" --> Q
   Q -- "GET /next" --> P
@@ -48,8 +48,8 @@ Prérequis : un serveur Linux avec Docker (Compose v2) et les ports 80 et 443 ou
 une adresse `sslip.io` est générée. HTTPS est obligatoire : Claude et ChatGPT refusent un connecteur en HTTP.
 
 ```bash
-git clone https://github.com/KlevisGolemi/cowork-communication.git
-cd cowork-communication
+git clone https://github.com/KlevisGolemi/agent-inbox.git
+cd agent-inbox
 ./install.sh
 ```
 
@@ -99,7 +99,7 @@ racontent votre activité : clients, chiffre d'affaires, incidents. Voici ce qui
 combien de temps.
 
 - **Où.** Les payloads restent dans la base SQLite de _votre_ serveur. Aucun service tiers ne les reçoit.
-- **Comment.** Connexion MCP en OAuth 2.1 avec PKCE, ou clé API `cwk_…` dont seul le hash SHA-256 est stocké.
+- **Comment.** Connexion MCP en OAuth 2.1 avec PKCE, ou clé API `aik_…` dont seul le hash SHA-256 est stocké.
   L'administration est derrière une session avec protection CSRF. Les logs ne reçoivent ni secret, ni jeton,
   ni contenu de message.
 - **Combien de temps.** Durée de conservation (TTL) réglable globalement et **par topic** : par exemple
@@ -137,7 +137,7 @@ Détails et signalement d'une faille : [SECURITY.md](SECURITY.md).
 - **Réglages en base, relus à chaud** : modifiés dans l'admin, appliqués sans redémarrage.
 - **OAuth 2.1** via le SDK MCP, ou clé API pour les clients sans navigateur.
 - **Suite de tests Vitest** (+ Supertest), ESLint et `tsc` exécutés par la
-  [CI](https://github.com/KlevisGolemi/cowork-communication/actions/workflows/ci.yml) : `npm run check`.
+  [CI](https://github.com/KlevisGolemi/agent-inbox/actions/workflows/ci.yml) : `npm run check`.
 
 Stack : Node 24, TypeScript, Express 5, better-sqlite3. Plan du code et invariants :
 [CLAUDE.md](CLAUDE.md) et [AGENTS.md](AGENTS.md) ; API HTTP des producteurs : [docs/api.md](docs/api.md).
@@ -155,7 +155,7 @@ requête/réponse, un digest quotidien. Voir [examples/n8n/](examples/n8n/README
 | Document                                                   | Contenu                                                                                 |
 | ---------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | [docs/installation.md](docs/installation.md)               | Domaine, sslip.io, Traefik, mise à jour, sauvegardes, migration depuis la v1, dépannage |
-| [docs/connecter-un-client.md](docs/connecter-un-client.md) | Claude (Web, Desktop, Cowork, Code), ChatGPT, clés API                                  |
+| [docs/connecter-un-client.md](docs/connecter-un-client.md) | Claude (Web, Desktop, Code), ChatGPT, clés API                                  |
 | [docs/api.md](docs/api.md)                                 | API HTTP des producteurs : routes, topics, `ack`, `wait`, `search`, exemples            |
 | [docs/cas-d-usage.md](docs/cas-d-usage.md)                 | Trois recettes complètes avec n8n et Claude                                             |
 | [AGENTS.md](AGENTS.md)                                     | Procédure d'installation pour un agent IA, guide pour contribuer au code                |
@@ -183,5 +183,5 @@ curl -X POST https://<votre-hôte>/webhook \
 Puis demandez à Claude : « Qu'est-ce qui est arrivé dans la file ? » Il appelle `queue_next` et vous
 répond avec le message.
 
-Si Cowork Queue vous a fait gagner du temps, une étoile sur GitHub aide d'autres personnes à le trouver.
+Si Agent Inbox vous a fait gagner du temps, une étoile sur GitHub aide d'autres personnes à le trouver.
 Et si vous hésitez sur la suite, ouvrez une issue : « quel conseil pour la suite ? » est une vraie question.

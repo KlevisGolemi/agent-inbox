@@ -4,10 +4,10 @@ Guide pour Claude Code sur ce dépôt. Procédure d'installation et guide de con
 
 ## Vue d'ensemble
 
-Cowork Queue : file d'attente auto-hébergée. Des producteurs (n8n, scripts) déposent des messages en HTTP
+Agent Inbox : file d'attente auto-hébergée. Des producteurs (n8n, scripts) déposent des messages en HTTP
 (`POST /webhook`), Claude et ChatGPT les lisent et en écrivent via MCP (`POST /mcp`, 12 outils). Une seule
 application TypeScript (Node 24, Express 5, better-sqlite3), un conteneur, une base SQLite (`/data/queue.db`).
-Authentification : secret partagé pour l'API HTTP, OAuth 2.1 ou clé API `cwk_…` pour MCP, session par cookie
+Authentification : secret partagé pour l'API HTTP, OAuth 2.1 ou clé API `aik_…` pour MCP, session par cookie
 pour `/admin`. Version courante : 2.x ; la v1 (`server.js`, `mcp/`) n'existe plus.
 
 ## Commandes

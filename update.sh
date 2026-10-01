@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Met à jour Cowork Queue : récupère la dernière version et redémarre les conteneurs.
+# Met à jour Agent Inbox : récupère la dernière version et redémarre les conteneurs.
 set -euo pipefail
 
 cd "$(dirname "$0")"

@@ -15,8 +15,8 @@ RUN npm run build && npm prune --omit=dev
 
 # ── Étape d'exécution : aucun outil de build, utilisateur non-root.
 FROM node:24-alpine
-LABEL org.opencontainers.image.source="https://github.com/KlevisGolemi/cowork-communication" \
-      org.opencontainers.image.title="Cowork Queue" \
+LABEL org.opencontainers.image.source="https://github.com/KlevisGolemi/agent-inbox" \
+      org.opencontainers.image.title="Agent Inbox" \
       org.opencontainers.image.description="File d'attente auto-hébergée + MCP + OAuth + interface d'administration" \
       org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production

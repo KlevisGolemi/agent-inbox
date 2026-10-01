@@ -197,9 +197,9 @@ Modifiables à chaud dans Admin → Réglages, sans redémarrage.
 
 ## n8n : nœud HTTP Request
 
-1. Créez un credential **Header Auth** : *Name* `x-webhook-secret`, *Value* le secret ; nommez-le `Cowork Queue`.
+1. Créez un credential **Header Auth** : *Name* `x-webhook-secret`, *Value* le secret ; nommez-le `Agent Inbox`.
 2. Nœud **HTTP Request** (v4) : *Method* `POST`, *URL* `https://queue.example.com/webhook`, *Authentication*
-   `Generic Credential Type` → `Header Auth` → `Cowork Queue`.
+   `Generic Credential Type` → `Header Auth` → `Agent Inbox`.
 3. *Send Headers* : `x-topic` (et `x-correlation-id` si besoin). *Send Body* : JSON.
 
 Des workflows prêts à importer sont dans [`examples/n8n/`](../examples/n8n/README.md).

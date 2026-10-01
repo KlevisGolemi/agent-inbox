@@ -1,15 +1,15 @@
-# Cowork Queue — variante pour un Traefik déjà en place (réseau externe, certresolver).
+# Agent Inbox — variante pour un Traefik déjà en place (réseau externe, certresolver).
 # Utilisation depuis la racine du projet (install.sh écrit COMPOSE_FILE dans .env) :
 #   docker compose -f deploy/docker-compose.traefik.yml up -d
 # Par défaut, Traefik joint le conteneur par son réseau de projet (cas d'un Traefik en
 # network_mode: host). Pour un réseau Traefik partagé, ajoutez deploy/docker-compose.traefik-network.yml
 # (COMPOSE_FILE=deploy/docker-compose.traefik.yml:deploy/docker-compose.traefik-network.yml, TRAEFIK_NETWORK=...).
 # Les chemins sont relatifs à deploy/ ; le fichier .env reste celui de la racine.
-name: ${COMPOSE_PROJECT_NAME:-cowork-queue}
+name: ${COMPOSE_PROJECT_NAME:-agent-inbox}
 
 services:
   app:
-    image: ghcr.io/klevisgolemi/cowork-queue:${VERSION:-latest}
+    image: ghcr.io/klevisgolemi/agent-inbox:${VERSION:-latest}
     build: ..
     restart: unless-stopped
     # Arrêt propre : l'application coupe ses attentes longues et sort en moins de 15 s.
@@ -31,11 +31,11 @@ services:
       start_period: 15s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.cowork-queue.rule=${TRAEFIK_RULE:?TRAEFIK_RULE est obligatoire (voir .env.example)}"
-      - "traefik.http.routers.cowork-queue.entrypoints=websecure"
-      - "traefik.http.routers.cowork-queue.tls=true"
-      - "traefik.http.routers.cowork-queue.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
-      - "traefik.http.services.cowork-queue.loadbalancer.server.port=3000"
+      - "traefik.http.routers.agent-inbox.rule=${TRAEFIK_RULE:?TRAEFIK_RULE est obligatoire (voir .env.example)}"
+      - "traefik.http.routers.agent-inbox.entrypoints=websecure"
+      - "traefik.http.routers.agent-inbox.tls=true"
+      - "traefik.http.routers.agent-inbox.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      - "traefik.http.services.agent-inbox.loadbalancer.server.port=3000"
 
   # Mise à jour en un clic depuis l'interface (optionnelle) : COMPOSE_PROFILES=updater dans .env.
   updater:
@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
     environment:
       UPDATER_SECRET: ${UPDATER_SECRET:-}
-      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-cowork-queue}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-agent-inbox}
       COMPOSE_FILE: ${COMPOSE_FILE:-deploy/docker-compose.traefik.yml}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -52,4 +52,4 @@ services:
 
 volumes:
   queue_data:
-    name: ${QUEUE_VOLUME_NAME:-cowork-queue-data}
+    name: ${QUEUE_VOLUME_NAME:-agent-inbox-data}

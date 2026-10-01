@@ -4,7 +4,7 @@ import type { Env } from '../env.js'
 import { randomToken, sha256 } from './tokens.js'
 import type { User } from './users.js'
 
-export const SESSION_COOKIE = 'cq_session'
+export const SESSION_COOKIE = 'inbox_session'
 export const SESSION_TTL_MS = 7 * 24 * 3600 * 1000
 
 export interface AdminSessions {

@@ -80,7 +80,7 @@ async function openConsent(cookie: string, query: Record<string, string>) {
   expect(loc).toMatch(/^\/oauth\/consent\?req=[A-Za-z0-9_-]+$/)
   const page = await request(t.app).get(loc).set('Cookie', cookie).set('Accept', 'text/html')
   expect(page.status).toBe(200)
-  const csrf = getSetCookie(page, 'cq_csrf')!
+  const csrf = getSetCookie(page, 'inbox_csrf')!
   const req = /name="req" value="([^"]+)"/.exec(page.text)?.[1]
   expect(req).toBeTruthy()
   return { page, csrf, req: req! }
@@ -90,7 +90,7 @@ async function decide(cookie: string, c: { csrf: string; req: string }, decision
   return request(t.app)
     .post('/oauth/consent')
     .set('Accept', 'text/html')
-    .set('Cookie', [cookie, `cq_csrf=${c.csrf}`].filter(Boolean).join('; '))
+    .set('Cookie', [cookie, `inbox_csrf=${c.csrf}`].filter(Boolean).join('; '))
     .type('form')
     .send({ _csrf: c.csrf, req: c.req, decision })
 }
@@ -155,7 +155,7 @@ describe('métadonnées OAuth', () => {
     expect(res.status).toBe(200)
     expect(res.body.resource).toBe('https://queue.example.test/mcp')
     expect(res.body.authorization_servers).toEqual(['https://queue.example.test/'])
-    expect(res.body.resource_name).toBe('Cowork Queue')
+    expect(res.body.resource_name).toBe('Agent Inbox')
   })
 
   it('mcpResourceMetadataUrl pointe vers la ressource /mcp', () => {
@@ -578,9 +578,9 @@ describe('middleware Bearer', () => {
     expect(res.body).toEqual({ clientId: `api-key:${id}`, scopes: ['queue'] })
   })
 
-  it('jeton OAuth commençant par cwk_ → authentifié par le vérificateur OAuth', async () => {
+  it('jeton OAuth commençant par aik_ → authentifié par le vérificateur OAuth', async () => {
     const clientId = await registerClient()
-    const token = `cwk_${randomToken(32).slice(4)}`
+    const token = `aik_${randomToken(32).slice(4)}`
     t.db
       .prepare(
         `INSERT INTO oauth_tokens (token_hash, kind, client_id, user_id, scopes, resource, expires_at, created_at)

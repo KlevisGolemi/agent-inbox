@@ -1,11 +1,11 @@
-# Cowork Queue — déploiement par défaut : application + Caddy (HTTPS automatique).
+# Agent Inbox — déploiement par défaut : application + Caddy (HTTPS automatique).
 # Seul Caddy publie des ports : l'application n'est jamais exposée directement
 # (le limiteur de débit ne fait confiance qu'à un seul proxy).
-name: ${COMPOSE_PROJECT_NAME:-cowork-queue}
+name: ${COMPOSE_PROJECT_NAME:-agent-inbox}
 
 services:
   app:
-    image: ghcr.io/klevisgolemi/cowork-queue:${VERSION:-latest}
+    image: ghcr.io/klevisgolemi/agent-inbox:${VERSION:-latest}
     build: .
     restart: unless-stopped
     # Arrêt propre : l'application coupe ses attentes longues et sort en moins de 15 s.
@@ -50,7 +50,7 @@ services:
     restart: unless-stopped
     environment:
       UPDATER_SECRET: ${UPDATER_SECRET:-}
-      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-cowork-queue}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-agent-inbox}
       COMPOSE_FILE: ${COMPOSE_FILE:-docker-compose.yml}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -60,6 +60,6 @@ volumes:
   queue_data:
     # Nom fixe : une installation v1 peut réutiliser son volume existant
     # (QUEUE_VOLUME_NAME dans .env, voir .env.example).
-    name: ${QUEUE_VOLUME_NAME:-cowork-queue-data}
+    name: ${QUEUE_VOLUME_NAME:-agent-inbox-data}
   caddy_data:
   caddy_config:

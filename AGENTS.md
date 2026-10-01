@@ -1,9 +1,9 @@
 # AGENTS.md
 
-Instructions pour un agent IA (Claude Code, Codex, etc.). Deux parties : [installer et connecter](#installer-cowork-queue)
+Instructions pour un agent IA (Claude Code, Codex, etc.). Deux parties : [installer et connecter](#installer-agent-inbox)
 une instance pour un utilisateur, puis [contribuer au code](#contribuer-au-code).
 
-## Installer Cowork Queue
+## Installer Agent Inbox
 
 Suivez les étapes dans l'ordre. Après chaque étape, exécutez la vérification et comparez avec la sortie
 attendue ; en cas d'écart, passez à [Si ça échoue](#5-si-ça-échoue). N'improvisez pas d'autres commandes.
@@ -30,8 +30,8 @@ libres (Caddy) et joignables, enregistrement DNS créé (inutile avec une IP).
 ### 2. Installer
 
 ```bash
-git clone https://github.com/KlevisGolemi/cowork-communication.git
-cd cowork-communication
+git clone https://github.com/KlevisGolemi/agent-inbox.git
+cd agent-inbox
 CQ_YES=1 CQ_PUBLIC_URL=<domaine-ou-ip> ./install.sh
 ```
 
@@ -87,11 +87,11 @@ lui-même son e-mail et son mot de passe. **Vérifier** : l'utilisateur atteint 
 Donnez à l'utilisateur l'adresse MCP **`$URL/mcp`** (elle doit se terminer par `/mcp`) et suivez
 [docs/connecter-un-client.md](docs/connecter-un-client.md) :
 
-- **Claude (Web, Desktop, Cowork)** : Paramètres → Connecteurs → Ajouter un connecteur personnalisé, puis connexion et consentement.
-- **Claude Code** : `claude mcp add --transport http cowork-queue $URL/mcp`, puis `/mcp` pour s'authentifier.
+- **Claude (Web, Desktop)** : Paramètres → Connecteurs → Ajouter un connecteur personnalisé, puis connexion et consentement.
+- **Claude Code** : `claude mcp add --transport http agent-inbox $URL/mcp`, puis `/mcp` pour s'authentifier.
 - **ChatGPT** : connecteur MCP personnalisé en mode développeur, authentification OAuth.
 - **Autre client / automatisation** : clé API créée par l'utilisateur dans Admin → Connexions
-  (`Authorization: Bearer cwk_…`). Ne créez pas de clé à sa place sans qu'il le demande.
+  (`Authorization: Bearer aik_…`). Ne créez pas de clé à sa place sans qu'il le demande.
 
 **Vérifier** : le client liste **12 outils** (`queue_status`, `queue_stats`, `queue_peek`, `queue_search`,
 `queue_by_id`, `queue_next`, `queue_wait`, `queue_ack`, `queue_nack`, `queue_send`, `queue_delete`,

@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE: ghcr.io/klevisgolemi/cowork-queue
+  IMAGE: ghcr.io/klevisgolemi/agent-inbox
 
 jobs:
   check:
