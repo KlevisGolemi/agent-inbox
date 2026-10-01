@@ -106,6 +106,16 @@ describe('/setup', () => {
     expect(t.users.count()).toBe(0)
   })
 
+  it('POST sans jeton CSRF, client JSON → 403 avec le code unique « csrf »', async () => {
+    const r = await request(app())
+      .post('/setup')
+      .set('Accept', 'application/json')
+      .type('form')
+      .send(setupFields())
+    expect(r.status).toBe(403)
+    expect(r.body).toMatchObject({ ok: false, error: 'csrf' })
+  })
+
   it('POST avec un jeton CSRF qui ne correspond pas au cookie → 403', async () => {
     const { cookie } = await csrfFrom(app(), '/setup')
     const r = await request(app())

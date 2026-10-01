@@ -59,8 +59,6 @@ export const requireCsrf: RequestHandler = (req, res, next) => {
       '<p>Le formulaire a expiré ou est invalide. Rechargez la page et réessayez.</p>',
     )
   } else {
-    res
-      .status(403)
-      .json({ ok: false, error: 'csrf_invalid', message: 'Jeton CSRF manquant ou invalide.' })
+    res.status(403).json({ ok: false, error: 'csrf', message: 'Jeton CSRF manquant ou invalide.' })
   }
 }
