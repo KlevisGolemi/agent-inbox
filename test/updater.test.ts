@@ -79,27 +79,30 @@ describe('updater sidecar', () => {
 
   it('délai dépassé : processus interrompu, erreur journalisée, nouvelle exécution possible', async () => {
     expect(UPDATE_TIMEOUT_MS).toBe(10 * 60_000)
-    const log = vi.fn()
-    let received: AbortSignal | undefined
-    // Exécution factice qui ne se termine jamais (seule l'annulation est observée).
-    const run = vi.fn((signal: AbortSignal) => {
-      received = signal
-      return new Promise<void>(() => {})
-    })
-    const server = createUpdaterServer({ secret: SECRET, run, log, timeoutMs: 50 })
-    const auth = { 'x-updater-secret': SECRET }
-    expect((await request(server).post('/update').set(auth)).status).toBe(202)
-    expect((await request(server).post('/update').set(auth)).status).toBe(409)
-    await vi.waitFor(() =>
-      expect(log).toHaveBeenCalledWith(
-        'error',
-        expect.stringContaining('délai'),
-        expect.anything(),
-      ),
-    )
-    expect(received?.aborted).toBe(true)
-    expect((await request(server).post('/update').set(auth)).status).toBe(202)
-    expect(run).toHaveBeenCalledTimes(2)
+    // Minuterie factice : avec un vrai délai de 50 ms, deux allers-retours HTTP sous charge
+    // dépassaient le délai avant la requête qui doit recevoir 409 (202 reçu). Seul setTimeout est
+    // simulé ; les E/S réelles de supertest ne sont pas touchées.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const log = vi.fn()
+      let received: AbortSignal | undefined
+      // Exécution factice qui ne se termine jamais (seule l'annulation est observée).
+      const run = vi.fn((signal: AbortSignal) => {
+        received = signal
+        return new Promise<void>(() => {})
+      })
+      const server = createUpdaterServer({ secret: SECRET, run, log, timeoutMs: 50 })
+      const auth = { 'x-updater-secret': SECRET }
+      expect((await request(server).post('/update').set(auth)).status).toBe(202)
+      expect((await request(server).post('/update').set(auth)).status).toBe(409)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(log).toHaveBeenCalledWith('error', expect.stringContaining('délai'), expect.anything())
+      expect(received?.aborted).toBe(true)
+      expect((await request(server).post('/update').set(auth)).status).toBe(202)
+      expect(run).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('refuse un secret absent ou trop court à la création', () => {
