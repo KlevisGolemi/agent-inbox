@@ -9,448 +9,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-  <!-- Alpine Collapse plugin MUST be before Alpine core -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['DM Sans', 'sans-serif'],
-            heading: ['Space Grotesk', 'sans-serif'],
-          }
-        }
-      }
-    }
-  </script>
-
-  <style>
-    /* ═══ RESET & BASE ═══════════════════════════════════════════════ */
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; min-height: 100%; }
-    body {
-      font-family: 'DM Sans', sans-serif;
-      color: #F1F5F9;
-      /* ── BG PATTERN (efferd/bg-pattern) ── */
-      background-color: #020617;
-      background-image:
-        linear-gradient(to right, rgba(100,116,139,0.07) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(100,116,139,0.07) 1px, transparent 1px),
-        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(34,197,94,0.07) 0%, transparent 70%);
-      background-size: 40px 40px, 40px 40px, 100% 100%;
-      background-attachment: fixed;
-    }
-    h1,h2,h3,h4,.font-heading { font-family: 'Space Grotesk', sans-serif; }
-
-    /* ═══ GLASS ══════════════════════════════════════════════════════ */
-    .glass {
-      background: rgba(15, 23, 42, 0.75);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .glass-sm {
-      background: rgba(30, 41, 59, 0.5);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(255,255,255,0.05);
-    }
-
-    /* ═══ STAT CARD (magic: reui/statistics-card-7) ══════════════════ */
-    .sc-wrap {
-      padding: 1px;
-      border-radius: 16px;
-      background: linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 100%);
-      transition: background 0.4s ease;
-    }
-    .sc-wrap:hover {
-      background: linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%);
-    }
-    .sc-inner {
-      position: relative;
-      border-radius: 15px;
-      overflow: hidden;
-      background: linear-gradient(135deg, #0f172a 0%, #0a1120 100%);
-      padding: 1.5rem;
-      height: 100%;
-    }
-
-    /* Orbiting halo */
-    .sc-halo {
-      position: absolute;
-      width: 48px; height: 48px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.18);
-      filter: blur(18px);
-      pointer-events: none;
-      animation: halo-orbit 10s linear infinite;
-    }
-    @keyframes halo-orbit {
-      0%   { top: 10%; left: 10%; }
-      25%  { top: 10%; left: 80%; }
-      50%  { top: 75%; left: 80%; }
-      75%  { top: 75%; left: 10%; }
-      100% { top: 10%; left: 10%; }
-    }
-
-    /* Rotating ray */
-    .sc-ray {
-      position: absolute;
-      width: 220px; height: 50px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.06);
-      filter: blur(24px);
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      animation: ray-spin 12s linear infinite;
-    }
-    @keyframes ray-spin {
-      from { transform: translate(-50%, -50%) rotate(0deg); }
-      to   { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-
-    /* Value text */
-    .sc-value {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 2.5rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1;
-      background: linear-gradient(135deg, #FFFFFF, #CBD5E1);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      transition: all 0.3s ease;
-    }
-    .sc-wrap:hover .sc-value {
-      background: linear-gradient(135deg, #FFFFFF, #22C55E);
-      -webkit-background-clip: text;
-      background-clip: text;
-    }
-    .sc-label {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.68rem;
-      font-weight: 500;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: rgba(255,255,255,0.55);
-      margin-top: 0.5rem;
-      transition: color 0.3s ease;
-    }
-    .sc-wrap:hover .sc-label { color: rgba(255,255,255,0.85); }
-
-    /* Icon wrapper */
-    .sc-icon {
-      width: 2.75rem; height: 2.75rem;
-      border-radius: 0.75rem;
-      display: flex; align-items: center; justify-content: center;
-      border: 1px solid;
-      transition: all 0.3s ease;
-      backdrop-filter: blur(4px);
-    }
-    .sc-icon-green  { background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.25);  color: #4ADE80; }
-    .sc-icon-blue   { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.25); color: #60A5FA; }
-    .sc-icon-red    { background: rgba(239,68,68,0.1);  border-color: rgba(239,68,68,0.25);  color: #F87171; }
-    .sc-icon-purple { background: rgba(168,85,247,0.1); border-color: rgba(168,85,247,0.25); color: #C084FC; }
-
-    /* Trend badge */
-    .sc-trend {
-      display: inline-flex; align-items: center; gap: 3px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      border: 1px solid rgba(34,197,94,0.3);
-      background: rgba(34,197,94,0.1);
-      color: #4ADE80;
-    }
-
-    /* ═══ TABS ═══════════════════════════════════════════════════════ */
-    .tab-btn {
-      display: flex; align-items: center; gap: 6px;
-      padding: 12px 14px;
-      font-size: 0.875rem; font-weight: 500;
-      color: #94A3B8;
-      border-bottom: 2px solid transparent;
-      transition: all 0.15s ease;
-      cursor: pointer;
-      white-space: nowrap;
-      background: transparent;
-      border-top: none; border-left: none; border-right: none;
-    }
-    .tab-btn:hover { color: #E2E8F0; background: rgba(255,255,255,0.03); }
-    .tab-btn.active { color: #22C55E; border-bottom-color: rgba(34,197,94,0.55); background: rgba(34,197,94,0.05); }
-
-    /* ═══ HEADER STATUS PULSE ════════════════════════════════════════ */
-    .status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      position: relative;
-    }
-    .status-dot::after {
-      content: '';
-      position: absolute;
-      inset: -3px;
-      border-radius: 50%;
-      animation: dot-pulse 2.5s ease-in-out infinite;
-    }
-    .status-dot.healthy { background: #22C55E; }
-    .status-dot.healthy::after { background: rgba(34,197,94,0.35); }
-    .status-dot.degraded { background: #EF4444; }
-    .status-dot.degraded::after { background: rgba(239,68,68,0.35); }
-    @keyframes dot-pulse {
-      0%,100% { transform: scale(1); opacity: 0.8; }
-      50% { transform: scale(2); opacity: 0; }
-    }
-
-    /* ═══ SYSTEM MONITOR ROWS (isaiahbjork/system-monitor) ══════════ */
-    .monitor-row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      transition: background 0.2s ease;
-    }
-    .monitor-row:hover { background: rgba(255,255,255,0.04); }
-    .monitor-icon-wrap {
-      width: 30px; height: 30px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.06);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-      color: #CBD5E1;
-      transition: all 0.2s;
-    }
-    .monitor-row:hover .monitor-icon-wrap { background: rgba(255,255,255,0.08); color: #F1F5F9; }
-    .monitor-label { font-size: 0.75rem; font-weight: 500; color: #E2E8F0; }
-    .monitor-value { font-size: 0.75rem; font-family: 'Space Grotesk', monospace; color: #F1F5F9; }
-
-    /* Inline sparkline SVG */
-    .spark { overflow: visible; }
-    .spark-line { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-
-    /* ═══ ACCORDION (ruixenui/ruixen-accordian01 — outline variant) ══ */
-    .ac-item {
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 14px;
-      overflow: hidden;
-      transition: border-color 0.2s ease;
-    }
-    .ac-item:hover { border-color: rgba(255,255,255,0.11); }
-    .ac-item.ac-open { border-color: rgba(255,255,255,0.1); }
-
-    .ac-trigger {
-      width: 100%;
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
-      padding: 14px 20px;
-      background: rgba(15, 23, 42, 0.6);
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.15s ease;
-    }
-    .ac-trigger:hover { background: rgba(30, 41, 59, 0.7); }
-    .ac-item.ac-open .ac-trigger { background: rgba(20, 30, 50, 0.8); }
-
-    .ac-chevron {
-      width: 16px; height: 16px;
-      color: #CBD5E1;
-      flex-shrink: 0;
-      transition: transform 0.25s ease, color 0.2s;
-    }
-    .ac-item.ac-open .ac-chevron { transform: rotate(180deg); color: #F1F5F9; }
-
-    .ac-content {
-      background: rgba(10, 15, 30, 0.6);
-      border-top: 1px solid rgba(255,255,255,0.05);
-      padding: 14px 20px 16px;
-    }
-
-    /* Method badges */
-    .badge {
-      padding: 3px 10px;
-      border-radius: 8px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      font-family: 'Space Grotesk', monospace;
-      letter-spacing: 0.05em;
-      flex-shrink: 0;
-    }
-    .badge-get    { background: rgba(34,197,94,0.12);  color: #4ADE80; border: 1px solid rgba(34,197,94,0.25); }
-    .badge-post   { background: rgba(59,130,246,0.12); color: #60A5FA; border: 1px solid rgba(59,130,246,0.25); }
-    .badge-delete { background: rgba(239,68,68,0.12);  color: #F87171; border: 1px solid rgba(239,68,68,0.25); }
-    .badge-pending { background: rgba(251,191,36,0.12); color: #FCD34D; border: 1px solid rgba(251,191,36,0.25); font-size:0.68rem; padding:2px 8px; border-radius:999px; font-family:'Space Grotesk',sans-serif; letter-spacing:0.04em; }
-    .badge-read    { background: rgba(100,116,139,0.12); color: #CBD5E1; border: 1px solid rgba(100,116,139,0.2); font-size:0.68rem; padding:2px 8px; border-radius:999px; font-family:'Space Grotesk',sans-serif; letter-spacing:0.04em; }
-
-    /* ═══ COPY FIELD ═════════════════════════════════════════════════ */
-    .copy-field {
-      display: flex; align-items: center; gap: 8px;
-      background: rgba(0,0,0,0.3);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px;
-      padding: 8px 12px;
-      font-size: 0.75rem;
-      font-family: 'DM Mono', 'Fira Code', 'SF Mono', monospace;
-      color: #E2E8F0;
-      overflow: hidden;
-    }
-    .copy-field span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-    /* ═══ BUTTONS ════════════════════════════════════════════════════ */
-    .btn {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 6px 14px;
-      border-radius: 9px;
-      font-size: 0.8rem; font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      border: 1px solid transparent;
-    }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    .btn-ghost {
-      color: #E2E8F0;
-      border-color: rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.04);
-    }
-    .btn-ghost:hover:not(:disabled) { color: #FFFFFF; background: rgba(255,255,255,0.09); }
-
-    .btn-primary {
-      color: #4ADE80;
-      border-color: rgba(34,197,94,0.25);
-      background: rgba(34,197,94,0.09);
-    }
-    .btn-primary:hover:not(:disabled) { background: rgba(34,197,94,0.15); }
-
-    .btn-icon {
-      width: 34px; height: 34px; padding: 0;
-      border-radius: 9px;
-      display: flex; align-items: center; justify-content: center;
-      color: #CBD5E1;
-      border-color: rgba(255,255,255,0.09);
-      background: rgba(255,255,255,0.04);
-    }
-    .btn-icon:hover:not(:disabled) { color: #FFFFFF; background: rgba(255,255,255,0.09); }
-
-    /* ═══ INPUT ══════════════════════════════════════════════════════ */
-    .q-input {
-      width: 100%;
-      background: rgba(0,0,0,0.25);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 10px;
-      padding: 8px 12px 8px 36px;
-      font-size: 0.875rem; color: #F1F5F9;
-      outline: none;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .q-input:focus { border-color: rgba(34,197,94,0.3); background: rgba(0,0,0,0.3); }
-    .q-input::placeholder { color: #64748B; }
-
-    /* ═══ FILTER PILLS ═══════════════════════════════════════════════ */
-    .filter-pill {
-      padding: 4px 14px;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-      border: 1px solid rgba(255,255,255,0.07);
-      color: #CBD5E1;
-      background: transparent;
-    }
-    .filter-pill:hover { color: #F1F5F9; border-color: rgba(255,255,255,0.15); }
-    .filter-pill.active { color: #22C55E; background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); }
-
-    /* ═══ TOGGLE ═════════════════════════════════════════════════════ */
-    .toggle { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-    .toggle-track {
-      width: 38px; height: 20px;
-      border-radius: 999px;
-      background: #1E293B;
-      border: 1px solid rgba(255,255,255,0.07);
-      position: relative;
-      transition: background 0.2s;
-    }
-    .toggle-track.on { background: rgba(34,197,94,0.4); border-color: rgba(34,197,94,0.3); }
-    .toggle-thumb {
-      position: absolute;
-      top: 2px; left: 2px;
-      width: 14px; height: 14px;
-      border-radius: 50%;
-      background: white;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-      transition: transform 0.2s;
-    }
-    .toggle-track.on .toggle-thumb { transform: translateX(18px); }
-
-    /* ═══ JSON SYNTAX ════════════════════════════════════════════════ */
-    .jk { color: #7DD3FC; }
-    .js { color: #86EFAC; }
-    .jn { color: #FCA5A5; }
-    .jb { color: #C4B5FD; }
-    .jl { color: #94A3B8; }
-
-    /* ═══ ANIMATIONS ═════════════════════════════════════════════════ */
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spin { animation: spin 0.7s linear infinite; display: inline-block; }
-
-    @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-    .fade-up { animation: fade-up 0.2s ease forwards; }
-    @keyframes fade-down { from { opacity: 1; } to { opacity: 0; transform: translateY(4px); } }
-    .fade-down { animation: fade-down 0.15s ease forwards; }
-
-    /* ═══ SCROLLBAR ══════════════════════════════════════════════════ */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.12); border-radius: 2px; }
-
-    /* ═══ SECTION TITLE ══════════════════════════════════════════════ */
-    .section-title {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #CBD5E1;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .section-title::after {
-      content: '';
-      flex: 1; height: 1px;
-      background: linear-gradient(to right, rgba(255,255,255,0.07), transparent);
-    }
-
-    /* Explorer empty state */
-    .empty-state {
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 3.5rem 1rem;
-      color: #CBD5E1;
-    }
-
-    /* Settings reveal field */
-    .secret-value {
-      flex: 1; min-width: 0;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.75rem;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      color: #94A3B8;
-      letter-spacing: 0.04em;
-    }
-    .secret-value.revealed { color: #F1F5F9; letter-spacing: 0; }
-
-    /* Queue item row in explorer */
-    .q-row {
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .q-row:last-child { border-bottom: none; }
-
-    [x-cloak] { display: none !important; }
-  </style>
+  <!-- Feuille Tailwind compilée (npm run build:css) -->
+  <link rel="stylesheet" href="/admin/assets/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <!-- Le plugin Collapse d'Alpine doit être chargé avant le noyau -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.17.4/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.17.4/dist/cdn.min.js"></script>
 </head>
 
 <body>
@@ -461,7 +25,7 @@
     <div class="max-w-7xl mx-auto flex items-center justify-between">
       <!-- Brand -->
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 flex items-center justify-center flex-shrink-0">
+        <div class="w-8 h-8 flex items-center justify-center shrink-0">
           <svg viewBox="0 0 3200 3200" class="w-8 h-8" fill="#22C55E" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;">
             <path d="M1342.207,634.477c82.961,1.182 175.524,12.705 298.981,105.871c14.189,10.707 157.597,161.55 166.797,298.711c0.319,4.75 -16.727,21.026 -157.869,277.345c-6.194,11.249 -73.62,133.696 -78.221,140.169c-0.004,0.005 -25.966,11.41 -37.888,-5.865c-41.924,-60.754 -165.235,-286.39 -172.803,-285.62c-11.206,1.14 -474.853,817.445 -633.341,1084.132c-48.5,81.611 -84.826,164.647 -23.055,280.399c28.092,52.641 61.948,70.376 69.132,74.139c14.82,7.763 119.648,62.675 208.524,15.91c100.354,-52.805 113.831,-111.77 245.672,-337.766c33.642,-57.668 33.018,-57.995 418.842,-721.835c337.562,-580.803 321.924,-593.091 408.293,-673.489c51.166,-47.629 87.28,-55.887 96.025,-57.886c28.974,-6.625 73.168,-18.357 144.194,3.592c11.92,3.684 87.436,54.423 120.17,123.186c22.176,46.584 21.291,47.645 19.548,99.197c-3.481,102.975 -43.557,135.067 -206.469,424.49c-4.291,7.622 -573.474,993.744 -687.957,1193.458c-82.384,143.718 -151.773,282.057 -404.76,391.64c-152.763,66.171 -726.732,125.27 -918.937,-487.662c-6.51,-20.759 -20.197,-122.903 -15.896,-181.304c19.444,-264.02 115.9,-357.688 342.301,-752.363c38.338,-66.832 466.933,-813.986 481.064,-834.346c31.011,-44.681 63.725,-79.99 151.307,-127.097c24.488,-13.171 99.994,-44.688 166.347,-47.005Z"/>
             <path d="M2582.71,3099.932c-12.936,-1.347 -28.817,4.067 -77.258,-30.74c-17.955,-12.902 -34.523,-26.619 -56.183,-49.631c-20.912,-22.217 -42.206,-44.841 -199.335,-325.143c-174.381,-311.078 -304.727,-494.231 -271.866,-545.025c80.269,-124.074 114.971,-202.355 166.494,-288.884c65.151,-109.414 58.673,-116.683 69.551,-117.999c26.38,-3.191 27.398,0.679 42.483,22.405c8.498,12.239 350.733,609.38 381.134,662.426c122.187,213.196 208.741,304.214 219.883,446.113c1.019,12.981 -10.778,80.218 -35.652,120.963c-68.635,112.427 -161.528,112.909 -239.251,105.517Z"/>
@@ -470,7 +34,7 @@
         </div>
         <div>
           <p class="font-heading font-semibold text-sm text-white leading-tight">Cowork Queue</p>
-          <p style="font-size:0.7rem; color:#94A3B8; line-height:1.2" class="mt-0.5">Admin Dashboard</p>
+          <p style="font-size:0.7rem; color:#94A3B8; line-height:1.2" class="mt-0.5">Admin · v<span x-text="ov.version || ''"></span></p>
         </div>
       </div>
 
@@ -493,30 +57,44 @@
     <div class="max-w-7xl w-full mx-auto flex">
 
       <button class="tab-btn" :class="tab==='dashboard'&&'active'" @click="tab='dashboard'">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10-2a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z"/>
         </svg>
         Dashboard
       </button>
 
       <button class="tab-btn" :class="tab==='explorer'&&'active'" @click="tab='explorer'; maybePeek()">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
         </svg>
         Queue Explorer
       </button>
 
-      <button class="tab-btn" :class="tab==='settings'&&'active'" @click="tab='settings'; ensureConfig()">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <button class="tab-btn" :class="tab==='settings'&&'active'" @click="tab='settings'; loadSettingsForm()">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round"
                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
           <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
         </svg>
-        Paramètres
+        Réglages
       </button>
 
-      <button class="tab-btn" :class="tab==='api'&&'active'" @click="tab='api'; ensureConfig()">
-        <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <button class="tab-btn" :class="tab==='connections'&&'active'" @click="tab='connections'; loadConnections()">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+        Connexions
+      </button>
+
+      <button class="tab-btn" :class="tab==='account'&&'active'" @click="tab='account'">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        Compte
+      </button>
+
+      <button class="tab-btn" :class="tab==='api'&&'active'" @click="tab='api'">
+        <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
         </svg>
         Référence API
@@ -711,6 +289,21 @@
 
               <div class="h-px mx-3 my-1" style="background:rgba(255,255,255,0.04)"></div>
 
+              <!-- Leased -->
+              <div class="monitor-row">
+                <div class="monitor-icon-wrap">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between">
+                    <span class="monitor-label">En cours (leased)</span>
+                    <span class="monitor-value" x-text="fmtNum(m.leased)"></span>
+                  </div>
+                </div>
+              </div>
+
               <!-- TTL info -->
               <div class="monitor-row">
                 <div class="monitor-icon-wrap">
@@ -759,6 +352,7 @@
             <p class="text-sm mt-0.5" style="color:#94A3B8">Lecture seule — aucun message n'est consommé (peek)</p>
           </div>
           <div class="flex items-center gap-2">
+            <button class="btn btn-primary" @click="testError=''; testOpen=true">+ Message de test</button>
             <button class="btn btn-ghost" @click="loadPeek()" :disabled="loading.explorer">
               <svg class="w-3.5 h-3.5" :class="loading.explorer&&'spin'" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -797,6 +391,13 @@
         <!-- Search bar -->
         <div class="glass rounded-2xl p-4 mb-4">
           <div class="flex gap-2.5">
+            <select x-model="explorerTopic" @change="loadPeek()"
+                    class="glass-sm text-xs px-2.5 py-1.5 rounded-lg cursor-pointer outline-none text-white" title="Filtrer par topic">
+              <option value="">Tous les topics</option>
+              <template x-for="t in topics()" :key="t">
+                <option :value="t" x-text="t"></option>
+              </template>
+            </select>
             <div class="relative flex-1">
               <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style="color:#64748B"
                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -827,6 +428,11 @@
                     @click="explorerStatusFilter='pending'">
               Pending
               <span class="ml-1 text-xs opacity-60" x-text="`(${explorerItems.filter(i=>i.status==='pending').length})`"></span>
+            </button>
+            <button class="filter-pill" :class="explorerStatusFilter==='leased'&&'active'"
+                    @click="explorerStatusFilter='leased'">
+              Leased
+              <span class="ml-1 text-xs opacity-60" x-text="`(${explorerItems.filter(i=>i.status==='leased').length})`"></span>
             </button>
             <button class="filter-pill" :class="explorerStatusFilter==='read'&&'active'"
                     @click="explorerStatusFilter='read'">
@@ -873,8 +479,8 @@
                         @mouseleave="$el.style.background=explorerOpen===(item.id||idx)?'rgba(20,30,50,0.6)':'transparent'">
 
                   <!-- Status badge -->
-                  <span class="badge flex-shrink-0"
-                        :class="item.status==='pending' ? 'badge-pending' : 'badge-read'"
+                  <span class="badge shrink-0"
+                        :class="statusBadge(item.status)"
                         x-text="item.status ?? '—'"></span>
 
                   <!-- ID / correlation -->
@@ -889,6 +495,11 @@
                     </div>
                     <div class="flex items-center gap-3 mt-0.5">
                       <span class="text-xs" style="color:#94A3B8" x-text="item.createdAt ?? ''"></span>
+                      <span class="text-xs px-1.5 py-0 rounded"
+                            style="color:#7DD3FC;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.15)"
+                            x-text="item.topic" title="Topic"></span>
+                      <span x-show="item.attempts > 0" class="text-xs" style="color:#94A3B8"
+                            x-text="item.attempts + (item.attempts > 1 ? ' tentatives' : ' tentative')"></span>
                       <span x-show="item.source"
                             class="text-xs px-1.5 py-0 rounded"
                             style="color:#C084FC;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.15)"
@@ -897,7 +508,7 @@
                   </div>
 
                   <!-- Chevron -->
-                  <svg class="w-4 h-4 flex-shrink-0 transition-transform duration-200"
+                  <svg class="w-4 h-4 shrink-0 transition-transform duration-200"
                        style="color:#94A3B8"
                        :style="explorerOpen===(item.id||idx) ? 'transform:rotate(180deg)' : ''"
                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -925,6 +536,18 @@
                       <div>
                         <p class="text-xs mb-0.5" style="color:#94A3B8">ID interne</p>
                         <code class="text-xs font-mono" style="color:#64748B" x-text="item.id ?? '—'"></code>
+                      </div>
+                      <div>
+                        <p class="text-xs mb-0.5" style="color:#94A3B8">Topic</p>
+                        <p class="text-xs text-white" x-text="item.topic"></p>
+                      </div>
+                      <div x-show="item.status==='leased'">
+                        <p class="text-xs mb-0.5" style="color:#94A3B8">Bail jusqu'au</p>
+                        <p class="text-xs text-white" x-text="item.leaseUntil"></p>
+                      </div>
+                      <div x-show="item.attempts > 0">
+                        <p class="text-xs mb-0.5" style="color:#94A3B8">Tentatives</p>
+                        <p class="text-xs text-white" x-text="item.attempts"></p>
                       </div>
                       <div x-show="item.readAt">
                         <p class="text-xs mb-0.5" style="color:#94A3B8">Lu le</p>
@@ -986,209 +609,141 @@
 
 
       <!-- ══════════════════════════════════════════════════════════
-           TAB 3 — PARAMÈTRES
+           TAB 3 — RÉGLAGES
       ══════════════════════════════════════════════════════════════ -->
       <div x-show="tab==='settings'" style="display:none">
 
-        <div class="mb-5">
-          <h2 class="font-heading text-xl font-semibold text-white">Paramètres</h2>
-          <p class="text-sm mt-0.5" style="color:#94A3B8">Secrets, URLs et configuration du système</p>
+        <div class="flex flex-wrap items-end justify-between gap-3 mb-5">
+          <div>
+            <h2 class="font-heading text-xl font-semibold text-white">Réglages</h2>
+            <p class="text-sm mt-0.5" style="color:#94A3B8">Appliqués immédiatement, sans redémarrage</p>
+          </div>
+          <button class="btn btn-primary" @click="saveSettings()" :disabled="saving.settings">
+            <svg x-show="saving.settings" class="w-3.5 h-3.5 spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Enregistrer les réglages
+          </button>
         </div>
 
-        <!-- Secrets -->
+        <!-- Secret du webhook -->
         <div class="glass rounded-2xl p-5 mb-4">
           <p class="section-title mb-4">
-            <svg class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
             </svg>
-            Secrets d'authentification
+            Secret du webhook
           </p>
-
-          <div class="space-y-4">
-            <!-- Webhook Secret -->
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <label class="text-xs text-white">Webhook Secret <span style="color:#64748B">(x-webhook-secret)</span></label>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="copy-field flex-1">
-                  <span class="secret-value" :class="reveal.webhook && 'revealed'"
-                        x-text="reveal.webhook ? cfg.webhookSecret : '•'.repeat(32)"></span>
-                </div>
-                <button class="btn btn-icon" @click="toggleReveal('webhook')">
-                  <svg x-show="!reveal.webhook" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                  </svg>
-                  <svg x-show="reveal.webhook" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
-                  </svg>
-                </button>
-                <button class="btn btn-icon" :disabled="!cfg.webhookSecret" @click="copy(cfg.webhookSecret)">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                  </svg>
-                </button>
-              </div>
+          <label class="text-xs text-white block mb-1.5">Secret <span style="color:#64748B">(en-tête x-webhook-secret)</span></label>
+          <div class="flex items-center gap-2">
+            <div class="copy-field flex-1">
+              <span class="secret-value" :class="reveal.webhook && 'revealed'"
+                    x-text="reveal.webhook ? secret : (ov.settings ? ov.settings.webhook_secret : '••••')"></span>
             </div>
-
-            <!-- MCP Token -->
-            <div>
-              <label class="text-xs text-white block mb-1.5">MCP Token <span style="color:#64748B">(URL embarqué)</span></label>
-              <div class="flex items-center gap-2">
-                <div class="copy-field flex-1">
-                  <span class="secret-value" :class="reveal.mcp && 'revealed'"
-                        x-text="reveal.mcp ? cfg.mcpToken : '•'.repeat(32)"></span>
-                </div>
-                <button class="btn btn-icon" @click="toggleReveal('mcp')">
-                  <svg x-show="!reveal.mcp" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                  </svg>
-                  <svg x-show="reveal.mcp" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
-                  </svg>
-                </button>
-                <button class="btn btn-icon" :disabled="!cfg.mcpToken" @click="copy(cfg.mcpToken)">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
+            <button class="btn btn-icon" @click="toggleReveal()" :title="reveal.webhook ? 'Masquer' : 'Afficher'">
+              <svg x-show="!reveal.webhook" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+              <svg x-show="reveal.webhook" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+              </svg>
+            </button>
+            <button class="btn btn-icon" @click="copySecret()" title="Copier">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost" @click="askRotate()">Régénérer</button>
           </div>
-        </div><!-- /secrets -->
+          <p class="text-xs mt-1.5" style="color:#64748B">Régénérer invalide immédiatement l'ancien secret : mettez à jour vos workflows n8n.</p>
+        </div>
 
-        <!-- URLs -->
+        <!-- File -->
         <div class="glass rounded-2xl p-5 mb-4">
           <p class="section-title mb-4">
-            <svg class="w-3.5 h-3.5 flex-shrink-0" style="color:#60A5FA" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-            </svg>
-            URLs d'accès
-          </p>
-          <div class="space-y-4">
-
-            <!-- MCP Connector -->
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <label class="text-xs text-white">MCP Connector URL</label>
-                <span class="text-xs font-medium" style="color:#4ADE80">Claude Web · Desktop · iOS · Android</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="copy-field flex-1">
-                  <span x-text="cfg.mcpConnectorUrl || 'Chargement…'"></span>
-                </div>
-                <button class="btn btn-primary" :disabled="!cfg.mcpConnectorUrl" @click="copy(cfg.mcpConnectorUrl)">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                  </svg>
-                  Copier
-                </button>
-              </div>
-              <p class="text-xs mt-1.5" style="color:#64748B">Claude → Paramètres → Connecteurs → Ajouter un connecteur personnalisé</p>
-            </div>
-
-            <!-- Webhook API URL -->
-            <div>
-              <div class="flex items-center justify-between mb-1.5">
-                <label class="text-xs text-white">Webhook API URL</label>
-                <span class="text-xs font-medium" style="color:#FB923C">n8n · Make · Zapier</span>
-              </div>
-              <div class="flex items-center gap-2">
-                <div class="copy-field flex-1">
-                  <span x-text="cfg.webhookApiUrl || 'Non configuré (DOMAIN manquant)'"></span>
-                </div>
-                <button class="btn btn-ghost" :disabled="!cfg.webhookApiUrl" @click="copy(cfg.webhookApiUrl)">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                  </svg>
-                  Copier
-                </button>
-              </div>
-              <p class="text-xs mt-1.5 font-mono" style="color:#64748B">
-                Header requis : <span style="color:#94A3B8">x-webhook-secret: &lt;secret&gt;</span>
-              </p>
-            </div>
-
-          </div>
-        </div><!-- /urls -->
-
-        <!-- TTL & Queue config -->
-        <div class="glass rounded-2xl p-5 mb-4">
-          <p class="section-title mb-4">
-            <svg class="w-3.5 h-3.5 flex-shrink-0" style="color:#FCD34D" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <svg class="w-3.5 h-3.5 shrink-0" style="color:#FCD34D" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            Configuration de la queue
+            Configuration de la file
           </p>
-
-          <!-- TTL actuel -->
-          <div class="flex items-start justify-between gap-4 p-4 rounded-xl mb-3"
-               style="background:rgba(251,191,36,0.05); border:1px solid rgba(251,191,36,0.12)">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                   style="background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.2)">
-                <svg class="w-4 h-4" style="color:#FCD34D" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-              </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <template x-for="f in numberFields" :key="f.key">
               <div>
-                <p class="text-sm font-medium text-white">TTL des messages</p>
-                <p class="text-xs mt-0.5" style="color:#94A3B8">Durée avant suppression automatique des messages lus et expirés</p>
+                <label class="text-xs text-white block mb-1" x-text="f.label"></label>
+                <input type="number" class="q-input plain" :class="errors[f.key]&&'invalid'"
+                       x-model.number="form[f.key]" :min="f.min" :max="f.max" step="1">
+                <p class="text-xs mt-1" style="color:#64748B" x-text="f.help"></p>
+                <p class="field-error" x-show="errors[f.key]" x-text="errors[f.key]"></p>
               </div>
-            </div>
-            <div class="text-right flex-shrink-0">
-              <p class="font-heading text-2xl font-bold text-white" x-text="m.ttl ? m.ttl + 'h' : '--'"></p>
-              <p class="text-xs" style="color:#94A3B8">actuel</p>
-            </div>
+            </template>
           </div>
 
-          <!-- Cleanup interval -->
-          <div class="flex items-center justify-between p-4 rounded-xl mb-3"
-               style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05)">
-            <div class="flex items-center gap-3">
-              <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                   style="background:rgba(100,116,139,0.1); border:1px solid rgba(100,116,139,0.15)">
-                <svg class="w-4 h-4" style="color:#94A3B8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-              </div>
-              <div>
-                <p class="text-sm font-medium text-white">Nettoyage automatique</p>
-                <p class="text-xs mt-0.5" style="color:#94A3B8">Fréquence de suppression des messages expirés</p>
-              </div>
+          <!-- TTL par topic -->
+          <div class="mt-5">
+            <label class="text-xs text-white block mb-1">TTL par topic</label>
+            <p class="text-xs mb-2" style="color:#64748B">Remplace le TTL global pour un topic donné (1 à 8760 h).</p>
+            <div class="space-y-2">
+              <template x-for="(row, i) in ttlRows" :key="i">
+                <div class="flex items-center gap-2">
+                  <input type="text" class="q-input plain sm flex-1" placeholder="topic" x-model="row.topic" maxlength="128">
+                  <input type="number" class="q-input plain sm" style="width:110px" placeholder="heures" min="1" max="8760" x-model.number="row.hours">
+                  <button class="btn btn-icon" style="width:30px;height:30px" @click="ttlRows.splice(i,1)" title="Retirer">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </template>
             </div>
-            <p class="font-heading text-lg font-semibold" style="color:#94A3B8" x-text="m.cleanupMin ? m.cleanupMin + 'min' : '60min'"></p>
+            <button class="btn btn-ghost mt-2" @click="ttlRows.push({topic:'', hours:''})">+ Ajouter un topic</button>
+            <p class="field-error" x-show="errors.topic_ttl_overrides" x-text="errors.topic_ttl_overrides"></p>
           </div>
+        </div>
 
-          <!-- Note .env -->
-          <div class="flex items-start gap-2.5 mt-3 p-3 rounded-lg"
-               style="background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.12)">
-            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" style="color:#60A5FA" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+        <!-- Mises à jour -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">Mises à jour</p>
+          <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="text-xs text-white font-medium mb-0.5">Configuration via variables d'environnement</p>
-              <p class="text-xs" style="color:#94A3B8">
-                Pour modifier ces valeurs, éditez le fichier
-                <code class="px-1 py-0.5 rounded text-xs" style="background:rgba(59,130,246,0.1); color:#93C5FD">.env</code>
-                sur le VPS puis relancez :
-                <code class="px-1 py-0.5 rounded text-xs" style="background:rgba(59,130,246,0.1); color:#93C5FD">TTL_HOURS=24</code>
-                et
-                <code class="px-1 py-0.5 rounded text-xs" style="background:rgba(59,130,246,0.1); color:#93C5FD">CLEANUP_INTERVAL_MIN=30</code>
-              </p>
+              <p class="text-sm text-white">Vérifier les nouvelles versions</p>
+              <p class="text-xs mt-0.5" style="color:#94A3B8">Interroge GitHub une fois par jour pour signaler une version plus récente.</p>
             </div>
+            <label class="toggle" @click="form.update_check_enabled = !form.update_check_enabled">
+              <div class="toggle-track" :class="form.update_check_enabled&&'on'"><div class="toggle-thumb"></div></div>
+            </label>
           </div>
-        </div><!-- /ttl config -->
+          <p class="field-error" x-show="errors.update_check_enabled" x-text="errors.update_check_enabled"></p>
+        </div>
 
-        <!-- Refresh interval -->
+        <!-- Sauvegardes (paramètres) -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">Sauvegardes automatiques</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <template x-for="f in backupFields" :key="f.key">
+              <div>
+                <label class="text-xs text-white block mb-1" x-text="f.label"></label>
+                <input type="number" class="q-input plain" :class="errors[f.key]&&'invalid'"
+                       x-model.number="form[f.key]" :min="f.min" :max="f.max" step="1">
+                <p class="text-xs mt-1" style="color:#64748B" x-text="f.help"></p>
+                <p class="field-error" x-show="errors[f.key]" x-text="errors[f.key]"></p>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Maintenance -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">Maintenance</p>
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm text-white">Compacter la base</p>
+              <p class="text-xs mt-0.5" style="color:#94A3B8">Exécute VACUUM pour récupérer l'espace des messages supprimés.</p>
+            </div>
+            <button class="btn btn-ghost" @click="vacuum()" :disabled="saving.vacuum">Compacter</button>
+          </div>
+        </div>
+
+        <!-- Affichage -->
         <div class="glass rounded-2xl p-5">
-          <p class="section-title mb-4">
-            <svg class="w-3.5 h-3.5 flex-shrink-0" style="color:#94A3B8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-              <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-            Affichage
-          </p>
+          <p class="section-title mb-4">Affichage</p>
           <div class="flex items-center justify-between">
             <div>
               <p class="text-sm text-white">Intervalle de rafraîchissement</p>
@@ -1208,14 +763,168 @@
 
 
       <!-- ══════════════════════════════════════════════════════════
-           TAB 4 — RÉFÉRENCE API
+           TAB 4 — CONNEXIONS
+      ══════════════════════════════════════════════════════════════ -->
+      <div x-show="tab==='connections'" style="display:none">
+
+        <div class="mb-5">
+          <h2 class="font-heading text-xl font-semibold text-white">Connexions</h2>
+          <p class="text-sm mt-0.5" style="color:#94A3B8">Brancher Claude, ChatGPT et vos automatisations sur la file</p>
+        </div>
+
+        <!-- URL MCP -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">
+            <svg class="w-3.5 h-3.5 shrink-0" style="color:#60A5FA" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+            URL du connecteur MCP
+          </p>
+          <div class="flex items-center gap-2">
+            <div class="copy-field flex-1"><span x-text="ov.mcpUrl || 'Chargement…'"></span></div>
+            <button class="btn btn-primary" :disabled="!ov.mcpUrl" @click="copy(ov.mcpUrl)">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+              </svg>
+              Copier
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+            <div class="p-4 rounded-xl" style="background:rgba(34,197,94,0.05); border:1px solid rgba(34,197,94,0.12)">
+              <p class="text-sm font-medium text-white mb-1">Mode 1 — Connexion OAuth</p>
+              <p class="text-xs" style="color:#94A3B8">
+                Pour Claude (web, Desktop, mobile) et ChatGPT : ajoutez l'URL ci-dessus comme connecteur personnalisé.
+                Une page de connexion s'ouvre, vous vous identifiez avec votre compte administrateur et autorisez l'accès.
+                Rien d'autre à saisir.
+              </p>
+            </div>
+            <div class="p-4 rounded-xl" style="background:rgba(59,130,246,0.05); border:1px solid rgba(59,130,246,0.12)">
+              <p class="text-sm font-medium text-white mb-1">Mode 2 — Clé API</p>
+              <p class="text-xs" style="color:#94A3B8">
+                Pour Claude Code, les scripts et les clients sans navigateur : créez une clé ci-dessous puis envoyez-la
+                dans l'en-tête <code class="px-1 rounded" style="background:rgba(59,130,246,0.1); color:#93C5FD">Authorization: Bearer cwk_…</code>
+                sur la même URL.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- URL Webhook -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">URL du webhook</p>
+          <div class="flex items-center gap-2">
+            <div class="copy-field flex-1"><span x-text="ov.webhookUrl || 'Chargement…'"></span></div>
+            <button class="btn btn-ghost" :disabled="!ov.webhookUrl" @click="copy(ov.webhookUrl)">Copier</button>
+          </div>
+          <p class="text-xs mt-1.5 font-mono" style="color:#64748B">
+            Pour n8n · Make · Zapier — en-tête requis : <span style="color:#94A3B8">x-webhook-secret: &lt;secret&gt;</span>
+          </p>
+        </div>
+
+        <!-- Clés API -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <div class="flex items-center justify-between mb-4">
+            <p class="section-title flex-1">Clés API</p>
+            <button class="btn btn-primary ml-3" @click="newKeyName=''; newKeyError=''; newKeyOpen=true; $nextTick(() => $refs.newKeyInput.focus())">+ Nouvelle clé</button>
+          </div>
+          <p class="text-xs py-6 text-center" style="color:#94A3B8" x-show="!apiKeys.length">Aucune clé API.</p>
+          <div x-show="apiKeys.length" class="divide-y" style="border-color:rgba(255,255,255,0.04)">
+            <template x-for="k in apiKeys" :key="k.id">
+              <div class="flex items-center gap-3 py-3" style="border-color:rgba(255,255,255,0.04)">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm text-white truncate" x-text="k.name"></span>
+                    <code class="text-xs font-mono" style="color:#7DD3FC" x-text="k.prefix + '…'"></code>
+                    <span x-show="k.revoked" class="badge-read">révoquée</span>
+                  </div>
+                  <p class="text-xs mt-0.5" style="color:#94A3B8">
+                    Créée le <span x-text="fmtDate(k.created_at)"></span> ·
+                    Dernier usage : <span x-text="k.last_used_at ? fmtDate(k.last_used_at) : 'jamais'"></span>
+                  </p>
+                </div>
+                <button class="btn" style="color:#F87171;border-color:rgba(239,68,68,0.2);background:rgba(239,68,68,0.06)"
+                        x-show="!k.revoked"
+                        @click="askRevokeKey(k)">Révoquer</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Clients OAuth -->
+        <div class="glass rounded-2xl p-5">
+          <p class="section-title mb-4">Clients OAuth connectés</p>
+          <p class="text-xs py-6 text-center" style="color:#94A3B8" x-show="!oauthClients.length">Aucun client connecté.</p>
+          <div x-show="oauthClients.length" class="divide-y" style="border-color:rgba(255,255,255,0.04)">
+            <template x-for="c in oauthClients" :key="c.client_id">
+              <div class="flex items-center gap-3 py-3" style="border-color:rgba(255,255,255,0.04)">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm text-white truncate" x-text="c.client_name || 'Client sans nom'"></span>
+                    <span class="badge-pending" x-text="c.active_tokens + ' jeton(s) actif(s)'"></span>
+                  </div>
+                  <p class="text-xs mt-0.5 truncate" style="color:#94A3B8">
+                    Enregistré le <span x-text="fmtDate(c.created_at)"></span> ·
+                    <span x-text="c.redirect_uris.join(', ')"></span>
+                  </p>
+                </div>
+                <button class="btn" style="color:#F87171;border-color:rgba(239,68,68,0.2);background:rgba(239,68,68,0.06)"
+                        @click="askRevokeClient(c)">Révoquer</button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div><!-- /connections -->
+
+
+      <!-- ══════════════════════════════════════════════════════════
+           TAB 5 — COMPTE
+      ══════════════════════════════════════════════════════════════ -->
+      <div x-show="tab==='account'" style="display:none">
+
+        <div class="mb-5">
+          <h2 class="font-heading text-xl font-semibold text-white">Compte</h2>
+          <p class="text-sm mt-0.5" style="color:#94A3B8">Connecté en tant que <span class="text-white" x-text="ov.user ? ov.user.email : '…'"></span></p>
+        </div>
+
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">Changer le mot de passe</p>
+          <form class="space-y-3 max-w-md" @submit.prevent="changePassword()">
+            <div>
+              <label class="text-xs text-white block mb-1">Mot de passe actuel</label>
+              <input type="password" class="q-input plain" :class="pwErrors.current&&'invalid'" x-model="pw.current" autocomplete="current-password">
+              <p class="field-error" x-show="pwErrors.current" x-text="pwErrors.current"></p>
+            </div>
+            <div>
+              <label class="text-xs text-white block mb-1">Nouveau mot de passe <span style="color:#64748B">(12 caractères minimum)</span></label>
+              <input type="password" class="q-input plain" :class="pwErrors.next&&'invalid'" x-model="pw.next" autocomplete="new-password" minlength="12">
+              <p class="field-error" x-show="pwErrors.next" x-text="pwErrors.next"></p>
+            </div>
+            <p class="text-xs" style="color:#64748B">Les autres sessions ouvertes seront déconnectées.</p>
+            <button type="submit" class="btn btn-primary" :disabled="saving.password || !pw.current || !pw.next">Changer le mot de passe</button>
+          </form>
+        </div>
+
+        <div class="glass rounded-2xl p-5">
+          <p class="section-title mb-4">Session</p>
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm text-white">Se déconnecter</p>
+              <p class="text-xs mt-0.5" style="color:#94A3B8">Met fin à la session sur ce navigateur.</p>
+            </div>
+            <button class="btn" style="color:#F87171;border-color:rgba(239,68,68,0.25);background:rgba(239,68,68,0.08)" @click="logout()">Déconnexion</button>
+          </div>
+        </div>
+      </div><!-- /account -->
+      <!-- ══════════════════════════════════════════════════════════
+           TAB 6 — RÉFÉRENCE API
            Accordion (ruixenui/ruixen-accordian01 — outline variant)
       ══════════════════════════════════════════════════════════════ -->
       <div x-show="tab==='api'" style="display:none">
 
         <div class="mb-5">
           <h2 class="font-heading text-xl font-semibold text-white">Référence API</h2>
-          <p class="text-sm mt-0.5" style="color:#94A3B8">Toutes les commandes curl, pré-remplies avec ton secret webhook</p>
+          <p class="text-sm mt-0.5" style="color:#94A3B8">Commandes curl pour la file ; affichez le secret dans Réglages pour les pré-remplir</p>
         </div>
 
         <div class="space-y-2.5" x-data="{ open: null }">
@@ -1231,7 +940,7 @@
                     <p class="text-xs mt-0.5 truncate" style="color:#94A3B8" x-text="cmd.desc"></p>
                   </div>
                 </div>
-                <div class="flex items-center gap-2 flex-shrink-0">
+                <div class="flex items-center gap-2 shrink-0">
                   <code class="hidden sm:block text-xs font-mono px-2 py-0.5 rounded"
                         style="color:#CBD5E1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07)"
                         x-text="cmd.endpoint"></code>
@@ -1270,7 +979,7 @@
   <div x-show="toast.on" x-cloak
        class="fixed bottom-5 right-5 z-50 glass rounded-xl px-4 py-3 flex items-center gap-2.5 shadow-2xl"
        :class="toast.on ? 'fade-up' : 'fade-down'">
-    <div class="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0"
+    <div class="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
          :class="toast.ok ? 'bg-green-500/20' : 'bg-red-500/20'">
       <svg x-show="toast.ok" class="w-2.5 h-2.5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
@@ -1288,7 +997,7 @@
        style="background:rgba(0,0,0,0.6); backdrop-filter:blur(4px)">
     <div class="glass rounded-2xl p-6 max-w-sm w-full mx-4">
       <div class="flex items-center gap-3 mb-4">
-        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
              style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25)">
           <svg class="w-5 h-5" style="color:#F87171" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M10 12l4 4m0-4l-4 4"/>
@@ -1300,7 +1009,7 @@
         </div>
       </div>
       <p class="text-sm mb-5" style="color:#94A3B8">
-        <span x-text="explorerItems.length"></span> message(s) seront définitivement supprimés.
+        <span x-text="ov.stats ? ov.stats.total : 0"></span> message(s), tous topics confondus, seront définitivement supprimés.
       </p>
       <div class="flex gap-2.5">
         <button class="btn btn-ghost flex-1" @click="clearConfirm=false">Annuler</button>
@@ -1310,11 +1019,97 @@
     </div>
   </div>
 
+  <!-- Confirmation générique -->
+  <div x-show="confirmBox.open" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center"
+       style="background:rgba(0,0,0,0.6); backdrop-filter:blur(4px)">
+    <div class="glass rounded-2xl p-6 max-w-sm w-full mx-4">
+      <p class="font-heading font-semibold text-white mb-1" x-text="confirmBox.title"></p>
+      <p class="text-sm mb-5" style="color:#94A3B8" x-text="confirmBox.text"></p>
+      <div class="flex gap-2.5">
+        <button class="btn btn-ghost flex-1" @click="confirmBox.open=false">Annuler</button>
+        <button class="btn flex-1" style="color:#F87171;border-color:rgba(239,68,68,0.25);background:rgba(239,68,68,0.12)"
+                @click="runConfirm()" x-text="confirmBox.label"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Secret / clé affichés une seule fois -->
+  <div x-show="once.open" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center"
+       style="background:rgba(0,0,0,0.6); backdrop-filter:blur(4px)">
+    <div class="glass rounded-2xl p-6 max-w-lg w-full mx-4">
+      <p class="font-heading font-semibold text-white mb-1" x-text="once.title"></p>
+      <p class="text-xs mb-4" style="color:#FCD34D" x-text="once.note"></p>
+      <div class="flex items-center gap-2 mb-5">
+        <div class="copy-field flex-1"><span class="secret-value revealed" x-text="once.value"></span></div>
+        <button class="btn btn-primary" @click="copy(once.value)">Copier</button>
+      </div>
+      <div class="flex justify-end">
+        <button class="btn btn-ghost" @click="once.open=false; once.value=''">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nouvelle clé API -->
+  <div x-show="newKeyOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center"
+       style="background:rgba(0,0,0,0.6); backdrop-filter:blur(4px)">
+    <form class="glass rounded-2xl p-6 max-w-sm w-full mx-4" @submit.prevent="createKey()">
+      <p class="font-heading font-semibold text-white mb-3">Nouvelle clé API</p>
+      <label class="text-xs text-white block mb-1">Nom <span style="color:#64748B">(ex. Claude Code)</span></label>
+      <input type="text" class="q-input plain" maxlength="100" x-model="newKeyName" x-ref="newKeyInput">
+      <p class="field-error" x-show="newKeyError" x-text="newKeyError"></p>
+      <div class="flex gap-2.5 mt-5">
+        <button type="button" class="btn btn-ghost flex-1" @click="newKeyOpen=false">Annuler</button>
+        <button type="submit" class="btn btn-primary flex-1" :disabled="!newKeyName.trim()">Créer</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Message de test -->
+  <div x-show="testOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center"
+       style="background:rgba(0,0,0,0.6); backdrop-filter:blur(4px)">
+    <form class="glass rounded-2xl p-6 max-w-lg w-full mx-4" @submit.prevent="sendTest()">
+      <p class="font-heading font-semibold text-white mb-3">Envoyer un message de test</p>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-white block mb-1">Topic <span style="color:#64748B">(optionnel)</span></label>
+          <input type="text" class="q-input plain" maxlength="128" placeholder="default" x-model="test.topic">
+        </div>
+        <div>
+          <label class="text-xs text-white block mb-1">Correlation ID <span style="color:#64748B">(optionnel)</span></label>
+          <input type="text" class="q-input plain" maxlength="128" x-model="test.correlation_id">
+        </div>
+      </div>
+      <label class="text-xs text-white block mb-1">Payload JSON</label>
+      <textarea class="q-input plain font-mono" rows="6" x-model="test.payload" style="font-size:0.78rem"></textarea>
+      <p class="field-error" x-show="testError" x-text="testError"></p>
+      <div class="flex gap-2.5 mt-5">
+        <button type="button" class="btn btn-ghost flex-1" @click="testOpen=false">Annuler</button>
+        <button type="submit" class="btn btn-primary flex-1">Envoyer</button>
+      </div>
+    </form>
+  </div>
+
 </div><!-- /app -->
 
 
 <!-- ═══════════════ JAVASCRIPT ═══════════════════════════════════ -->
 <script>
+// Messages d'erreur en français pour les réglages (les messages serveur de validation sont en anglais).
+const SETTING_HINTS = {
+  ttl_hours: 'entier entre 1 et 8760',
+  cleanup_interval_min: 'entier entre 1 et 1440',
+  webhook_rate_limit_per_min: 'entier entre 1 et 10000',
+  lease_timeout_sec: 'entier entre 10 et 86400',
+  backup_interval_hours: 'entier entre 0 et 168 (0 = désactivé)',
+  backup_retention: 'entier entre 1 et 90',
+  topic_ttl_overrides: 'topics valides (lettres, chiffres, _ et -) avec un TTL entier entre 1 et 8760 h',
+  update_check_enabled: 'valeur oui / non',
+}
+
 function app() {
   return {
     // ── State ──────────────────────────────────────────────────────
@@ -1326,18 +1121,24 @@ function app() {
     _chart: null,
     sparkData: [],
 
+    // Aperçu serveur (overview) et jeton CSRF
+    ov: {},
+    csrf: '',
+
     // health — tracked independently from JS errors
     health: { ok: true, mcpUptime: 0 },
 
-    // metrics (from /stats)
-    m: { depth: null, processed: null, total: null, uptime: null, ttl: null, cleanupMin: null },
+    // metrics (from /overview)
+    m: { depth: null, leased: null, processed: null, total: null, uptime: null, ttl: null, cleanupMin: null },
 
     loading: { dash: false, explorer: false },
+    saving: { settings: false, vacuum: false, password: false },
 
     // Explorer — all items array
     explorerItems: [],
     explorerOpen: null,
     explorerQ: '',
+    explorerTopic: '',
     explorerStatusFilter: 'all',
     explorerSearched: false,
     explorerPeriod: 5,
@@ -1347,25 +1148,95 @@ function app() {
     explorerPageSize: 50,
     explorerTotal: 0,
 
-    // Settings
-    cfg: { webhookSecret: '', mcpToken: '', mcpConnectorUrl: '', webhookApiUrl: '' },
-    reveal: { webhook: false, mcp: false },
-    _secretsLoaded: false,
-    _configLoaded: false,
+    // Message de test
+    testOpen: false,
+    test: { topic: '', correlation_id: '', payload: '{\n  "event": "test"\n}' },
+    testError: '',
+
+    // Réglages
+    form: {},
+    errors: {},
+    ttlRows: [],
+    secret: '',
+    reveal: { webhook: false },
+    numberFields: [
+      { key: 'ttl_hours', label: 'TTL des messages (heures)', min: 1, max: 8760,
+        help: 'Durée avant suppression automatique des messages lus et expirés.' },
+      { key: 'cleanup_interval_min', label: 'Nettoyage automatique (minutes)', min: 1, max: 1440,
+        help: 'Fréquence de suppression des messages expirés.' },
+      { key: 'lease_timeout_sec', label: 'Durée du bail (secondes)', min: 10, max: 86400,
+        help: 'Délai avant qu\'un message emprunté sans ack soit remis en file.' },
+      { key: 'webhook_rate_limit_per_min', label: 'Limite du webhook (requêtes/min)', min: 1, max: 10000,
+        help: 'Par adresse IP, sur POST /webhook.' },
+    ],
+    backupFields: [
+      { key: 'backup_interval_hours', label: 'Fréquence (heures)', min: 0, max: 168,
+        help: '0 désactive les sauvegardes automatiques.' },
+      { key: 'backup_retention', label: 'Sauvegardes conservées', min: 1, max: 90,
+        help: 'Les plus anciennes sont supprimées.' },
+    ],
+
+    // Connexions
+    apiKeys: [],
+    oauthClients: [],
+    newKeyOpen: false,
+    newKeyName: '',
+    newKeyError: '',
+
+    // Compte
+    pw: { current: '', next: '' },
+    pwErrors: {},
+
+    // Fenêtres modales génériques
+    confirmBox: { open: false, title: '', text: '', label: 'Confirmer', fn: null },
+    once: { open: false, title: '', note: '', value: '' },
 
     // Toast
     toast: { on: false, msg: '', ok: true },
     _toastTimer: null,
 
-    // ── URL helpers ────────────────────────────────────────────────
-    get token() { return window.location.pathname.split('/')[2] || '' },
-    get api()   { return `/t/${this.token}/api` },
+    // ── API d'administration (session + jeton CSRF) ────────────────
+    async call(method, path, body, retry = true) {
+      const headers = { 'Accept': 'application/json' }
+      if (body !== undefined) headers['Content-Type'] = 'application/json'
+      if (method !== 'GET') headers['x-csrf-token'] = this.csrf
+      const r = await fetch('/admin/api' + path, {
+        method, headers, credentials: 'same-origin',
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      let data = null
+      try { data = await r.json() } catch { /* corps vide ou non JSON */ }
+      if (r.status === 401) {
+        window.location.href = '/login?next=' + encodeURIComponent('/admin')
+        throw new Error('Session expirée')
+      }
+      if (r.status === 403 && retry && data && data.error === 'csrf_invalid') {
+        await this.loadOverview()
+        return this.call(method, path, body, false)
+      }
+      if (!r.ok) {
+        const err = new Error((data && data.message) || 'Erreur ' + r.status)
+        err.status = r.status
+        err.code = data && data.error
+        err.key = data && data.key
+        throw err
+      }
+      return data
+    },
 
     // ── init ────────────────────────────────────────────────────────
     async init() {
-      await Promise.all([this.refreshDash(), this.loadConfig()])
+      await this.refreshDash()
       this.$nextTick(() => this.initChart())
       if (this.autoRefresh) this.startTimer()
+    },
+
+    // ── Overview (stats, URLs, réglages, jeton CSRF) ─────────────────
+    async loadOverview() {
+      const d = await this.call('GET', '/overview')
+      this.ov = d
+      this.csrf = d.csrfToken
+      return d
     },
 
     // ── Dashboard refresh ─────────────────────────────────────────
@@ -1373,41 +1244,29 @@ function app() {
     async refreshDash() {
       this.loading.dash = true
       try {
-        const [statusR, statsR, hzR] = await Promise.all([
-          fetch(`${this.api}/status`).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch(`${this.api}/stats`).then(r => r.ok ? r.json() : null).catch(() => null),
+        const [ovR, hzR] = await Promise.all([
+          this.loadOverview().catch(() => null),
           fetch('/healthz').then(r => r.ok ? r.json() : null).catch(() => null),
         ])
-
-        // ── Queue health: null = network failure, .ok false = service error ──
-        if (statusR === null) {
-          this.health.ok = false          // real network failure
-        } else {
-          this.health.ok = statusR.ok === true || statusR.healthy === true
-        }
-
-        // ── Stats ──
-        // {"ok":true,"uptime_s":N,"ttl_hours":48,"cleanup_interval_min":60,
-        //  "stats":{"total":N,"pending":N,"read_count":N}}
-        if (statsR) {
-          const s = statsR.stats || {}
-          this.m.depth      = s.pending              ?? 0
-          this.m.processed  = s.read_count           ?? 0
-          this.m.total      = s.total                ?? 0
-          this.m.uptime     = statsR.uptime_s        ?? null
-          this.m.ttl        = statsR.ttl_hours       ?? null
-          this.m.cleanupMin = statsR.cleanup_interval_min ?? null
-        }
-
-        // ── MCP healthz ──
+        this.health.ok = !!(hzR && hzR.ok === true)
         if (hzR) this.health.mcpUptime = hzR.uptime_s ?? 0
+
+        if (ovR) {
+          const s = ovR.stats || {}
+          this.m.depth      = s.pending    ?? 0
+          this.m.leased     = s.leased     ?? 0
+          this.m.processed  = s.read_count ?? 0
+          this.m.total      = s.total      ?? 0
+          this.m.uptime     = ovR.uptime_s ?? null
+          this.m.ttl        = ovR.settings ? ovR.settings.ttl_hours : null
+          this.m.cleanupMin = ovR.settings ? ovR.settings.cleanup_interval_min : null
+        }
 
         // Sparkline data
         this.sparkData.push(this.m.depth ?? 0)
         if (this.sparkData.length > 20) this.sparkData.shift()
 
         this.lastUpdate = new Date().toLocaleTimeString('fr')
-
       } catch (e) {
         // JS processing error — log only, do NOT flip health.ok
         console.error('[dash] unexpected error:', e)
@@ -1418,33 +1277,149 @@ function app() {
       }
     },
 
-    // ── Config ────────────────────────────────────────────────────
-    async loadConfig() {
-      if (this._configLoaded) return
+    // ── Réglages ──────────────────────────────────────────────────
+    async loadSettingsForm() {
       try {
-        const r = await fetch(`${this.api}/config`)
-        const d = await r.json()
-        this.cfg.mcpConnectorUrl = d.mcpConnectorUrl || ''
-        this.cfg.webhookApiUrl   = d.webhookApiUrl   || ''
-        this._configLoaded = true
-      } catch {}
+        const d = await this.loadOverview()
+        const s = d.settings
+        this.form = {
+          ttl_hours: s.ttl_hours,
+          cleanup_interval_min: s.cleanup_interval_min,
+          lease_timeout_sec: s.lease_timeout_sec,
+          webhook_rate_limit_per_min: s.webhook_rate_limit_per_min,
+          update_check_enabled: s.update_check_enabled,
+          backup_interval_hours: s.backup_interval_hours,
+          backup_retention: s.backup_retention,
+        }
+        this.ttlRows = Object.entries(s.topic_ttl_overrides || {}).map(([topic, hours]) => ({ topic, hours }))
+        this.errors = {}
+      } catch (e) { this.showToast(e.message, false) }
     },
-    ensureConfig() { this.loadConfig() },
 
-    // ── Secrets ───────────────────────────────────────────────────
-    async loadSecrets() {
-      if (this._secretsLoaded) return
+    async saveSettings() {
+      this.errors = {}
+      const overrides = {}
+      for (const r of this.ttlRows) {
+        const topic = String(r.topic || '').trim()
+        if (topic === '' && (r.hours === '' || r.hours == null)) continue
+        overrides[topic] = r.hours === '' ? NaN : r.hours
+      }
+      this.saving.settings = true
       try {
-        const r = await fetch(`${this.api}/secrets`)
-        const d = await r.json()
-        this.cfg.webhookSecret = d.webhookSecret || ''
-        this.cfg.mcpToken      = d.mcpToken      || ''
-        this._secretsLoaded = true
-      } catch {}
+        const d = await this.call('PATCH', '/settings', { ...this.form, topic_ttl_overrides: overrides })
+        this.ov.settings = d.settings
+        this.m.ttl = d.settings.ttl_hours
+        this.showToast('Réglages enregistrés', true)
+      } catch (e) {
+        if (e.key && SETTING_HINTS[e.key]) {
+          this.errors[e.key] = 'Valeur invalide : ' + SETTING_HINTS[e.key] + '.'
+        } else if (e.key) {
+          this.errors[e.key] = e.message
+        }
+        this.showToast(e.key ? 'Réglage invalide' : e.message, false)
+      } finally { this.saving.settings = false }
     },
-    toggleReveal(k) {
-      this.reveal[k] = !this.reveal[k]
-      if (this.reveal[k]) this.loadSecrets()
+
+    // ── Secret du webhook ─────────────────────────────────────────
+    async fetchSecret() {
+      const d = await this.call('GET', '/settings/webhook-secret')
+      this.secret = d.secret
+      return d.secret
+    },
+    async toggleReveal() {
+      if (this.reveal.webhook) { this.reveal.webhook = false; this.secret = ''; return }
+      try { await this.fetchSecret(); this.reveal.webhook = true } catch (e) { this.showToast(e.message, false) }
+    },
+    async copySecret() {
+      try { this.copy(this.secret || await this.fetchSecret()) } catch (e) { this.showToast(e.message, false) }
+    },
+    askRotate() {
+      this.ask('Régénérer le secret ?',
+        'L\'ancien secret cesse immédiatement de fonctionner : tous vos workflows doivent être mis à jour.',
+        'Régénérer', async () => {
+          const d = await this.call('POST', '/settings/webhook-secret/rotate')
+          this.secret = ''
+          this.reveal.webhook = false
+          await this.loadOverview()
+          this.showOnce('Nouveau secret du webhook',
+            'Mettez à jour vos workflows (n8n, Make…) avec ce nouveau secret ; l\'ancien est déjà invalide.', d.secret)
+        })
+    },
+    async vacuum() {
+      this.saving.vacuum = true
+      try { await this.call('POST', '/maintenance/vacuum'); this.showToast('Base compactée', true) }
+      catch (e) { this.showToast(e.message, false) }
+      finally { this.saving.vacuum = false }
+    },
+
+    // ── Connexions ────────────────────────────────────────────────
+    async loadConnections() {
+      try {
+        const [k, c] = await Promise.all([this.call('GET', '/api-keys'), this.call('GET', '/oauth-clients')])
+        this.apiKeys = k.keys
+        this.oauthClients = c.clients
+        if (!this.ov.mcpUrl) await this.loadOverview()
+      } catch (e) { this.showToast(e.message, false) }
+    },
+    async createKey() {
+      this.newKeyError = ''
+      try {
+        const d = await this.call('POST', '/api-keys', { name: this.newKeyName })
+        this.newKeyOpen = false
+        this.showOnce('Clé API créée',
+          'Copiez cette clé maintenant : elle ne sera plus jamais affichée.', d.key)
+        await this.loadConnections()
+      } catch (e) { this.newKeyError = e.message }
+    },
+    askRevokeKey(k) {
+      this.ask('Révoquer cette clé ?', `« ${k.name} » (${k.prefix}…) cessera immédiatement de fonctionner.`,
+        'Révoquer', async () => {
+          await this.call('DELETE', '/api-keys/' + k.id)
+          this.showToast('Clé révoquée', true)
+          await this.loadConnections()
+        })
+    },
+    askRevokeClient(c) {
+      this.ask('Révoquer ce client ?',
+        `« ${c.client_name || c.client_id} » perdra son accès ; il devra se reconnecter pour réautoriser.`,
+        'Révoquer', async () => {
+          await this.call('DELETE', '/oauth-clients/' + encodeURIComponent(c.client_id))
+          this.showToast('Client révoqué', true)
+          await this.loadConnections()
+        })
+    },
+
+    // ── Compte ────────────────────────────────────────────────────
+    async changePassword() {
+      this.pwErrors = {}
+      this.saving.password = true
+      try {
+        await this.call('POST', '/password', { current: this.pw.current, next: this.pw.next })
+        this.pw = { current: '', next: '' }
+        this.showToast('Mot de passe modifié', true)
+      } catch (e) {
+        if (e.key) this.pwErrors[e.key] = e.message
+        this.showToast(e.key ? 'Mot de passe refusé' : e.message, false)
+      } finally { this.saving.password = false }
+    },
+    async logout() {
+      try {
+        await fetch('/logout', { method: 'POST', headers: { 'x-csrf-token': this.csrf }, credentials: 'same-origin', redirect: 'manual' })
+      } catch { /* la redirection suffit */ }
+      window.location.href = '/login'
+    },
+
+    // ── Modales ───────────────────────────────────────────────────
+    ask(title, text, label, fn) {
+      this.confirmBox = { open: true, title, text, label, fn }
+    },
+    async runConfirm() {
+      const fn = this.confirmBox.fn
+      this.confirmBox.open = false
+      try { await fn() } catch (e) { this.showToast(e.message, false) }
+    },
+    showOnce(title, note, value) {
+      this.once = { open: true, title, note, value }
     },
 
     // ── Explorer ──────────────────────────────────────────────────
@@ -1453,8 +1428,16 @@ function app() {
       return this.explorerItems.filter(i => i.status === this.explorerStatusFilter)
     },
 
+    topics() { return Object.keys((this.ov.stats && this.ov.stats.topics) || {}).sort() },
+
     maybePeek() {
       if (!this.explorerItems.length && !this.loading.explorer) this.loadPeek()
+    },
+
+    _peekPath(offset) {
+      let p = `/messages?limit=${this.explorerPageSize}&offset=${offset}`
+      if (this.explorerTopic) p += '&topic=' + encodeURIComponent(this.explorerTopic)
+      return p
     },
 
     async loadPeek() {
@@ -1463,19 +1446,14 @@ function app() {
       this.explorerOpen = null
       this.explorerOffset = 0
       try {
-        const r = await fetch(`${this.api}/peek?limit=${this.explorerPageSize}&offset=0`)
-        if (r.ok) {
-          const d = await r.json()
-          const items = Array.isArray(d.items) ? d.items : (d.id ? [d] : [])
-          this.explorerItems = items.map(i => this._normalize(i))
-          this.explorerTotal = d.stats?.total ?? this.explorerItems.length
-          this.explorerOffset = items.length
-        } else {
-          this.explorerItems = []
-          this.explorerTotal = 0
-        }
-      } catch { this.explorerItems = []; this.explorerTotal = 0 }
-      finally  {
+        const [d] = await Promise.all([this.call('GET', this._peekPath(0)), this.loadOverview().catch(() => null)])
+        this.explorerItems = d.items.map(i => this._normalize(i))
+        this.explorerTotal = d.total ?? this.explorerItems.length
+        this.explorerOffset = d.items.length
+      } catch (e) {
+        this.explorerItems = []; this.explorerTotal = 0
+        this.showToast(e.message, false)
+      } finally {
         this.loading.explorer = false
         this.$nextTick(() => { this.initArrivalChart(); this.updateArrivalChart() })
       }
@@ -1485,14 +1463,10 @@ function app() {
       if (this.loading.explorer) return
       this.loading.explorer = true
       try {
-        const r = await fetch(`${this.api}/peek?limit=${this.explorerPageSize}&offset=${this.explorerOffset}`)
-        if (r.ok) {
-          const d = await r.json()
-          const items = Array.isArray(d.items) ? d.items : []
-          this.explorerItems = [...this.explorerItems, ...items.map(i => this._normalize(i))]
-          this.explorerOffset += items.length
-          this.explorerTotal = d.stats?.total ?? this.explorerTotal
-        }
+        const d = await this.call('GET', this._peekPath(this.explorerOffset))
+        this.explorerItems = [...this.explorerItems, ...d.items.map(i => this._normalize(i))]
+        this.explorerOffset += d.items.length
+        this.explorerTotal = d.total ?? this.explorerTotal
       } catch { this.showToast('Erreur de chargement', false) }
       finally  { this.loading.explorer = false; this.updateArrivalChart() }
     },
@@ -1502,18 +1476,11 @@ function app() {
       this.loading.explorer = true
       this.explorerOpen = null
       try {
-        const r = await fetch(`${this.api}/by-id/${encodeURIComponent(this.explorerQ)}?peek=true`)
-        if (r.ok) {
-          const d = await r.json()
-          const item = Array.isArray(d.items) ? d.items[0] : (d.id ? d : null)
-          this.explorerItems = item ? [this._normalize(item)] : []
-          this.explorerSearched = true
-          if (!this.explorerItems.length) this.showToast('Message non trouvé', false)
-          else this.explorerOpen = this.explorerItems[0].id || 0
-        } else {
-          this.explorerItems = []
-          this.showToast('Message non trouvé', false)
-        }
+        const d = await this.call('GET', '/messages?correlation_id=' + encodeURIComponent(this.explorerQ.trim()))
+        this.explorerItems = d.items.map(i => this._normalize(i))
+        this.explorerSearched = true
+        if (!this.explorerItems.length) this.showToast('Message non trouvé', false)
+        else this.explorerOpen = this.explorerItems[0].id || 0
       } catch { this.showToast('Erreur de recherche', false) }
       finally  { this.loading.explorer = false }
     },
@@ -1521,14 +1488,37 @@ function app() {
     _normalize(item) {
       return {
         id:            item.id ?? null,
-        correlationId: item.correlation_id ?? item.correlationId ?? null,
-        payload:       item.payload ?? item.body ?? item.data ?? {},
+        correlationId: item.correlation_id ?? null,
+        payload:       item.payload ?? {},
         createdAt:     item.created_at ? new Date(item.created_at).toLocaleString('fr') : null,
         rawCreatedAt:  item.created_at ? new Date(item.created_at).getTime() : null,
         readAt:        item.read_at    ? new Date(item.read_at).toLocaleString('fr')    : null,
+        leaseUntil:    item.lease_until ? new Date(item.lease_until).toLocaleString('fr') : null,
         status:        item.status ?? null,
         source:        item.source ?? null,
+        topic:         item.topic ?? 'default',
+        attempts:      item.attempts ?? 0,
       }
+    },
+
+    statusBadge(status) {
+      return status === 'pending' ? 'badge-pending' : status === 'leased' ? 'badge-leased' : 'badge-read'
+    },
+
+    async sendTest() {
+      this.testError = ''
+      let payload
+      try { payload = JSON.parse(this.test.payload) } catch { this.testError = 'Le payload n\'est pas un JSON valide.'; return }
+      const body = { payload }
+      if (this.test.topic.trim()) body.topic = this.test.topic.trim()
+      if (this.test.correlation_id.trim()) body.correlation_id = this.test.correlation_id.trim()
+      try {
+        await this.call('POST', '/messages', body)
+        this.testOpen = false
+        this.showToast('Message envoyé', true)
+        await this.loadPeek()
+        this.refreshDash()
+      } catch (e) { this.testError = e.message }
     },
 
     // ── Auto-refresh ──────────────────────────────────────────────
@@ -1547,30 +1537,28 @@ function app() {
 
     // ── API commands ──────────────────────────────────────────────
     apiCmds() {
-      const s = this.cfg.webhookSecret || '<WEBHOOK_SECRET>'
-      const b = this.cfg.webhookApiUrl
-        ? this.cfg.webhookApiUrl.replace('/webhook', '')
-        : 'https://queue.your-domain.com'
+      const s = this.secret || '<WEBHOOK_SECRET>'
+      const b = (this.ov.publicUrl || 'https://queue.your-domain.com/').replace(/\/$/, '')
       const h = `-H "x-webhook-secret: ${s}"`
       return [
         { id:'status', method:'GET',  name:'Statut de la queue',
           desc:'État de santé + uptime', endpoint:'/status',
-          curl:`curl ${h} \\\n  ${b}/status` },
+          curl:`curl ${b}/status` },
         { id:'stats',  method:'GET',  name:'Statistiques complètes',
-          desc:'Messages traités, pending, total, TTL, uptime…', endpoint:'/stats',
+          desc:'Messages en attente, empruntés, lus, total, par topic', endpoint:'/stats',
           curl:`curl ${h} \\\n  ${b}/stats` },
         { id:'peek',   method:'GET',  name:'Peek — aperçu non-destructif',
-          desc:'Voir les 50 derniers messages sans les consommer', endpoint:'/peek',
+          desc:'Voir les derniers messages sans les consommer (filtre ?topic=)', endpoint:'/peek',
           curl:`curl ${h} \\\n  ${b}/peek` },
         { id:'next',   method:'GET',  name:'Next — consommer le prochain',
-          desc:'Récupère ET retire le message de la queue (FIFO)', endpoint:'/next',
+          desc:'Récupère ET retire le message de la queue (FIFO) ; ?ack=manual pour un bail', endpoint:'/next',
           curl:`curl ${h} \\\n  ${b}/next` },
         { id:'byid',   method:'GET',  name:'Recherche par Correlation ID',
           desc:'Accéder à un message spécifique (peek par défaut)', endpoint:'/by-id/:id',
           curl:`curl ${h} \\\n  "${b}/by-id/MON_ID?peek=true"` },
         { id:'send',   method:'POST', name:'Envoyer un message',
-          desc:'Ajoute un payload JSON dans la queue avec ID de corrélation optionnel', endpoint:'/webhook',
-          curl:`curl -X POST \\\n  ${h} \\\n  -H "Content-Type: application/json" \\\n  -H "x-correlation-id: mon-id-unique" \\\n  -d '{"event":"my_event","data":{"key":"value"}}' \\\n  ${b}/webhook` },
+          desc:'Ajoute un payload JSON dans la queue (ID de corrélation et topic optionnels)', endpoint:'/webhook',
+          curl:`curl -X POST \\\n  ${h} \\\n  -H "Content-Type: application/json" \\\n  -H "x-correlation-id: mon-id-unique" \\\n  -H "x-topic: mon-topic" \\\n  -d '{"event":"my_event","data":{"key":"value"}}' \\\n  ${b}/webhook` },
         { id:'clear',  method:'DELETE', name:'Vider la queue',
           desc:'Supprime TOUS les messages (pending + read). Irréversible.', endpoint:'/clear',
           curl:`curl -X DELETE ${h} \\\n  ${b}/clear` },
@@ -1585,6 +1573,7 @@ function app() {
       if (n == null) return '--'
       return Number(n).toLocaleString('fr')
     },
+    fmtDate(iso) { return iso ? new Date(iso).toLocaleString('fr') : '—' },
     fmtUptime(s) {
       if (s == null) return '--'
       const d = Math.floor(s / 86400)
@@ -1594,6 +1583,7 @@ function app() {
       if (h > 0) return `${h}h ${m}m`
       return `${m}m ${s%60}s`
     },
+
     syntaxHL(json) {
       if (!json) return ''
       return json
@@ -1694,29 +1684,23 @@ function app() {
     // ── Clear + delete ─────────────────────────────────────────────
     async clearQueue() {
       try {
-        const r = await fetch(`${this.api}/clear`, { method: 'DELETE' })
-        if (r.ok) {
-          this.showToast('Queue vidée', true)
-          await this.loadPeek()
-        } else {
-          this.showToast('Erreur lors du vidage', false)
-        }
-      } catch { this.showToast('Erreur réseau', false) }
+        await this.call('DELETE', '/messages', { confirm: true })
+        this.showToast('Queue vidée', true)
+        await this.loadPeek()
+        this.refreshDash()
+      } catch (e) { this.showToast(e.message || 'Erreur lors du vidage', false) }
       this.clearConfirm = false
     },
 
     async deleteItem(id) {
       if (!id) return
       try {
-        const r = await fetch(`${this.api}/message/${encodeURIComponent(id)}`, { method: 'DELETE' })
-        if (r.ok) {
-          this.explorerItems = this.explorerItems.filter(i => i.id !== id)
-          this.showToast('Message supprimé', true)
-          this.updateArrivalChart()
-        } else {
-          this.showToast('Message introuvable', false)
-        }
-      } catch { this.showToast('Erreur réseau', false) }
+        await this.call('DELETE', '/messages/' + encodeURIComponent(id))
+        this.explorerItems = this.explorerItems.filter(i => i.id !== id)
+        this.explorerTotal = Math.max(0, this.explorerTotal - 1)
+        this.showToast('Message supprimé', true)
+        this.updateArrivalChart()
+      } catch (e) { this.showToast(e.status === 404 ? 'Message introuvable' : e.message, false) }
     },
 
     // ── Chart.js ──────────────────────────────────────────────────

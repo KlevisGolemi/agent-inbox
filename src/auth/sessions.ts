@@ -13,6 +13,8 @@ export interface AdminSessions {
   /** null si le cookie est absent, inconnu ou expiré (expirée dès que now >= expires_at). */
   resolve(cookie?: string): User | null
   destroy(cookie?: string): void
+  /** Supprime toutes les sessions de l'utilisateur sauf celle du cookie donné. */
+  destroyOthers(userId: number, keepCookie?: string): void
 }
 
 // randomToken(32) → 43 caractères base64url ; on refuse tout le reste sans toucher la base.
@@ -30,6 +32,7 @@ export function createAdminSessions(
      WHERE s.id_hash = ? AND s.expires_at > ?`,
   )
   const remove = db.prepare('DELETE FROM admin_sessions WHERE id_hash = ?')
+  const removeOthers = db.prepare('DELETE FROM admin_sessions WHERE user_id = ? AND id_hash != ?')
 
   return {
     create(userId) {
@@ -45,6 +48,12 @@ export function createAdminSessions(
     destroy(cookie) {
       if (typeof cookie !== 'string' || !COOKIE_RE.test(cookie)) return
       remove.run(sha256(cookie))
+    },
+    destroyOthers(userId, keepCookie) {
+      // Sans cookie valide à conserver, '' ne correspond à aucun id_hash : tout est supprimé.
+      const keep =
+        typeof keepCookie === 'string' && COOKIE_RE.test(keepCookie) ? sha256(keepCookie) : ''
+      removeOthers.run(userId, keep)
     },
   }
 }
