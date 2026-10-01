@@ -382,11 +382,11 @@
           <div class="flex items-center gap-1.5">
             <template x-for="p in [{v:1,l:'1m'},{v:5,l:'5m'},{v:30,l:'30m'},{v:60,l:'1h'},{v:720,l:'12h'},{v:1440,l:'24h'}]" :key="p.v">
               <button class="filter-pill" :class="explorerPeriod===p.v&&'active'"
-                      @click="explorerPeriod=p.v; updateArrivalChart()"
+                      @click="explorerPeriod=p.v; loadArrivals()"
                       x-text="p.l"></button>
             </template>
             <span class="ml-2 text-xs font-medium" style="color:#4ADE80"
-                  x-text="`${arrivedInPeriod().length} message${arrivedInPeriod().length>1?'s':''} — ${explorerPeriod>=60?(explorerPeriod/60)+'h':explorerPeriod+'min'}`"></span>
+                  x-text="`${arrivedInPeriod().length}${arrivalCapped()?'+':''} message${arrivedInPeriod().length>1?'s':''} — ${explorerPeriod>=60?(explorerPeriod/60)+'h':explorerPeriod+'min'}`"></span>
           </div>
         </div>
 
@@ -1221,6 +1221,7 @@ function app() {
     explorerOpen: null,
     explorerQ: '',
     explorerTopic: '',
+    arrivalTimes: [],   // horodatages (ms) des 500 messages les plus récents, indépendants de la pagination
     explorerStatusFilter: 'all',
     explorerSearched: false,
     explorerPeriod: 5,
@@ -1586,7 +1587,7 @@ function app() {
         this.showToast(e.message, false)
       } finally {
         this.loading.explorer = false
-        this.$nextTick(() => { this.initArrivalChart(); this.updateArrivalChart() })
+        this.$nextTick(() => { this.initArrivalChart(); this.loadArrivals() })
       }
     },
 
@@ -1599,7 +1600,7 @@ function app() {
         this.explorerOffset += d.items.length
         this.explorerTotal = d.total ?? this.explorerTotal
       } catch { this.showToast('Erreur de chargement', false) }
-      finally  { this.loading.explorer = false; this.updateArrivalChart() }
+      finally  { this.loading.explorer = false }
     },
 
     async searchById() {
@@ -1761,7 +1762,25 @@ function app() {
     // ── Arrival period chart ───────────────────────────────────────
     arrivedInPeriod() {
       const cutoff = Date.now() - this.explorerPeriod * 60 * 1000
-      return this.explorerItems.filter(i => i.rawCreatedAt && i.rawCreatedAt >= cutoff)
+      return this.arrivalTimes.filter(t => t >= cutoff)
+    },
+
+    // Vrai si la fenêtre de 500 messages est pleine et couvre toute la période
+    arrivalCapped() {
+      const cutoff = Date.now() - this.explorerPeriod * 60 * 1000
+      return this.arrivalTimes.length >= 500 && Math.min(...this.arrivalTimes) >= cutoff
+    },
+
+    async loadArrivals() {
+      try {
+        let p = '/messages?limit=500&offset=0'
+        if (this.explorerTopic) p += '&topic=' + encodeURIComponent(this.explorerTopic)
+        const d = await this.call('GET', p)
+        this.arrivalTimes = d.items
+          .map(i => i.created_at ? new Date(i.created_at).getTime() : null)
+          .filter(t => t !== null)
+      } catch { this.arrivalTimes = [] }
+      this.updateArrivalChart()
     },
 
     initArrivalChart() {
@@ -1791,7 +1810,6 @@ function app() {
           animation: { duration: 200 }
         }
       })
-      this.updateArrivalChart()
     },
 
     updateArrivalChart() {
@@ -1801,9 +1819,8 @@ function app() {
       const periodMs = this.explorerPeriod * 60 * 1000
       const bucketSize = periodMs / BUCKETS
       const counts = Array(BUCKETS).fill(0)
-      this.explorerItems.forEach(i => {
-        if (!i.rawCreatedAt) return
-        const age = now - i.rawCreatedAt
+      this.arrivalTimes.forEach(t => {
+        const age = now - t
         if (age < 0 || age > periodMs) return
         const idx = Math.min(BUCKETS - 1, Math.floor(age / bucketSize))
         counts[BUCKETS - 1 - idx]++
@@ -1830,7 +1847,7 @@ function app() {
         this.explorerItems = this.explorerItems.filter(i => i.id !== id)
         this.explorerTotal = Math.max(0, this.explorerTotal - 1)
         this.showToast('Message supprimé', true)
-        this.updateArrivalChart()
+        this.loadArrivals()
       } catch (e) { this.showToast(e.status === 404 ? 'Message introuvable' : e.message, false) }
     },
 
