@@ -15,12 +15,16 @@ import { createMcpRouter } from './mcp/server.js'
 import { createQueueRouter } from './queue/routes.js'
 import type { QueueRepo } from './queue/repo.js'
 import type { Settings } from './settings/index.js'
+import type { VersionService } from './version/index.js'
 
 export interface AppDeps {
   db: Database.Database
   settings: Settings
   repo: QueueRepo
   version: string
+  versions: VersionService
+  /** Remplaçable en test ; `fetch` global par défaut. */
+  updaterFetch?: typeof fetch
   env: Env
   users: Users
   sessions: AdminSessions

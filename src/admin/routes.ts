@@ -12,12 +12,16 @@ import { queryString } from '../queue/http.js'
 import type { QueueRepo } from '../queue/repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 import { SETTING_KEYS, SettingValidationError, type Settings } from '../settings/index.js'
+import type { VersionService } from '../version/index.js'
 
 export interface AdminDeps {
   db: Database.Database
   settings: Settings
   repo: QueueRepo
   version: string
+  versions: VersionService
+  /** Remplaçable en test ; `fetch` global par défaut. */
+  updaterFetch?: typeof fetch
   env: Env
   users: Users
   sessions: AdminSessions
@@ -26,6 +30,8 @@ export interface AdminDeps {
 
 const MASK = '••••'
 const MAX_LIMIT = 500
+const UPDATER_TIMEOUT_MS = 10_000
+const UPDATE_COMMAND = './update.sh'
 
 /** Réponse d'erreur uniforme de l'API d'administration. */
 function fail(res: Response, status: number, error: string, message: string, key?: string): void {
@@ -270,6 +276,40 @@ export function createAdminRouter(deps: AdminDeps): Router {
     } else {
       fail(res, 404, 'not_found', 'Client introuvable.')
     }
+  })
+
+  // ── Version et mise à jour ────────────────────────────────────────
+  router.get('/version', async (_req, res) => {
+    res.json({ ok: true, ...(await deps.versions.check()), updater: env.updater !== undefined })
+  })
+
+  router.post('/update', async (_req, res) => {
+    const updater = env.updater
+    if (!updater) {
+      res.status(409).json({
+        ok: false,
+        error: 'no_updater',
+        message: 'La mise à jour en un clic n’est pas activée. Lancez la commande sur le serveur.',
+        command: UPDATE_COMMAND,
+      })
+      return
+    }
+    try {
+      const upstream = await (deps.updaterFetch ?? fetch)(new URL('/update', updater.url), {
+        method: 'POST',
+        headers: { 'x-updater-secret': updater.secret },
+        signal: AbortSignal.timeout(UPDATER_TIMEOUT_MS),
+      })
+      if (!upstream.ok) throw new Error(`réponse ${upstream.status}`)
+    } catch (err) {
+      log('warn', 'Updater injoignable ou en erreur', {
+        reason: err instanceof Error ? err.message : 'inconnue',
+      })
+      fail(res, 502, 'updater_unreachable', 'Le service de mise à jour ne répond pas.')
+      return
+    }
+    log('info', 'Mise à jour demandée depuis l’administration')
+    res.status(202).json({ ok: true, started: true })
   })
 
   // ── Maintenance et compte ─────────────────────────────────────────

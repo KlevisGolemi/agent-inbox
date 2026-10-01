@@ -1,14 +1,19 @@
 import request from 'supertest'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SESSION_COOKIE } from '../src/auth/sessions.js'
-import { getSetCookie, makeTestApp } from './helpers/app.js'
+import type { AppDeps } from '../src/app.js'
+import { getSetCookie, makeTestApp, testEnv } from './helpers/app.js'
 
 const EMAIL = 'admin@example.test'
 const PASSWORD = 'mot-de-passe-initial-1'
 
 /** Application de test avec un admin connecté ; `cookies` porte session + CSRF. */
 async function setup() {
-  const ctx = makeTestApp()
+  return setupWith()
+}
+
+async function setupWith(over: Partial<AppDeps> = {}) {
+  const ctx = makeTestApp(over)
   const user = await ctx.users.create(EMAIL, PASSWORD)
   const session = ctx.sessions.create(user.id)
   const base = `${SESSION_COOKIE}=${session}`
@@ -351,5 +356,97 @@ describe('compte et maintenance', () => {
     const res = await api('post', '/maintenance/vacuum')
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
+  })
+})
+
+describe('version et mise à jour', () => {
+  const SECRET = 'u'.repeat(32)
+  const versions = {
+    current: '2.0.0',
+    check: async () => ({
+      current: '2.0.0',
+      latest: '2.1.0',
+      updateAvailable: true,
+      notes: 'Nouveautés',
+      url: 'https://github.com/x/y/releases/tag/v2.1.0',
+    }),
+  }
+
+  it('GET /version exige une session', async () => {
+    const { app } = makeTestApp()
+    expect((await request(app).get('/admin/api/version')).status).toBe(401)
+  })
+
+  it('GET /version renvoie l’état de la vérification et la présence de l’updater', async () => {
+    const { api } = await setupWith({ versions })
+    const res = await api('get', '/version')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      ok: true,
+      current: '2.0.0',
+      latest: '2.1.0',
+      updateAvailable: true,
+      notes: 'Nouveautés',
+      url: 'https://github.com/x/y/releases/tag/v2.1.0',
+      updater: false,
+    })
+  })
+
+  it('POST /update sans updater : 409 no_updater avec la commande', async () => {
+    const { api } = await setupWith({ versions })
+    const res = await api('post', '/update').send({})
+    expect(res.status).toBe(409)
+    expect(res.body).toMatchObject({ ok: false, error: 'no_updater', command: './update.sh' })
+    expect(typeof res.body.message).toBe('string')
+  })
+
+  it('POST /update exige le jeton CSRF', async () => {
+    const { app, base } = await setupWith({ versions })
+    expect((await request(app).post('/admin/api/update').set('Cookie', base).send({})).status).toBe(
+      403,
+    )
+  })
+
+  it('POST /update avec updater : relaie vers <url>/update avec le secret et répond 202', async () => {
+    const updaterFetch = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const { api } = await setupWith({
+      versions,
+      updaterFetch,
+      env: testEnv({ updater: { url: new URL('http://updater:8081'), secret: SECRET } }),
+    })
+    const res = await api('post', '/update').send({})
+    expect(res.status).toBe(202)
+    expect(res.body).toEqual({ ok: true, started: true })
+    const [url, init] = updaterFetch.mock.calls[0]!
+    expect(String(url)).toBe('http://updater:8081/update')
+    expect(init?.method).toBe('POST')
+    expect(new Headers(init?.headers).get('x-updater-secret')).toBe(SECRET)
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+    const ver = await api('get', '/version')
+    expect(ver.body.updater).toBe(true)
+  })
+
+  it('POST /update : updater injoignable ou en erreur → 502 updater_unreachable', async () => {
+    const env = testEnv({ updater: { url: new URL('http://updater:8081'), secret: SECRET } })
+    const down = await setupWith({
+      versions,
+      env,
+      updaterFetch: async () => {
+        throw new Error('ECONNREFUSED')
+      },
+    })
+    const r1 = await down.api('post', '/update').send({})
+    expect(r1.status).toBe(502)
+    expect(r1.body).toMatchObject({ ok: false, error: 'updater_unreachable' })
+    expect(JSON.stringify(r1.body)).not.toContain(SECRET)
+
+    const busy = await setupWith({
+      versions,
+      env,
+      updaterFetch: async () => new Response('busy', { status: 409 }),
+    })
+    const r2 = await busy.api('post', '/update').send({})
+    expect(r2.status).toBe(502)
+    expect(r2.body.error).toBe('updater_unreachable')
   })
 })

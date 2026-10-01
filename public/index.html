@@ -729,6 +729,41 @@
           </div>
         </div>
 
+        <!-- Version et mise à jour -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">Version</p>
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-sm text-white">
+                v<span x-text="ver.current || ov.version || ''"></span> installée
+                <template x-if="ver.latest">
+                  <span> · v<span x-text="ver.latest"></span> disponible</span>
+                </template>
+              </p>
+              <p class="text-xs mt-0.5" style="color:#94A3B8">
+                <template x-if="ver.latest && ver.updateAvailable">
+                  <span>Une nouvelle version est disponible.
+                    <a x-show="ver.url" :href="ver.url" target="_blank" rel="noopener noreferrer" class="underline">Notes de version</a></span>
+                </template>
+                <template x-if="ver.latest && !ver.updateAvailable">
+                  <span>Vous utilisez la dernière version.</span>
+                </template>
+                <template x-if="!ver.latest">
+                  <span>Vérification indisponible ou désactivée (réglage « update_check_enabled »).</span>
+                </template>
+              </p>
+            </div>
+            <button class="btn btn-primary" x-show="ver.updateAvailable" @click="runUpdate()" :disabled="saving.update">Mettre à jour</button>
+          </div>
+          <div x-show="updateCmd" class="mt-4" style="display:none">
+            <p class="text-xs mb-2" style="color:#94A3B8">La mise à jour en un clic n'est pas activée. Lancez cette commande sur le serveur :</p>
+            <div class="flex items-center gap-2">
+              <div class="copy-field flex-1"><span x-text="updateCmd"></span></div>
+              <button class="btn btn-ghost" @click="copy(updateCmd)">Copier</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Maintenance -->
         <div class="glass rounded-2xl p-5 mb-4">
           <p class="section-title mb-4">Maintenance</p>
@@ -1132,7 +1167,7 @@ function app() {
     m: { depth: null, leased: null, processed: null, total: null, uptime: null, ttl: null, cleanupMin: null },
 
     loading: { dash: false, explorer: false },
-    saving: { settings: false, vacuum: false, password: false },
+    saving: { settings: false, vacuum: false, password: false, update: false },
 
     // Explorer — all items array
     explorerItems: [],
@@ -1152,6 +1187,10 @@ function app() {
     testOpen: false,
     test: { topic: '', correlation_id: '', payload: '{\n  "event": "test"\n}' },
     testError: '',
+
+    // Version et mise à jour
+    ver: {},
+    updateCmd: '',
 
     // Réglages
     form: {},
@@ -1219,6 +1258,7 @@ function app() {
         err.status = r.status
         err.code = data && data.error
         err.key = data && data.key
+        err.command = data && data.command
         throw err
       }
       return data
@@ -1294,6 +1334,22 @@ function app() {
         this.ttlRows = Object.entries(s.topic_ttl_overrides || {}).map(([topic, hours]) => ({ topic, hours }))
         this.errors = {}
       } catch (e) { this.showToast(e.message, false) }
+      this.loadVersion()
+    },
+    async loadVersion() {
+      try { this.ver = await this.call('GET', '/version') }
+      catch { /* la version installée reste affichée via l'overview */ }
+    },
+    async runUpdate() {
+      this.saving.update = true
+      this.updateCmd = ''
+      try {
+        await this.call('POST', '/update', {})
+        this.showToast('Mise à jour lancée : le service redémarre dans un instant', true)
+      } catch (e) {
+        if (e.code === 'no_updater') this.updateCmd = e.command || './update.sh'
+        else this.showToast(e.message, false)
+      } finally { this.saving.update = false }
     },
 
     async saveSettings() {

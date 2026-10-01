@@ -16,6 +16,7 @@ import { loadEnv } from '../src/env.js'
 import { log } from '../src/log.js'
 import { createQueueRepo } from '../src/queue/repo.js'
 import { createSettings, seedSettings } from '../src/settings/index.js'
+import { createVersionService } from '../src/version/index.js'
 
 // Identifiants de développement : source de vérité du compte créé ci-dessous (jamais affichés).
 const ADMIN_EMAIL = 'admin@example.com'
@@ -43,6 +44,12 @@ const app = createApp({
   settings,
   repo: createQueueRepo(db, { leaseTimeoutMs: () => settings.get('lease_timeout_sec') * 1000 }),
   version: '2.0.0-dev',
+  versions: createVersionService({
+    settings,
+    fetch,
+    current: '2.0.0-dev',
+    repo: env.updateRepo,
+  }),
   env,
   users,
   sessions,

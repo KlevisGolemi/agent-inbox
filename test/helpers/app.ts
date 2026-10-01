@@ -10,6 +10,7 @@ import { migrate } from '../../src/db/migrations.js'
 import type { Env } from '../../src/env.js'
 import { createQueueRepo } from '../../src/queue/repo.js'
 import { createSettings, seedSettings } from '../../src/settings/index.js'
+import { createVersionService } from '../../src/version/index.js'
 
 /** Env de test : https, NODE_ENV=test (cookies Secure). */
 export function testEnv(over: Partial<Env> = {}): Env {
@@ -18,6 +19,7 @@ export function testEnv(over: Partial<Env> = {}): Env {
     port: 3000,
     dbPath: ':memory:',
     nodeEnv: 'test',
+    updateRepo: 'KlevisGolemi/cowork-communication',
     seed: {},
     ...over,
   }
@@ -45,6 +47,15 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     settings,
     repo: over.repo ?? createQueueRepo(db),
     version: over.version ?? '0.0.0-test',
+    versions:
+      over.versions ??
+      createVersionService({
+        settings,
+        fetch: async () => Response.json({ tag_name: 'v0.0.0-test', body: '', html_url: '' }),
+        current: over.version ?? '0.0.0-test',
+        repo: env.updateRepo,
+      }),
+    updaterFetch: over.updaterFetch,
     env,
     users: over.users ?? createUsers(db),
     sessions,

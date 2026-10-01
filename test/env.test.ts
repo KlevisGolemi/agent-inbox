@@ -59,3 +59,32 @@ describe('loadEnv', () => {
     })
   })
 })
+
+describe('loadEnv : mise à jour', () => {
+  const base = { PUBLIC_URL: 'https://q.example.com' }
+  const secret = 's'.repeat(32)
+
+  it('updateRepo vaut le dépôt par défaut, surchargeable par UPDATE_REPO', () => {
+    expect(loadEnv(base).updateRepo).toBe('KlevisGolemi/cowork-communication')
+    expect(loadEnv({ ...base, UPDATE_REPO: 'acme/fork' }).updateRepo).toBe('acme/fork')
+    expect(() => loadEnv({ ...base, UPDATE_REPO: 'pas un depot' })).toThrow(/UPDATE_REPO/)
+  })
+  it('updater absent par défaut, présent si URL et secret sont fournis', () => {
+    expect(loadEnv(base).updater).toBeUndefined()
+    const env = loadEnv({ ...base, UPDATER_URL: 'http://updater:8081', UPDATER_SECRET: secret })
+    expect(env.updater?.url.href).toBe('http://updater:8081/')
+    expect(env.updater?.secret).toBe(secret)
+  })
+  it('exige UPDATER_URL et UPDATER_SECRET ensemble', () => {
+    expect(() => loadEnv({ ...base, UPDATER_URL: 'http://updater:8081' })).toThrow(/UPDATER_SECRET/)
+    expect(() => loadEnv({ ...base, UPDATER_SECRET: secret })).toThrow(/UPDATER_URL/)
+  })
+  it('refuse un secret trop court ou une URL invalide', () => {
+    expect(() =>
+      loadEnv({ ...base, UPDATER_URL: 'http://updater:8081', UPDATER_SECRET: 'court' }),
+    ).toThrow(/UPDATER_SECRET/)
+    expect(() => loadEnv({ ...base, UPDATER_URL: 'nope', UPDATER_SECRET: secret })).toThrow(
+      /UPDATER_URL/,
+    )
+  })
+})
