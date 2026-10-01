@@ -1,0 +1,86 @@
+import { randomBytes } from 'node:crypto'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import type Database from 'better-sqlite3'
+import { createApp } from './app.js'
+import { createApiKeys } from './auth/apiKeys.js'
+import { SqliteOAuthProvider } from './auth/oauth/provider.js'
+import { createAdminSessions } from './auth/sessions.js'
+import { ensureAdmin } from './auth/setup.js'
+import { createUsers, type Users } from './auth/users.js'
+import { createBackups, type Backups } from './backups/index.js'
+import { openDb } from './db/index.js'
+import { migrate } from './db/migrations.js'
+import type { Env } from './env.js'
+import { startBackups } from './jobs/backup.js'
+import { startCleanup } from './jobs/cleanup.js'
+import { log } from './log.js'
+import { createQueueRepo } from './queue/repo.js'
+import { createSettings, seedSettings, type Settings } from './settings/index.js'
+import { createVersionService } from './version/index.js'
+
+/** Version courante : package.json, au même chemin relatif depuis src/ et dist/. */
+const { version: VERSION } = createRequire(import.meta.url)('../package.json') as {
+  version: string
+}
+
+export interface Runtime {
+  app: ReturnType<typeof createApp>
+  db: Database.Database
+  settings: Settings
+  users: Users
+  backups: Backups
+  setupCode: { value: string | null }
+  /** Lance les tâches périodiques (nettoyage, sauvegardes) ; stop() les arrête. */
+  start(): { stop(): void }
+}
+
+/** Assemble toutes les dépendances de l'application (production, développement et tests). */
+export async function buildRuntime(env: Env): Promise<Runtime> {
+  const db = openDb(env.dbPath)
+  migrate(db)
+  const settings = createSettings(db)
+  seedSettings(settings, db, env.seed, () => randomBytes(32).toString('hex'))
+
+  const users = createUsers(db)
+  const setupCode = { value: (await ensureAdmin({ users, env, log })).setupCode }
+
+  const sessions = createAdminSessions(db)
+  const repo = createQueueRepo(db, {
+    leaseTimeoutMs: () => settings.get('lease_timeout_sec') * 1000,
+  })
+  const backups = createBackups({ db, dir: join(dirname(env.dbPath), 'backups'), settings })
+  const app = createApp({
+    db,
+    settings,
+    repo,
+    version: VERSION,
+    versions: createVersionService({ settings, fetch, current: VERSION, repo: env.updateRepo }),
+    env,
+    users,
+    sessions,
+    setupCode,
+    apiKeys: createApiKeys(db),
+    oauthProvider: new SqliteOAuthProvider({ db, sessions, env }),
+    backups,
+  })
+
+  return {
+    app,
+    db,
+    settings,
+    users,
+    backups,
+    setupCode,
+    start() {
+      const cleanup = startCleanup({ db, repo, settings })
+      const backupJob = startBackups({ backups, settings })
+      return {
+        stop() {
+          cleanup.stop()
+          backupJob.stop()
+        },
+      }
+    },
+  }
+}
