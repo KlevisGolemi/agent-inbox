@@ -1,0 +1,13 @@
+node_modules
+dist
+.dev
+.git
+.superpowers
+.claude
+.github
+coverage
+mcp
+docs
+test
+*.db*
+.env

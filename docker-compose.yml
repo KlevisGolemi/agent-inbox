@@ -1,80 +1,63 @@
+# Cowork Queue — déploiement par défaut : application + Caddy (HTTPS automatique).
+# Seul Caddy publie des ports : l'application n'est jamais exposée directement
+# (le limiteur de débit ne fait confiance qu'à un seul proxy).
+name: ${COMPOSE_PROJECT_NAME:-cowork-queue}
+
 services:
-  webhook-queue:
+  app:
+    image: ghcr.io/klevisgolemi/cowork-queue:${VERSION:-latest}
     build: .
-    container_name: webhook-queue
     restart: unless-stopped
-
-    env_file:
-      - .env
-
+    env_file: .env
     volumes:
       - queue_data:/data
-
-    networks:
-      - default
-
-    expose:
-      - "3333"
-
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.wq.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.wq.entrypoints=websecure"
-      - "traefik.http.routers.wq.tls=true"
-      - "traefik.http.routers.wq.tls.certresolver=letsencrypt"
-      - "traefik.http.services.wq.loadbalancer.server.port=3333"
-      - "traefik.http.routers.wq.middlewares=wq-headers@docker"
-      - "traefik.http.middlewares.wq-headers.headers.customResponseHeaders.X-Content-Type-Options=nosniff"
-      - "traefik.http.middlewares.wq-headers.headers.customResponseHeaders.X-Frame-Options=DENY"
-
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3333/status"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
 
-  cowork-mcp:
-    build: ./mcp
-    container_name: cowork-mcp
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
-
-    env_file:
-      - .env
-
-    environment:
-      - QUEUE_INTERNAL_URL=http://webhook-queue:3333
-      - PORT=8080
-
-    networks:
-      - default
-
-    expose:
-      - "8080"
-
     depends_on:
-      webhook-queue:
+      app:
         condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_HOST: ${SITE_HOST:?SITE_HOST est obligatoire (voir .env.example)}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mcp.rule=Host(`${MCP_DOMAIN}`)"
-      - "traefik.http.routers.mcp.entrypoints=websecure"
-      - "traefik.http.routers.mcp.tls=true"
-      - "traefik.http.routers.mcp.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mcp.loadbalancer.server.port=8080"
-
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+  # Mise à jour en un clic depuis l'interface (optionnelle) : COMPOSE_PROFILES=updater dans .env.
+  updater:
+    profiles: ["updater"]
+    build: ./deploy/updater
+    restart: unless-stopped
+    environment:
+      UPDATER_SECRET: ${UPDATER_SECRET:-}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-cowork-queue}
+      COMPOSE_FILE: ${COMPOSE_FILE:-docker-compose.yml}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
 
 volumes:
   queue_data:
-    driver: local
-
-networks:
-  default:
-    driver: bridge
+    # Nom fixe : une installation v1 peut réutiliser son volume existant
+    # (QUEUE_VOLUME_NAME dans .env, voir .env.example).
+    name: ${QUEUE_VOLUME_NAME:-cowork-queue-data}
+  caddy_data:
+  caddy_config:
