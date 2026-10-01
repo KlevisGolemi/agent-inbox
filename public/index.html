@@ -1221,6 +1221,7 @@ function app() {
     explorerOpen: null,
     explorerQ: '',
     explorerTopic: '',
+    arrivalTotal: 0,    // total (filtré par topic) renvoyé par l'API
     arrivalTimes: [],   // horodatages (ms) des 500 messages les plus récents, indépendants de la pagination
     explorerStatusFilter: 'all',
     explorerSearched: false,
@@ -1765,10 +1766,11 @@ function app() {
       return this.arrivalTimes.filter(t => t >= cutoff)
     },
 
-    // Vrai si la fenêtre de 500 messages est pleine et couvre toute la période
+    // Vrai si des messages plus anciens existent (total API > reçus) et que le plus ancien reçu
+    // est encore dans la période : le décompte est alors tronqué.
     arrivalCapped() {
       const cutoff = Date.now() - this.explorerPeriod * 60 * 1000
-      return this.arrivalTimes.length >= 500 && Math.min(...this.arrivalTimes) >= cutoff
+      return this.arrivalTotal > this.arrivalTimes.length && Math.min(...this.arrivalTimes) >= cutoff
     },
 
     async loadArrivals() {
@@ -1776,10 +1778,11 @@ function app() {
         let p = '/messages?limit=500&offset=0'
         if (this.explorerTopic) p += '&topic=' + encodeURIComponent(this.explorerTopic)
         const d = await this.call('GET', p)
+        this.arrivalTotal = d.total ?? d.items.length
         this.arrivalTimes = d.items
           .map(i => i.created_at ? new Date(i.created_at).getTime() : null)
           .filter(t => t !== null)
-      } catch { this.arrivalTimes = [] }
+      } catch { this.arrivalTimes = []; this.arrivalTotal = 0 }
       this.updateArrivalChart()
     },
 
