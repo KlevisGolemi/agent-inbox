@@ -1,7 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { log } from '../log.js'
-import { claimedView, itemView, waitForClaim } from '../queue/http.js'
+import {
+  claimedView,
+  itemView,
+  TooManyWaitersError,
+  waitForClaim,
+  type WaitPool,
+} from '../queue/http.js'
 import type { AckResult, QueueRepo, QueueItem } from '../queue/repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 import type { Settings } from '../settings/index.js'
@@ -10,6 +16,7 @@ export interface McpToolDeps {
   repo: QueueRepo
   settings: Settings
   version: string
+  waits: WaitPool
 }
 
 const topicSchema = z
@@ -54,7 +61,7 @@ function ackOutcome(outcome: AckResult) {
 }
 
 export function registerTools(server: McpServer, deps: McpToolDeps): void {
-  const { repo, settings, version } = deps
+  const { repo, settings, version, waits } = deps
   const topicOpt = (topic: string | undefined) => (topic !== undefined ? { topic } : {})
 
   server.registerTool(
@@ -79,7 +86,12 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
       inputSchema: { topic: topicSchema },
       annotations: { readOnlyHint: true },
     },
-    ({ topic }) => result({ ok: true, ttl_hours: settings.get('ttl_hours'), stats: repo.stats(topicOpt(topic)) }),
+    ({ topic }) =>
+      result({
+        ok: true,
+        ttl_hours: settings.get('ttl_hours'),
+        stats: repo.stats(topicOpt(topic)),
+      }),
   )
 
   server.registerTool(
@@ -119,7 +131,10 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
         topic: topicSchema,
         source: z.string().min(1).max(100).optional().describe('Source exacte (ex. n8n, claude).'),
         status: z.enum(['pending', 'leased', 'read']).optional().describe('Statut du message.'),
-        since: z.iso.datetime({ offset: true }).optional().describe('Créés à partir de (ISO 8601).'),
+        since: z.iso
+          .datetime({ offset: true })
+          .optional()
+          .describe('Créés à partir de (ISO 8601).'),
         until: z.iso.datetime({ offset: true }).optional().describe('Créés jusqu’à (ISO 8601).'),
         text: z.string().min(1).max(500).optional().describe('Texte cherché dans le payload.'),
         limit: z.number().int().min(1).max(100).default(50).describe('Nombre maximum (1–100).'),
@@ -184,7 +199,8 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
       inputSchema: { topic: topicSchema },
       annotations: { destructiveHint: true },
     },
-    ({ topic }) => claimedResult(repo, settings, repo.claimNext({ lease: true, ...topicOpt(topic) })),
+    ({ topic }) =>
+      claimedResult(repo, settings, repo.claimNext({ lease: true, ...topicOpt(topic) })),
   )
 
   server.registerTool(
@@ -201,43 +217,67 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
         correlation_id: correlationSchema
           .optional()
           .describe('Attendre le message portant ce correlation_id (exclusif avec topic).'),
-        timeout_sec: z.number().int().min(1).max(50).default(30).describe('Attente maximale (1–50 s).'),
+        timeout_sec: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(30)
+          .describe('Attente maximale (1–50 s).'),
       },
       annotations: { readOnlyHint: false },
     },
     async ({ topic, correlation_id, timeout_sec }, extra) => {
       if (topic !== undefined && correlation_id !== undefined)
         return fail('topic_and_correlation_id_are_exclusive')
-      if (correlation_id === undefined) {
-        const item = await waitForClaim({
-          repo,
-          signal: extra.signal,
-          topic,
-          waitSec: timeout_sec,
-          claim: () => repo.claimNext({ lease: true, ...topicOpt(topic) }),
+      try {
+        return await waitTool(topic, correlation_id, timeout_sec, extra.signal)
+      } catch (err) {
+        if (!(err instanceof TooManyWaitersError)) throw err
+        return fail('too_many_waiters', {
+          message: `Trop d’attentes simultanées (maximum ${waits.max}) : réessaie dans quelques secondes.`,
         })
-        return claimedResult(repo, settings, item)
       }
-      // Par correlation_id : un message déjà consommé ou emprunté est une erreur immédiate ;
-      // absent, on attend son arrivée.
-      const first = repo.claimByCorrelation(correlation_id, { lease: true })
-      if ('item' in first) return claimedResult(repo, settings, first.item)
-      if (first.error === 'leased') return fail('leased', { lease_until: first.lease_until })
-      if (first.error === 'already_read')
-        return fail('already_read', { id: first.id, read_at: first.read_at })
-      const item = await waitForClaim({
-        repo,
-        signal: extra.signal,
-        topic: undefined,
-        waitSec: timeout_sec,
-        claim: () => {
-          const r = repo.claimByCorrelation(correlation_id, { lease: true })
-          return 'item' in r ? r.item : null
-        },
-      })
-      return claimedResult(repo, settings, item)
     },
   )
+
+  async function waitTool(
+    topic: string | undefined,
+    correlation_id: string | undefined,
+    timeout_sec: number,
+    signal: AbortSignal,
+  ) {
+    if (correlation_id === undefined) {
+      const item = await waitForClaim({
+        repo,
+        pool: waits,
+        signal,
+        topic,
+        waitSec: timeout_sec,
+        claim: () => repo.claimNext({ lease: true, ...topicOpt(topic) }),
+      })
+      return claimedResult(repo, settings, item)
+    }
+    // Par correlation_id : un message déjà consommé ou emprunté est une erreur immédiate ;
+    // absent, on attend son arrivée.
+    const first = repo.claimByCorrelation(correlation_id, { lease: true })
+    if ('item' in first) return claimedResult(repo, settings, first.item)
+    if (first.error === 'leased') return fail('leased', { lease_until: first.lease_until })
+    if (first.error === 'already_read')
+      return fail('already_read', { id: first.id, read_at: first.read_at })
+    const item = await waitForClaim({
+      repo,
+      pool: waits,
+      signal,
+      topic: undefined,
+      waitSec: timeout_sec,
+      claim: () => {
+        const r = repo.claimByCorrelation(correlation_id, { lease: true })
+        return 'item' in r ? r.item : null
+      },
+    })
+    return claimedResult(repo, settings, item)
+  }
 
   for (const kind of ['ack', 'nack'] as const) {
     server.registerTool(
@@ -251,7 +291,9 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
               'acquitté, rendu ou ré-emprunté).'
             : 'Rend un message emprunté à la file (statut → pending) quand tu ne peux pas le traiter : il sera ' +
               'servi à nouveau. À appeler avec le lease_id reçu. Erreurs : invalid_lease, not_found, not_leased.',
-        inputSchema: { lease_id: z.string().min(1).max(100).describe('lease_id renvoyé à l’emprunt.') },
+        inputSchema: {
+          lease_id: z.string().min(1).max(100).describe('lease_id renvoyé à l’emprunt.'),
+        },
         annotations: { readOnlyHint: false, destructiveHint: false },
       },
       ({ lease_id }) => ackOutcome(repo[kind](lease_id)),
@@ -267,7 +309,9 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
         'correlation_id (optionnel) doit être unique : un doublon renvoie l’erreur duplicate_correlation_id.',
       inputSchema: {
         payload: z.record(z.string(), z.unknown()).describe('Contenu JSON (objet) du message.'),
-        correlation_id: correlationSchema.optional().describe('Identifiant unique pour retrouver le message.'),
+        correlation_id: correlationSchema
+          .optional()
+          .describe('Identifiant unique pour retrouver le message.'),
         source: z.string().min(1).max(100).default('claude').describe('Origine du message.'),
         topic: topicSchema,
       },

@@ -15,6 +15,7 @@ import type { Env } from './env.js'
 import { startBackups } from './jobs/backup.js'
 import { startCleanup } from './jobs/cleanup.js'
 import { log } from './log.js'
+import { createWaitPool, type WaitPool } from './queue/http.js'
 import { createQueueRepo } from './queue/repo.js'
 import { createSettings, seedSettings, type Settings } from './settings/index.js'
 import { createVersionService } from './version/index.js'
@@ -31,6 +32,10 @@ export interface Runtime {
   users: Users
   backups: Backups
   setupCode: { value: string | null }
+  /** Arrêt : `shutdown.abort()` résout aussitôt toutes les attentes longues (HTTP et MCP). */
+  shutdown: AbortController
+  /** Attentes longues en cours (plafond `MAX_WAITERS`). */
+  waits: WaitPool
   /** Lance les tâches périodiques (nettoyage, sauvegardes) ; stop() les arrête. */
   start(): { stop(): void }
 }
@@ -50,6 +55,8 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     leaseTimeoutMs: () => settings.get('lease_timeout_sec') * 1000,
   })
   const backups = createBackups({ db, dir: join(dirname(env.dbPath), 'backups'), settings })
+  const shutdown = new AbortController()
+  const waits = createWaitPool({ signal: shutdown.signal })
   const app = createApp({
     db,
     settings,
@@ -63,6 +70,7 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     apiKeys: createApiKeys(db),
     oauthProvider: new SqliteOAuthProvider({ db, sessions, env }),
     backups,
+    waits,
   })
 
   return {
@@ -72,6 +80,8 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     users,
     backups,
     setupCode,
+    shutdown,
+    waits,
     start() {
       const cleanup = startCleanup({ db, repo, settings })
       const backupJob = startBackups({ backups, settings })

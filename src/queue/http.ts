@@ -98,26 +98,63 @@ export function parseSearch(req: Request): { filter: SearchFilter } | { invalid:
   return { filter }
 }
 
+/** Plafond global des attentes longues simultanées (`GET /next?wait`, `queue_wait`). */
+export const MAX_WAITERS = 100
+
+/**
+ * Attentes longues en cours : compteur borné par `max`, et signal d'arrêt global (annulé à
+ * l'arrêt du serveur : toutes les attentes se résolvent alors aussitôt en « vide »).
+ */
+export interface WaitPool {
+  readonly max: number
+  readonly signal: AbortSignal
+  active: number
+}
+
+export function createWaitPool(opts: { max?: number; signal?: AbortSignal } = {}): WaitPool {
+  return {
+    max: opts.max ?? MAX_WAITERS,
+    signal: opts.signal ?? new AbortController().signal,
+    active: 0,
+  }
+}
+
+/** Plafond `MAX_WAITERS` atteint : HTTP 429, MCP isError. */
+export class TooManyWaitersError extends Error {
+  constructor() {
+    super('too_many_waiters')
+    this.name = 'TooManyWaitersError'
+  }
+}
+
 /**
  * Tente `claim` ; si rien n'est disponible et que `waitSec` est fourni, attend un enqueue du bon
  * topic (jusqu'à `waitSec` secondes) puis réessaie. Écouteur et minuteur sont libérés dès qu'un
- * message est obtenu, à l'échéance, ou quand `signal` est annulé (client déconnecté).
+ * message est obtenu, à l'échéance, quand `signal` est annulé (client déconnecté) ou à l'arrêt
+ * du serveur (`pool.signal`). Rejette avec `TooManyWaitersError` si le plafond est atteint.
  */
 export function waitForClaim(opts: {
   repo: QueueRepo
+  pool: WaitPool
   signal?: AbortSignal | undefined
   topic: string | undefined
   waitSec: number | undefined
   claim: () => QueueItem | null
 }): Promise<QueueItem | null> {
-  const { repo, signal, topic, waitSec, claim } = opts
+  const { repo, pool, signal, topic, waitSec, claim } = opts
   const first = claim()
-  if (first || waitSec === undefined || signal?.aborted) return Promise.resolve(first)
+  if (first || waitSec === undefined || signal?.aborted || pool.signal.aborted) {
+    return Promise.resolve(first)
+  }
+  if (pool.active >= pool.max) return Promise.reject(new TooManyWaitersError())
+  pool.active++
   return new Promise((resolve) => {
     const finish = (item: QueueItem | null) => {
       off()
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
+      pool.signal.removeEventListener('abort', onAbort)
+      pool.active--
       resolve(item)
     }
     const onAbort = () => finish(null)
@@ -127,13 +164,15 @@ export function waitForClaim(opts: {
       if (item) finish(item)
     })
     const timer = setTimeout(() => finish(null), waitSec * 1000)
-    signal?.addEventListener('abort', onAbort)
+    signal?.addEventListener('abort', onAbort, { once: true })
+    pool.signal.addEventListener('abort', onAbort, { once: true })
   })
 }
 
 /** Variante HTTP de `waitForClaim` : l'attente s'arrête quand la réponse `res` est fermée. */
 export function claimWithWait(opts: {
   repo: QueueRepo
+  pool: WaitPool
   res: Response
   topic: string | undefined
   waitSec: number | undefined

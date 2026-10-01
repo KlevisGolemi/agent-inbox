@@ -13,6 +13,7 @@ import type { Users } from './auth/users.js'
 import type { Backups } from './backups/index.js'
 import type { Env } from './env.js'
 import { createMcpRouter } from './mcp/server.js'
+import { createWaitPool, type WaitPool } from './queue/http.js'
 import { createQueueRouter } from './queue/routes.js'
 import type { QueueRepo } from './queue/repo.js'
 import type { Settings } from './settings/index.js'
@@ -35,6 +36,8 @@ export interface AppDeps {
   oauthProvider: SqliteOAuthProvider
   /** Instance unique, partagée avec la planification. */
   backups: Backups
+  /** Attentes longues (plafond + signal d'arrêt) ; une instance neuve par défaut. */
+  waits?: WaitPool
 }
 
 /** Dossier de l'interface (même chemin relatif depuis src/admin et dist/admin). */
@@ -73,12 +76,14 @@ export function createApp(deps: AppDeps): Express {
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()), version: deps.version })
   })
-  app.use(createQueueRouter({ repo: deps.repo, settings: deps.settings }))
+  const waits = deps.waits ?? createWaitPool()
+  app.use(createQueueRouter({ repo: deps.repo, settings: deps.settings, waits }))
   app.use(
     createMcpRouter({
       repo: deps.repo,
       settings: deps.settings,
       version: deps.version,
+      waits,
       bearer: createBearerMiddleware({
         provider: deps.oauthProvider,
         apiKeys: deps.apiKeys,

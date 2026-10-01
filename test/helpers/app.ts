@@ -70,6 +70,7 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     backups:
       over.backups ??
       createBackups({ db, dir: mkdtempSync(join(tmpdir(), 'cq-backups-')), settings }),
+    waits: over.waits,
   }
 }
 

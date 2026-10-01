@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js'
 import { makeAppDeps } from './helpers/app.js'
 import { openDb } from '../src/db/index.js'
 import { migrate } from '../src/db/migrations.js'
+import { createWaitPool, MAX_WAITERS } from '../src/queue/http.js'
 import { createQueueRepo, type QueueRepo } from '../src/queue/repo.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
 
@@ -292,6 +293,48 @@ describe('wait : déconnexion du client', () => {
     await vi.waitFor(() => expect(active).toBe(1))
     req.destroy()
     await vi.waitFor(() => expect(active).toBe(0))
+    server.close()
+  })
+})
+
+describe('wait : plafond des attentes simultanées', () => {
+  it('MAX_WAITERS vaut 100 ; au-delà du plafond : 429 too_many_waiters', async () => {
+    expect(MAX_WAITERS).toBe(100)
+    const waits = createWaitPool({ max: 1 })
+    const capped = createApp(makeAppDeps({ db, settings, repo, waits }))
+    const server = capped.listen(0)
+    const { port } = server.address() as AddressInfo
+    const first = http.get({ port, path: '/next?wait=30', headers: H })
+    first.on('error', () => {})
+    await vi.waitFor(() => expect(waits.active).toBe(1))
+    const r = await request(capped).get('/next?wait=5').set(H)
+    expect(r.status).toBe(429)
+    expect(r.body).toEqual({ ok: false, error: 'too_many_waiters' })
+    // Sans attente (pas de ?wait), /next reste servi.
+    expect((await request(capped).get('/next').set(H)).status).toBe(200)
+    first.destroy()
+    await vi.waitFor(() => expect(waits.active).toBe(0))
+    server.close()
+  })
+})
+
+describe('GET /next : limite de débit', () => {
+  it('600 requêtes/min/IP, puis 429', async () => {
+    const server = app.listen(0)
+    const { port } = server.address() as AddressInfo
+    const statuses: number[] = []
+    for (let i = 0; i < 12; i++) {
+      const batch = await Promise.all(
+        Array.from({ length: 50 }, () =>
+          fetch(`http://127.0.0.1:${port}/next`).then((r) => r.status),
+        ),
+      )
+      statuses.push(...batch)
+    }
+    expect(statuses.every((s) => s === 401)).toBe(true)
+    const over = await fetch(`http://127.0.0.1:${port}/next`, { headers: H })
+    expect(over.status).toBe(429)
+    expect(await over.json()).toEqual({ ok: false, error: 'Too many requests' })
     server.close()
   })
 })

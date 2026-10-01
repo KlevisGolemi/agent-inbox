@@ -12,6 +12,8 @@ services:
     image: ghcr.io/klevisgolemi/cowork-queue:${VERSION:-latest}
     build: ..
     restart: unless-stopped
+    # Arrêt propre : l'application coupe ses attentes longues et sort en moins de 15 s.
+    stop_grace_period: 20s
     env_file: ../.env
     volumes:
       - queue_data:/data

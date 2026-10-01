@@ -1,6 +1,8 @@
+import type { AddressInfo } from 'node:net'
 import request from 'supertest'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.js'
+import { createWaitPool } from '../src/queue/http.js'
 import { createQueueRepo } from '../src/queue/repo.js'
 import { makeAppDeps, makeTestApp, testDb } from './helpers/app.js'
 
@@ -219,6 +221,31 @@ describe('MCP stateless', () => {
     expect(out.item.lease_id).toBeTruthy()
   })
 
+  it('queue_wait : au-delà du plafond d’attentes → isError too_many_waiters', async () => {
+    const waits = createWaitPool({ max: 1 })
+    const t = makeTestApp({ waits })
+    const ctx = { app: t.app, key: t.apiKeys.create('test').key }
+    const waiting = call(ctx, 'queue_wait', { timeout_sec: 2 })
+    await vi.waitFor(() => expect(waits.active).toBe(1))
+    const body = await call(ctx, 'queue_wait', { timeout_sec: 2 })
+    expect(body.result.isError).toBe(true)
+    expect(data(body)).toMatchObject({ ok: false, error: 'too_many_waiters' })
+    expect(data(await waiting).empty).toBe(true)
+  })
+
+  it('queue_wait : l’arrêt du serveur résout l’attente en { empty: true }', async () => {
+    const ctrl = new AbortController()
+    const waits = createWaitPool({ signal: ctrl.signal })
+    const t = makeTestApp({ waits })
+    const ctx = { app: t.app, key: t.apiKeys.create('test').key }
+    const waiting = call(ctx, 'queue_wait', { timeout_sec: 50 })
+    await vi.waitFor(() => expect(waits.active).toBe(1))
+    const t0 = Date.now()
+    ctrl.abort()
+    expect(data(await waiting).empty).toBe(true)
+    expect(Date.now() - t0).toBeLessThan(500)
+  })
+
   it('queue_wait : timeout → { empty: true } sans erreur', async () => {
     const ctx = setup()
     const body = await call(ctx, 'queue_wait', { timeout_sec: 1 })
@@ -302,5 +329,34 @@ describe('MCP stateless', () => {
     expect(unauth.headers['access-control-expose-headers']).toMatch(/WWW-Authenticate/i)
     const other = await request(app).get('/healthz')
     expect(other.headers['access-control-allow-origin']).toBeUndefined()
+  })
+})
+
+describe('POST /mcp : limite de débit', () => {
+  it('600 requêtes/min/IP, puis 429 avec une erreur JSON-RPC', async () => {
+    const { app } = setup()
+    const server = app.listen(0)
+    const { port } = server.address() as AddressInfo
+    const send = () =>
+      fetch(`http://127.0.0.1:${port}/mcp`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      })
+    const statuses: number[] = []
+    for (let i = 0; i < 12; i++) {
+      statuses.push(
+        ...(await Promise.all(Array.from({ length: 50 }, () => send().then((r) => r.status)))),
+      )
+    }
+    expect(statuses.every((s) => s === 401)).toBe(true)
+    const over = await send()
+    expect(over.status).toBe(429)
+    expect(await over.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: expect.any(String) },
+      id: null,
+    })
+    server.close()
   })
 })

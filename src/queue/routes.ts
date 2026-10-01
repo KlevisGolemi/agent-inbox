@@ -11,12 +11,21 @@ import {
   parseTopicParam,
   parseWait,
   queryString,
+  TooManyWaitersError,
+  type WaitPool,
 } from './http.js'
 import type { QueueRepo } from './repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from './validation.js'
 
-export function createQueueRouter(deps: { repo: QueueRepo; settings: Settings }): Router {
-  const { repo, settings } = deps
+/** Limite de débit de `GET /next` (requêtes par minute et par IP). */
+export const NEXT_RATE_LIMIT_PER_MIN = 600
+
+export function createQueueRouter(deps: {
+  repo: QueueRepo
+  settings: Settings
+  waits: WaitPool
+}): Router {
+  const { repo, settings, waits } = deps
   const router = Router()
 
   // Le secret est relu à chaque requête : une rotation depuis l'administration est immédiate.
@@ -34,6 +43,14 @@ export function createQueueRouter(deps: { repo: QueueRepo; settings: Settings })
   const webhookLimiter = rateLimit({
     windowMs: 60_000,
     limit: () => settings.get('webhook_rate_limit_per_min'),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { ok: false, error: 'Too many requests' },
+  })
+
+  const nextLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: NEXT_RATE_LIMIT_PER_MIN,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { ok: false, error: 'Too many requests' },
@@ -104,7 +121,7 @@ export function createQueueRouter(deps: { repo: QueueRepo; settings: Settings })
     })
   })
 
-  router.get('/next', auth, async (req, res) => {
+  router.get('/next', nextLimiter, auth, async (req, res) => {
     const topic = parseTopicParam(req)
     if (topic === null) {
       res.status(400).json({ ok: false, error: 'invalid_topic' })
@@ -118,13 +135,21 @@ export function createQueueRouter(deps: { repo: QueueRepo; settings: Settings })
       return
     }
     const lease = isLease(req)
-    const item = await claimWithWait({
-      repo,
-      res,
-      topic,
-      waitSec,
-      claim: () => repo.claimNext({ lease, ...(topic !== undefined ? { topic } : {}) }),
-    })
+    let item
+    try {
+      item = await claimWithWait({
+        repo,
+        pool: waits,
+        res,
+        topic,
+        waitSec,
+        claim: () => repo.claimNext({ lease, ...(topic !== undefined ? { topic } : {}) }),
+      })
+    } catch (err) {
+      if (!(err instanceof TooManyWaitersError)) throw err
+      res.status(429).json({ ok: false, error: 'too_many_waiters' })
+      return
+    }
     if (res.destroyed) return
     if (!item) {
       res.json({ ok: true, empty: true, item: null })
