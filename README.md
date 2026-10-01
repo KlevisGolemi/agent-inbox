@@ -136,7 +136,8 @@ Détails et signalement d'une faille : [SECURITY.md](SECURITY.md).
 - **Bail et acquittement** : consommer emprunte le message ; sans `ack`, il revient après le délai du bail.
 - **Réglages en base, relus à chaud** : modifiés dans l'admin, appliqués sans redémarrage.
 - **OAuth 2.1** via le SDK MCP, ou clé API pour les clients sans navigateur.
-- **286 tests** (Vitest + Supertest), ESLint et `tsc` dans la CI : `npm run check`.
+- **Suite de tests Vitest** (+ Supertest), ESLint et `tsc` exécutés par la
+  [CI](https://github.com/KlevisGolemi/cowork-communication/actions/workflows/ci.yml) : `npm run check`.
 
 Stack : Node 24, TypeScript, Express 5, better-sqlite3. Plan du code et invariants :
 [CLAUDE.md](CLAUDE.md) et [AGENTS.md](AGENTS.md) ; API HTTP des producteurs : [docs/api.md](docs/api.md).

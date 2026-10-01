@@ -98,6 +98,10 @@ faisant confiance qu'à **exactement `TRUST_PROXY` proxys** (1 par défaut, 0 à
 directement, n'importe qui peut forger l'en-tête et contourner la limite. N'ajoutez donc pas de `ports:` au
 service `app`.
 
+**Port interne.** L'application écoute sur `PORT` (3000 par défaut). Les healthchecks (`Dockerfile`,
+`docker-compose.yml`, `deploy/docker-compose.traefik.yml`), `deploy/Caddyfile` et le label Traefik
+`loadbalancer.server.port` supposent 3000 : gardez cette valeur, ou adaptez tous ces fichiers en même temps.
+
 Avec Caddy (installation par défaut), l'en-tête `X-Forwarded-For` est écrasé par l'adresse réelle du client ;
 derrière un proxy Cloudflare, tous les clients apparaîtraient avec l'IP de Cloudflare : désactivez le proxy
 orange (DNS seul) ou utilisez la variante Traefik.
