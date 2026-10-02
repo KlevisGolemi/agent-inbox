@@ -266,7 +266,8 @@ describe('inbox_get_file', () => {
         await call(ctx, 'inbox_get_file', { attachment_id: att.id, delivery: 'link' }),
       )
       expect(out.curl).toBe(`curl -fL -o '${att.id}.${ext}' '${out.url}'`)
-      expect(out.curl).not.toMatch(/-[a-zA-Z]*J|-O|conftest|envrc|Makefile/)
+      // Hors URL (la signature base64url peut contenir « -J ») : ni -J, ni -O, ni nom du déposant.
+      expect(out.curl.replace(out.url, '')).not.toMatch(/ -[a-zA-Z]*[JO]|conftest|envrc|Makefile/)
       expect(out.attachment.filename).toBe(name)
     }
   })
