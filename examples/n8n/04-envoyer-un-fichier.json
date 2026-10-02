@@ -1,0 +1,110 @@
+{
+  "name": "Agent Inbox - 04 Envoyer un fichier",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b1e9a2f0-3c4d-4e8f-9b2a-1c3d5e7f9a0b",
+      "name": "Test manuel",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/tmp/facture.pdf",
+        "options": {}
+      },
+      "id": "c2f0b3a1-4d5e-4f9f-8c3b-2d4e6f8a0b1c",
+      "name": "Lire le fichier",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "={{ $env.AGENT_INBOX_URL }}/webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-topic",
+              "value": "compta"
+            },
+            {
+              "name": "x-tags",
+              "value": "facture"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "payload",
+              "value": "={{ JSON.stringify({ source: 'n8n', note: 'Facture du mois' }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d3a1c4b2-5e6f-4a0b-9d4c-3e5f7a9b1c2d",
+      "name": "Envoyer le fichier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Agent Inbox"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Test manuel": {
+      "main": [
+        [
+          {
+            "node": "Lire le fichier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire le fichier": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le fichier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

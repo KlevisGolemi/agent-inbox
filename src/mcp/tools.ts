@@ -1,5 +1,12 @@
+import { Readable } from 'node:stream'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import type { DropsRepo } from '../drops/repo.js'
+import { newAttachments, type AttachmentsRepo } from '../files/attachments.js'
+import { decodeBase64Attachments } from '../files/base64.js'
+import { attachmentSummary } from '../files/http.js'
+import type { FileStore } from '../files/store.js'
+import { UploadError, type UploadManager, type UploadSession } from '../files/uploads.js'
 import { log } from '../log.js'
 import {
   claimedView,
@@ -8,36 +15,35 @@ import {
   waitForClaim,
   type WaitPool,
 } from '../queue/http.js'
-import type { AckResult, QueueRepo, QueueItem } from '../queue/repo.js'
-import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
+import type { AckResult, EnqueueResult, QueueRepo, QueueItem } from '../queue/repo.js'
 import type { Settings } from '../settings/index.js'
+import type { NewTag } from '../tags/attach.js'
+import type { TagRegistry } from '../tags/registry.js'
+import {
+  correlationSchema,
+  fail,
+  newTagSchema,
+  resolveFailure,
+  result,
+  tagsSchema,
+  topicSchema,
+} from './common.js'
+import { registerDropTools } from './dropTools.js'
+import { registerFileTools } from './fileTools.js'
+import { registerTagTools } from './tagTools.js'
 
 export interface McpToolDeps {
   repo: QueueRepo
   settings: Settings
   version: string
   waits: WaitPool
+  files: FileStore
+  uploads: UploadManager
+  attachments: AttachmentsRepo
+  tags: TagRegistry
+  drops: DropsRepo
+  publicUrl: URL
 }
-
-const topicSchema = z
-  .string()
-  .regex(TOPIC_REGEX, 'Topic invalide : ^[A-Za-z0-9_-]{1,128}$')
-  .optional()
-  .describe('Canal de la file (défaut : tous les topics en lecture, « default » en écriture).')
-const correlationSchema = z
-  .string()
-  .regex(CORRELATION_ID_REGEX, 'Format attendu : ^[A-Za-z0-9_-]{1,128}$')
-
-/** Résultat d'outil : texte JSON + contenu structuré ; `isError` pour les erreurs métier. */
-function result(x: Record<string, unknown>, isError = false) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(x, null, 2) }],
-    structuredContent: x,
-    ...(isError ? { isError: true } : {}),
-  }
-}
-const fail = (error: string, extra: Record<string, unknown> = {}) =>
-  result({ ok: false, error, ...extra }, true)
 
 const LEASE_HINT =
   'Le message est emprunté (bail limité dans le temps) : appelle queue_ack({lease_id}) une fois ' +
@@ -61,7 +67,7 @@ function ackOutcome(outcome: AckResult) {
 }
 
 export function registerTools(server: McpServer, deps: McpToolDeps): void {
-  const { repo, settings, version, waits } = deps
+  const { repo, settings, version, waits, tags, uploads } = deps
   const topicOpt = (topic: string | undefined) => (topic !== undefined ? { topic } : {})
 
   server.registerTool(
@@ -69,11 +75,17 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
     {
       title: 'État du serveur',
       description:
-        'Vérifie que la file Agent Inbox répond. Renvoie { ok, uptime_s, version }. ' +
+        'Vérifie que la file Agent Inbox répond. Renvoie { ok, uptime_s, version, storage } (jauge de stockage des fichiers). ' +
         'Lecture seule, sans effet de bord.',
       annotations: { readOnlyHint: true },
     },
-    () => result({ ok: true, uptime_s: Math.floor(process.uptime()), version }),
+    () =>
+      result({
+        ok: true,
+        uptime_s: Math.floor(process.uptime()),
+        version,
+        storage: uploads.snapshot(),
+      }),
   )
 
   server.registerTool(
@@ -91,6 +103,7 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
         ok: true,
         ttl_hours: settings.get('ttl_hours'),
         stats: repo.stats(topicOpt(topic)),
+        storage: uploads.snapshot(),
       }),
   )
 
@@ -137,11 +150,23 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
           .describe('Créés à partir de (ISO 8601).'),
         until: z.iso.datetime({ offset: true }).optional().describe('Créés jusqu’à (ISO 8601).'),
         text: z.string().min(1).max(500).optional().describe('Texte cherché dans le payload.'),
+        tag: z
+          .string()
+          .min(1)
+          .max(160)
+          .optional()
+          .describe(
+            'Tag du registre, ou automatique : type:<catégorie>, source:<source>, topic:<topic>, external.',
+          ),
+        has_attachments: z
+          .boolean()
+          .optional()
+          .describe('true : seulement les messages avec pièces jointes ; false : sans.'),
         limit: z.number().int().min(1).max(100).default(50).describe('Nombre maximum (1–100).'),
       },
       annotations: { readOnlyHint: true },
     },
-    ({ topic, source, status, since, until, text, limit }) =>
+    ({ topic, source, status, since, until, text, tag, has_attachments, limit }) =>
       result({
         ok: true,
         items: repo
@@ -152,6 +177,8 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
             ...(since !== undefined ? { since: Date.parse(since) } : {}),
             ...(until !== undefined ? { until: Date.parse(until) } : {}),
             ...(text !== undefined ? { text } : {}),
+            ...(tag !== undefined ? { tag } : {}),
+            ...(has_attachments !== undefined ? { hasAttachments: has_attachments } : {}),
             limit,
           })
           .map(itemView),
@@ -300,13 +327,28 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
     )
   }
 
+  const attachmentSchema = z.object({
+    filename: z.string().min(1).max(255).describe('Nom du fichier (ex. rapport.pdf).'),
+    mime_type: z
+      .string()
+      .max(255)
+      .optional()
+      .describe('Type déclaré, indicatif : le serveur détecte le vrai type.'),
+    data_base64: z.string().min(1).describe('Contenu encodé en base64.'),
+  })
+
   server.registerTool(
     'queue_send',
     {
       title: 'Envoyer un message',
       description:
         'Ajoute un message dans la file (ex. une réponse ou une tâche pour n8n). Renvoie { id, pending, topic }. ' +
-        'correlation_id (optionnel) doit être unique : un doublon renvoie l’erreur duplicate_correlation_id.',
+        'correlation_id (optionnel) doit être unique : un doublon renvoie l’erreur duplicate_correlation_id. ' +
+        'Fichiers : attachments [{filename, data_base64}] pour de petits fichiers (total décodé limité par mcp_upload_max_mb) ; ' +
+        'pour un gros fichier, appelle inbox_upload_link puis curl. ' +
+        'Tags : tags n’accepte que des tags EXISTANTS (un tag inconnu est refusé avec les tags proches) ; ' +
+        'routine : réutiliser un tag existant, sinon new_tags [{name, description}].' +
+        tags.injectionText(),
       inputSchema: {
         payload: z.record(z.string(), z.unknown()).describe('Contenu JSON (objet) du message.'),
         correlation_id: correlationSchema
@@ -314,26 +356,117 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
           .describe('Identifiant unique pour retrouver le message.'),
         source: z.string().min(1).max(100).default('claude').describe('Origine du message.'),
         topic: topicSchema,
+        attachments: z
+          .array(attachmentSchema)
+          .max(50)
+          .optional()
+          .describe('Fichiers joints, en base64.'),
+        tags: tagsSchema.optional().describe('Tags existants du registre (voir inbox_tags).'),
+        new_tags: z
+          .array(newTagSchema)
+          .max(20)
+          .optional()
+          .describe('Tags à créer puis poser (anti-doublon).'),
+        force_new_tags: z
+          .boolean()
+          .default(false)
+          .describe('Créer new_tags même si un tag proche existe.'),
+        on_download: z
+          .enum(['keep', 'consume'])
+          .optional()
+          .describe(
+            'consume : fichier effacé peu après sa première livraison complète (défaut : réglage du serveur).',
+          ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    ({ payload, correlation_id, source, topic }) => {
-      const out = repo.enqueue({
+    async ({
+      payload,
+      correlation_id,
+      source,
+      topic,
+      attachments,
+      tags: tagList,
+      new_tags,
+      force_new_tags,
+      on_download,
+    }) => {
+      const t = topic ?? 'default'
+      // R11 : tout est validé (tags, tailles, base64) avant la moindre écriture ; les tags
+      // éventuels sont créés dans la transaction d'enqueue.
+      let existing: string[] = []
+      let fresh: NewTag[] = []
+      if ((tagList?.length ?? 0) + (new_tags?.length ?? 0) > 0) {
+        const r = tags.resolveForMcp({
+          ...(tagList ? { tags: tagList } : {}),
+          ...(new_tags ? { newTags: new_tags } : {}),
+          createdBy: `mcp:${source}`,
+          force: force_new_tags,
+        })
+        if (!r.ok) return resolveFailure(r)
+        existing = r.tags
+        fresh = r.newTags
+      }
+      const names = [...existing, ...fresh.map((n) => n.name)]
+      const base = {
         payload,
         source,
         correlationId: correlation_id ?? null,
-        topic: topic ?? 'default',
-      })
-      if (!out.ok)
-        return fail('duplicate_correlation_id', { correlation_id, existing_id: out.existingId })
-      log('info', 'Message mis en file (MCP)', { id: out.id, source, topic: topic ?? 'default' })
-      return result({
-        ok: true,
-        id: out.id,
-        correlation_id: correlation_id ?? null,
-        pending: out.pending,
-        topic: topic ?? 'default',
-      })
+        topic: t,
+        tags: existing,
+        newTags: fresh,
+      }
+      const done = (out: EnqueueResult, files?: ReturnType<typeof attachmentSummary>) => {
+        if (!out.ok)
+          return fail('duplicate_correlation_id', {
+            correlation_id,
+            existing_id: out.existingId,
+          })
+        log('info', 'Message mis en file (MCP)', {
+          id: out.id,
+          source,
+          topic: t,
+          files: files?.length ?? 0,
+        })
+        return result({
+          ok: true,
+          id: out.id,
+          correlation_id: correlation_id ?? null,
+          pending: out.pending,
+          topic: t,
+          ...(names.length > 0 ? { tags: names } : {}),
+          ...(files ? { attachments: files } : {}),
+        })
+      }
+      if (!attachments?.length) return done(repo.enqueue(base))
+      const decoded = decodeBase64Attachments(attachments, settings.get('mcp_upload_max_mb'))
+      if (!decoded.ok) return fail(decoded.error, { message: decoded.message })
+      let session: UploadSession
+      try {
+        session = uploads.begin()
+      } catch (err) {
+        if (err instanceof UploadError) return fail(err.code, { message: err.message })
+        throw err
+      }
+      try {
+        for (const f of decoded.files) await session.stage(Readable.from([f.data]), f.filename)
+        const out = session.commit((files) =>
+          repo.enqueue({
+            ...base,
+            attachments: newAttachments(
+              files,
+              on_download ?? settings.get('file_on_download_default'),
+              settings,
+              Date.now(),
+            ),
+          }),
+        )
+        return done(out, attachmentSummary(session.staged))
+      } catch (err) {
+        await session.abort()
+        if (err instanceof UploadError) return fail(err.code, { message: err.message })
+        throw err
+      }
     },
   )
 
@@ -370,4 +503,8 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
       return result({ ok: true, deleted })
     },
   )
+
+  registerTagTools(server, deps)
+  registerFileTools(server, deps)
+  registerDropTools(server, deps)
 }

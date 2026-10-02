@@ -47,6 +47,34 @@ describe('sauvegardes', () => {
     expect(backups.list().map((x) => x.name)).toEqual([b.name])
   })
 
+  it('sauvegarde et restaure les 7 tables v4, puis appelle onRestore', async () => {
+    const onRestore = vi.fn()
+    backups = createBackups({ db, dir, settings, now: () => clock, onRestore })
+    db.exec(`
+      INSERT INTO tags (name, description, created_by, created_at) VALUES ('facture', 'Factures des clients', 't', 1);
+      INSERT INTO messages (id, source, payload, status, created_at, trust) VALUES ('m1', 't', '{}', 'pending', 1, 'external');
+      INSERT INTO message_tags (message_id, tag) VALUES ('m1', 'facture');
+      INSERT INTO attachments (id, message_id, filename, mime_type, category, size_bytes, sha256, created_at, expires_at)
+        VALUES ('a1', 'm1', 'f.pdf', 'application/pdf', 'document', 3, 'x', 1, 2);
+      INSERT INTO drops (id, token_hash, kind, label, topic, max_files, max_file_mb, allowed_categories, created_by, created_at, expires_at)
+        VALUES ('d1', 'h', 'public', 'Photos', 'drops', 5, 10, '["image"]', 't', 1, 2);
+      INSERT INTO drop_tags (drop_id, tag) VALUES ('d1', 'facture');
+      INSERT INTO drop_events (drop_id, at, outcome) VALUES ('d1', 1, 'accepted');
+    `)
+    const b = await backups.run()
+    db.exec('DELETE FROM drops; DELETE FROM messages; DELETE FROM tags')
+    clock += 1000
+    await backups.restore(b.name)
+    const n = (t: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n
+    expect(
+      ['tags', 'messages', 'message_tags', 'attachments', 'drops', 'drop_tags', 'drop_events'].map(
+        n,
+      ),
+    ).toEqual([1, 1, 1, 1, 1, 1, 1])
+    expect(db.prepare('SELECT trust FROM messages').get()).toEqual({ trust: 'external' })
+    expect(onRestore).toHaveBeenCalledOnce()
+  })
+
   it('ajoute un suffixe quand deux sauvegardes tombent dans la même seconde', async () => {
     const a = await backups.run()
     const b = await backups.run()
@@ -142,6 +170,35 @@ describe('sauvegardes', () => {
     await expect(backups.restore('queue-20260101-000000.db')).rejects.toMatchObject({
       code: 'not_found',
     })
+  })
+
+  it('après restauration, file_signing_secret est régénéré (application câblée)', async () => {
+    const t = makeTestApp()
+    const before = t.settings.get('file_signing_secret')
+    const b = await t.backups.run()
+    await t.backups.restore(b.name)
+    expect(t.settings.get('file_signing_secret')).not.toBe(before)
+  })
+
+  it('un échec de onRestore est journalisé et ne saute pas la purge', async () => {
+    settings.set('backup_retention', 1)
+    const old = await backups.run()
+    clock += HOUR
+    const keep = await backups.run()
+    clock += HOUR
+    backups = createBackups({
+      db,
+      dir,
+      settings,
+      now: () => clock,
+      onRestore: () => {
+        throw new Error('secret-à-ne-pas-journaliser')
+      },
+    })
+    await expect(backups.restore(keep.name)).resolves.toBeUndefined()
+    const names = backups.list().map((x) => x.name)
+    expect(names).toContain(keep.name)
+    expect(names).not.toContain(old.name)
   })
 })
 

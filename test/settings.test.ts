@@ -1,7 +1,13 @@
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { migrate } from '../src/db/migrations.js'
-import { createSettings, seedSettings, SettingValidationError } from '../src/settings/index.js'
+import {
+  createSettings,
+  rotateFileSigningSecret,
+  seedSettings,
+  SettingValidationError,
+  type SettingKey,
+} from '../src/settings/index.js'
 
 const gen = () => 'x'.repeat(64)
 let db: Database.Database
@@ -36,6 +42,36 @@ describe('réglages', () => {
       topic_ttl_overrides: {},
       backup_interval_hours: 24,
       backup_retention: 7,
+      json_max_kb: 1024,
+      attachments_enabled: true,
+      attachments_max_per_message: 10,
+      file_max_mb: { image: 20, audio: 50, video: 95, document: 50, archive: 95, other: 100 },
+      file_allowed_categories: ['image', 'audio', 'video', 'document', 'archive', 'other'],
+      file_blocked_extensions: [],
+      storage_quota_gb: 5,
+      storage_min_free_gb: 2,
+      file_retention_hours: {
+        image: 168,
+        audio: 72,
+        video: 24,
+        document: 72,
+        archive: 24,
+        other: 72,
+      },
+      file_retention_large_mb: 50,
+      file_retention_large_hours: 24,
+      file_on_download_default: 'keep',
+      consume_grace_min: 10,
+      inline_max_mb: 5,
+      mcp_upload_max_mb: 5,
+      download_link_ttl_min: 60,
+      tags_injected_count: 15,
+      drops_enabled: true,
+      drop_default_hours: 24,
+      drop_max_hours: 168,
+      drop_default_max_files: 10,
+      drop_rate_limit_per_min: 10,
+      file_signing_secret: 'x'.repeat(64),
     })
   })
 
@@ -108,5 +144,72 @@ describe('réglages', () => {
     const s = createSettings(db)
     expect(s.get('ttl_hours')).toBe(48)
     expect(() => s.get('webhook_secret')).toThrow(/webhook_secret/)
+  })
+})
+
+const CATS = { image: 20, audio: 50, video: 95, document: 50, archive: 95, other: 100 }
+
+describe('réglages v2.2', () => {
+  it('amorce file_signing_secret et ne l’écrase jamais au redémarrage', () => {
+    const s = seeded()
+    s.set('file_signing_secret', 'b'.repeat(64))
+    seedSettings(createSettings(db), db, {}, () => 'c'.repeat(64))
+    expect(createSettings(db).get('file_signing_secret')).toBe('b'.repeat(64))
+  })
+
+  it('accepte des valeurs valides, relues sans redémarrage', () => {
+    const s = seeded()
+    s.update({ storage_quota_gb: 0.5, inline_max_mb: 0, file_blocked_extensions: ['exe', 'bat'] })
+    const fresh = createSettings(db)
+    expect(fresh.get('storage_quota_gb')).toBe(0.5)
+    expect(fresh.get('inline_max_mb')).toBe(0)
+    expect(fresh.get('file_blocked_extensions')).toEqual(['exe', 'bat'])
+  })
+
+  it.each([
+    ['json_max_kb', 15],
+    ['json_max_kb', 51201],
+    ['attachments_enabled', 'oui'],
+    ['attachments_max_per_message', 0],
+    ['attachments_max_per_message', 51],
+    ['file_max_mb', { ...CATS, image: 0 }],
+    ['file_max_mb', { ...CATS, video: 2049 }],
+    ['file_max_mb', { image: 20 }],
+    ['file_allowed_categories', ['image', 'exe']],
+    ['file_allowed_categories', ['image', 'image']],
+    ['file_blocked_extensions', ['.exe']],
+    ['file_blocked_extensions', Array.from({ length: 51 }, (_, i) => `e${i}`)],
+    ['storage_quota_gb', 0.05],
+    ['storage_quota_gb', 1001],
+    ['storage_min_free_gb', -1],
+    ['file_retention_hours', { ...CATS, image: 8761 }],
+    ['file_retention_large_mb', 0],
+    ['file_retention_large_hours', 8761],
+    ['file_on_download_default', 'delete'],
+    ['consume_grace_min', 0],
+    ['consume_grace_min', 1441],
+    ['inline_max_mb', 21],
+    ['mcp_upload_max_mb', -1],
+    ['download_link_ttl_min', 0],
+    ['tags_injected_count', 51],
+    ['drops_enabled', 1],
+    ['drop_default_hours', 721],
+    ['drop_max_hours', 0],
+    ['drop_default_max_files', 1001],
+    ['drop_rate_limit_per_min', 601],
+    ['file_signing_secret', 'court'],
+  ])('refuse %s = %j et conserve la valeur', (key, value) => {
+    const s = seeded()
+    const before = s.get(key as SettingKey)
+    expect(() => s.set(key as SettingKey, value)).toThrow(SettingValidationError)
+    expect(s.get(key as SettingKey)).toEqual(before)
+  })
+
+  it('rotateFileSigningSecret change le secret', () => {
+    const s = seeded()
+    const before = s.get('file_signing_secret')
+    rotateFileSigningSecret(s)
+    expect(s.get('file_signing_secret')).not.toBe(before)
+    expect(s.get('file_signing_secret')).toMatch(/^[0-9a-f]{64}$/)
   })
 })

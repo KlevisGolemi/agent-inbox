@@ -1,4 +1,7 @@
 import type Database from 'better-sqlite3'
+import type { FileStore } from '../files/store.js'
+import { sweepFiles, type FileSweepReport } from '../files/sweep.js'
+import type { UploadManager } from '../files/uploads.js'
 import { log as defaultLog } from '../log.js'
 import type { QueueRepo } from '../queue/repo.js'
 import type { Settings } from '../settings/index.js'
@@ -7,19 +10,31 @@ const HOUR_MS = 3_600_000
 const MIN_MS = 60_000
 /** Un client OAuth inactif (aucun jeton valide ni code en cours) depuis sa création au-delà de ce délai est purgé. */
 export const OAUTH_CLIENT_IDLE_MS = 30 * 24 * HOUR_MS
+/** Un lien de dépôt expiré ou révoqué depuis plus de ce délai est purgé (avec événements et tags). */
+export const DROP_RETENTION_MS = 30 * 24 * HOUR_MS
 
-export interface CleanupReport {
+const EMPTY_SWEEP: FileSweepReport = {
+  filesExpired: 0,
+  filesConsumed: 0,
+  orphansDeleted: 0,
+  tempsDeleted: 0,
+}
+
+export interface CleanupReport extends FileSweepReport {
   readDeleted: number
   pendingExpired: number
   oauthDeleted: number
   clientsDeleted: number
   sessionsDeleted: number
+  dropsDeleted: number
 }
 
 export interface CleanupDeps {
   db: Database.Database
   repo: QueueRepo
   settings: Settings
+  files?: FileStore
+  uploads?: UploadManager
   log?: typeof defaultLog
   now?: () => number
   setTimer?: typeof setTimeout
@@ -28,7 +43,7 @@ export interface CleanupDeps {
 
 /**
  * Nettoyage périodique : messages (TTL global + par topic), codes et jetons OAuth expirés,
- * clients OAuth inactifs, sessions admin expirées. Les jetons révoqués sont gardés jusqu'à leur
+ * clients OAuth inactifs, sessions admin expirées, liens de dépôt expirés ou révoqués depuis 30 jours. Les jetons révoqués sont gardés jusqu'à leur
  * expiration : un refresh révoqué rejoué doit encore déclencher la détection de réutilisation.
  */
 export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; stop(): void } {
@@ -53,9 +68,17 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
                            AND c.expires_at > :now)`,
   )
   const delSessions = db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?')
+  // drop_events et drop_tags partent avec le lien (ON DELETE CASCADE) ; messages.drop_id reste.
+  const delDrops = db.prepare(
+    'DELETE FROM drops WHERE expires_at <= :cutoff OR (revoked_at IS NOT NULL AND revoked_at <= :cutoff)',
+  )
 
   function execute(): CleanupReport {
     const t = now()
+    // Pièces avant messages : un message à pièce vivante n'est jamais supprimé par le TTL.
+    const sweep = deps.files
+      ? sweepFiles({ db, files: deps.files, settings, uploads: deps.uploads, now: t })
+      : EMPTY_SWEEP
     const { read, pending } = repo.deleteExpired(
       t - settings.get('ttl_hours') * HOUR_MS,
       settings.get('topic_ttl_overrides'),
@@ -64,6 +87,7 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
     const oauthDeleted = delCodes.run(t).changes + delTokens.run(t).changes
     const clientsDeleted = delClients.run({ cutoff: t - OAUTH_CLIENT_IDLE_MS, now: t }).changes
     const sessionsDeleted = delSessions.run(t).changes
+    const dropsDeleted = delDrops.run({ cutoff: t - DROP_RETENTION_MS }).changes
     db.pragma('optimize')
     const report = {
       readDeleted: read,
@@ -71,8 +95,13 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
       oauthDeleted,
       clientsDeleted,
       sessionsDeleted,
+      dropsDeleted,
+      ...sweep,
     }
-    if (read + pending + oauthDeleted + clientsDeleted + sessionsDeleted > 0) {
+    const sweepTotal =
+      sweep.filesExpired + sweep.filesConsumed + sweep.orphansDeleted + sweep.tempsDeleted
+    const total = read + pending + oauthDeleted + clientsDeleted + sessionsDeleted + dropsDeleted
+    if (total + sweepTotal > 0) {
       log('info', 'Nettoyage effectué', report)
     }
     return report
@@ -92,6 +121,8 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
         oauthDeleted: 0,
         clientsDeleted: 0,
         sessionsDeleted: 0,
+        dropsDeleted: 0,
+        ...EMPTY_SWEEP,
       }
     }
   }

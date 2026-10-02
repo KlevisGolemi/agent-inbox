@@ -1,8 +1,15 @@
-import { timingSafeEqual } from 'node:crypto'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import { rateLimit } from 'express-rate-limit'
-import { log } from '../log.js'
+import { newAttachments } from '../files/attachments.js'
+import { attachmentSummary, earlyResponsePolicy, sendUploadError } from '../files/http.js'
+import { MultipartError, receiveUpload } from '../files/multipart.js'
+import type { OnDownload } from '../files/types.js'
+import { UploadError, type UploadManager } from '../files/uploads.js'
+import { log, redactPath } from '../log.js'
 import type { Settings } from '../settings/index.js'
+import type { NewTag } from '../tags/attach.js'
+import { MAX_TAGS_PER_MESSAGE, type TagRegistry } from '../tags/registry.js'
+import { normalizeTagName } from '../tags/similarity.js'
 import {
   claimedView,
   claimWithWait,
@@ -15,6 +22,7 @@ import {
   type WaitPool,
 } from './http.js'
 import type { QueueRepo } from './repo.js'
+import { checkWebhookSecret } from './secret.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from './validation.js'
 
 /** Longueur maximale de `x-source` (comme le paramètre `source` des outils MCP). */
@@ -27,16 +35,16 @@ export function createQueueRouter(deps: {
   repo: QueueRepo
   settings: Settings
   waits: WaitPool
+  uploads: UploadManager
+  tags: TagRegistry
 }): Router {
-  const { repo, settings, waits } = deps
+  const { repo, settings, waits, uploads, tags } = deps
   const router = Router()
 
   // Le secret est relu à chaque requête : une rotation depuis l'administration est immédiate.
   function auth(req: Request, res: Response, next: NextFunction): void {
-    const provided = Buffer.from(String(req.headers['x-webhook-secret'] ?? ''))
-    const secret = Buffer.from(settings.get('webhook_secret'))
-    if (provided.length !== secret.length || !timingSafeEqual(provided, secret)) {
-      log('warn', 'Auth refusée', { ip: req.ip, path: req.path })
+    if (!checkWebhookSecret(req, settings)) {
+      log('warn', 'Auth refusée', { ip: req.ip, path: redactPath(req.path) })
       res.status(401).json({ ok: false, error: 'Unauthorized' })
       return
     }
@@ -66,71 +74,187 @@ export function createQueueRouter(deps: {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()) })
   })
 
-  router.post('/webhook', webhookLimiter, auth, (req, res) => {
-    const source = String(req.headers['x-source'] || 'n8n')
-    if (source.length > MAX_SOURCE_LENGTH) {
-      res.status(400).json({
-        ok: false,
-        error: 'invalid_source',
-        hint: `${MAX_SOURCE_LENGTH} caractères au maximum`,
-      })
-      return
-    }
-    const rawCid = String(req.headers['x-correlation-id'] ?? '').trim()
-    const correlationId = rawCid.length > 0 ? rawCid : null
-    if (correlationId !== null && !CORRELATION_ID_REGEX.test(correlationId)) {
-      res.status(400).json({
-        ok: false,
-        error: 'invalid_correlation_id',
-        hint: 'Format attendu : ^[A-Za-z0-9_-]{1,128}$',
-      })
-      return
-    }
-    const rawTopic = String(req.headers['x-topic'] ?? '').trim()
-    const topic = rawTopic.length > 0 ? rawTopic : 'default'
-    if (!TOPIC_REGEX.test(topic)) {
-      res.status(400).json({
-        ok: false,
-        error: 'invalid_topic',
-        hint: 'Format attendu : ^[A-Za-z0-9_-]{1,128}$',
-      })
-      return
-    }
+  // Réponse avant la fin du corps : fermeture immédiate tant que l'appelant est inconnu (401, 429),
+  // lingering borné une fois le secret vérifié (tous les refus suivants, d'en-tête comme d'envoi).
+  router.post(
+    '/webhook',
+    earlyResponsePolicy('close'),
+    webhookLimiter,
+    auth,
+    earlyResponsePolicy('linger'),
+    async (req, res) => {
+      const source = String(req.headers['x-source'] || 'n8n')
+      if (source.length > MAX_SOURCE_LENGTH) {
+        res.status(400).json({
+          ok: false,
+          error: 'invalid_source',
+          hint: `${MAX_SOURCE_LENGTH} caractères au maximum`,
+        })
+        return
+      }
+      const rawCid = String(req.headers['x-correlation-id'] ?? '').trim()
+      const correlationId = rawCid.length > 0 ? rawCid : null
+      if (correlationId !== null && !CORRELATION_ID_REGEX.test(correlationId)) {
+        res.status(400).json({
+          ok: false,
+          error: 'invalid_correlation_id',
+          hint: 'Format attendu : ^[A-Za-z0-9_-]{1,128}$',
+        })
+        return
+      }
+      const rawTopic = String(req.headers['x-topic'] ?? '').trim()
+      const topic = rawTopic.length > 0 ? rawTopic : 'default'
+      if (!TOPIC_REGEX.test(topic)) {
+        res.status(400).json({
+          ok: false,
+          error: 'invalid_topic',
+          hint: 'Format attendu : ^[A-Za-z0-9_-]{1,128}$',
+        })
+        return
+      }
 
-    const result = repo.enqueue({
-      payload: req.body ?? {},
-      source,
-      correlationId,
-      topic,
-    })
-    if (!result.ok) {
-      log('warn', 'correlation_id en double', {
-        correlation_id: correlationId,
-        existing_id: result.existingId,
+      const tagHeader = req.headers['x-tags']
+      let tagNames: string[] = []
+      let tagInput: { tags: string[]; newTags: NewTag[] } = { tags: [], newTags: [] }
+      if (tagHeader !== undefined) {
+        const raw = String(tagHeader)
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s !== '')
+        if (raw.length > MAX_TAGS_PER_MESSAGE) {
+          res.status(400).json({
+            ok: false,
+            error: 'too_many_tags',
+            hint: `${MAX_TAGS_PER_MESSAGE} tags au maximum`,
+          })
+          return
+        }
+        // Validation seule : les tags absents sont créés dans la transaction d'enqueue (aucun orphelin).
+        const resolved = tags.resolveForHttp(raw, `http:${source}`)
+        if (resolved.invalid.length > 0) {
+          res.status(400).json({
+            ok: false,
+            error: 'invalid_tags',
+            invalid: resolved.invalid,
+            hint: 'Format attendu : ^[a-z0-9][a-z0-9-]{0,47}$',
+          })
+          return
+        }
+        tagInput = { tags: resolved.tags, newTags: resolved.newTags }
+        tagNames = [...new Set(raw.map(normalizeTagName))]
+      }
+      let onDownload: OnDownload = settings.get('file_on_download_default')
+      const rawOnDownload = req.headers['x-on-download']
+      if (rawOnDownload !== undefined) {
+        const v = String(rawOnDownload).trim()
+        if (v !== 'keep' && v !== 'consume') {
+          res.status(400).json({ ok: false, error: 'invalid_on_download', hint: 'keep ou consume' })
+          return
+        }
+        onDownload = v
+      }
+
+      const duplicate = (existingId: string | null) => {
+        log('warn', 'correlation_id en double', {
+          correlation_id: correlationId,
+          existing_id: existingId,
+        })
+        res.status(409).json({
+          ok: false,
+          error: 'duplicate_correlation_id',
+          correlation_id: correlationId,
+          existing_id: existingId,
+        })
+      }
+
+      if (req.is('multipart/form-data')) {
+        try {
+          const out = await receiveUpload(req, uploads, {
+            maxFieldBytes: settings.get('json_max_kb') * 1024,
+            prepare(fields) {
+              if (fields.payload === undefined || fields.payload === '')
+                return { ok: true, value: {} as unknown }
+              try {
+                return { ok: true, value: JSON.parse(fields.payload) as unknown }
+              } catch {
+                return { ok: false, status: 400, body: { ok: false, error: 'invalid_json' } }
+              }
+            },
+            write: (payload, files) =>
+              repo.enqueue({
+                payload,
+                source,
+                correlationId,
+                topic,
+                ...tagInput,
+                attachments: newAttachments(files, onDownload, settings, Date.now()),
+              }),
+          })
+          if (out.kind === 'rejected') {
+            res.status(out.status).json(out.body)
+            return
+          }
+          if (!out.result.ok) {
+            duplicate(out.result.existingId)
+            return
+          }
+          const summary = attachmentSummary(out.files)
+          log('info', 'Message mis en file avec pièces', {
+            id: out.result.id,
+            source,
+            topic,
+            correlation_id: correlationId,
+            pending: out.result.pending,
+            files: summary.length,
+            bytes: summary.reduce((n, f) => n + f.size_bytes, 0),
+          })
+          res.json({
+            ok: true,
+            id: out.result.id,
+            correlation_id: correlationId,
+            pending: out.result.pending,
+            topic,
+            tags: tagNames,
+            attachments: summary,
+          })
+        } catch (err) {
+          if (err instanceof UploadError || err instanceof MultipartError) {
+            sendUploadError(res, err)
+            return
+          }
+          throw err
+        }
+        return
+      }
+
+      const result = repo.enqueue({
+        payload: req.body ?? {},
+        source,
+        correlationId,
+        topic,
+        ...tagInput,
       })
-      res.status(409).json({
-        ok: false,
-        error: 'duplicate_correlation_id',
+      if (!result.ok) {
+        duplicate(result.existingId)
+        return
+      }
+      log('info', 'Message mis en file', {
+        id: result.id,
+        source,
+        topic,
         correlation_id: correlationId,
-        existing_id: result.existingId,
+        pending: result.pending,
       })
-      return
-    }
-    log('info', 'Message mis en file', {
-      id: result.id,
-      source,
-      topic,
-      correlation_id: correlationId,
-      pending: result.pending,
-    })
-    res.json({
-      ok: true,
-      id: result.id,
-      correlation_id: correlationId,
-      pending: result.pending,
-      topic,
-    })
-  })
+      res.json({
+        ok: true,
+        id: result.id,
+        correlation_id: correlationId,
+        pending: result.pending,
+        topic,
+        ...(tagHeader !== undefined ? { tags: tagNames } : {}),
+      })
+    },
+  )
 
   router.get('/next', nextLimiter, auth, async (req, res) => {
     const topic = parseTopicParam(req)

@@ -1,6 +1,13 @@
 import type Database from 'better-sqlite3'
 import type { Env } from '../env.js'
-import { DEFAULTS, SETTING_KEYS, type SettingKey, type Settings } from './index.js'
+import {
+  DEFAULTS,
+  isSecretKey,
+  SETTING_KEYS,
+  type SecretKey,
+  type SettingKey,
+  type Settings,
+} from './index.js'
 
 /**
  * Amorce les réglages au démarrage : n'écrit que les clés absentes de la table,
@@ -23,7 +30,8 @@ export function seedSettings(
   const patch: Partial<Record<SettingKey, unknown>> = {}
   for (const key of SETTING_KEYS) {
     if (present.has(key)) continue
-    patch[key] = fromEnv[key] ?? (key === 'webhook_secret' ? gen() : DEFAULTS[key])
+    patch[key] =
+      fromEnv[key] ?? (isSecretKey(key) ? gen() : DEFAULTS[key as Exclude<SettingKey, SecretKey>])
   }
   if (Object.keys(patch).length > 0) settings.update(patch)
 }

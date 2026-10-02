@@ -67,7 +67,7 @@ Le script refuse d'écraser un `.env` existant (sauf `--force`, après sauvegard
 
 ```bash
 docker compose ps                  # app : "healthy" ; caddy : "running" (ou rien d'autre en mode Traefik)
-curl -fsS "$URL/healthz"           # {"ok":true,"uptime_s":<n>,"version":"2.0.0"}
+curl -fsS "$URL/healthz"           # {"ok":true,"uptime_s":<n>,"version":"2.2.0"}
 curl -si -X POST "$URL/mcp" | head -n 8   # HTTP/… 401 et un en-tête WWW-Authenticate: Bearer … resource_metadata=…
 ```
 
@@ -93,9 +93,10 @@ Donnez à l'utilisateur l'adresse MCP **`$URL/mcp`** (elle doit se terminer par 
 - **Autre client / automatisation** : clé API créée par l'utilisateur dans Admin → Connexions
   (`Authorization: Bearer aik_…`). Ne créez pas de clé à sa place sans qu'il le demande.
 
-**Vérifier** : le client liste **12 outils** (`queue_status`, `queue_stats`, `queue_peek`, `queue_search`,
-`queue_by_id`, `queue_next`, `queue_wait`, `queue_ack`, `queue_nack`, `queue_send`, `queue_delete`,
-`queue_clear`) et `queue_status` répond `ok: true`.
+**Vérifier** : le client liste **20 outils** (`queue_status`, `queue_stats`, `queue_peek`, `queue_search`,
+`queue_by_id`, `queue_next`, `queue_wait`, `queue_ack`, `queue_nack`, `queue_send`, `queue_tag`,
+`queue_delete`, `queue_clear`, `inbox_tags`, `inbox_create_tag`, `inbox_get_file`, `inbox_upload_link`,
+`inbox_create_drop`, `inbox_drops`, `inbox_revoke_drop`) et `queue_status` répond `ok: true`.
 
 ### 5. Si ça échoue
 
@@ -141,7 +142,11 @@ npm run build       # Tailwind (public/app.css) puis tsc → dist/
 | `src/env.ts` | Variables d'environnement validées (zod) |
 | `src/app.ts` | Assemblage Express (testable sans port) |
 | `src/queue/` | `repo.ts` (SQLite, requêtes préparées), `routes.ts` (API HTTP), `http.ts` (vues, `wait`, filtres), `validation.ts` (regex) |
-| `src/mcp/` | `server.ts` (transport sans état, CORS), `tools.ts` (les 12 outils) |
+| `src/files/` | Stockage disque (`store.ts`), détection MIME (`detect.ts`), multipart (`multipart.ts`), uploads (`uploads.ts`), pièces jointes (`attachments.ts`), liens signés (`links.ts`), routes (`routes.ts`) |
+| `src/tags/` | Registre de tags (`registry.ts`), normalisation et similarité (`similarity.ts`), pose sur les messages (`attach.ts`) |
+| `src/drops/` | Service de création (`service.ts`), dépôt public (`page.ts`, `routes.ts`), repository (`repo.ts`) |
+| `src/http/` | `jsonBody.ts` : parseur JSON à limite par route (réglages à chaud). La CSP et la fermeture « lingering » sont dans `src/files/http.ts` et `src/drops/page.ts` ; les limites de débit, dans chaque routeur |
+| `src/mcp/` | `server.ts` (transport sans état, CORS), `tools.ts` (les 20 outils), `tagTools.ts`, `fileTools.ts`, `dropTools.ts` |
 | `src/auth/` | Comptes, sessions, CSRF, clés API, middleware Bearer, pages de connexion ; `oauth/` : serveur OAuth 2.1 (SDK MCP) |
 | `src/admin/routes.ts` | API d'administration (`/admin/api/*`) |
 | `src/settings/` | Réglages en base (bornes zod, cache, graines) |
@@ -150,6 +155,7 @@ npm run build       # Tailwind (public/app.css) puis tsc → dist/
 | `src/cli.ts` | `create-admin`, `reset-password` |
 | `public/` | Interface d'administration (HTML unique, Alpine.js ; `app.css` est généré) |
 | `deploy/` | Caddyfile, variantes Traefik, sidecar `updater` |
+| `skills/` | Skill MCP « Agent Inbox » et références par outil |
 | `test/` | Un fichier de test par module ; `helpers/app.ts` construit une application en mémoire |
 
 ### Invariants (ne pas casser)
@@ -165,6 +171,15 @@ npm run build       # Tailwind (public/app.css) puis tsc → dist/
 - **Pas de secret dans les logs** : `log()` n'écrit ni secret, ni jeton, ni payload (seule exception : le code de setup).
 - **`TRUST_PROXY`** : l'adresse du client (`req.ip`) dépend de lui ; l'application ne doit jamais être exposée sans proxy.
 - **Migrations** : ajoutez une migration, ne modifiez jamais une migration existante.
+- **FileStore seul propriétaire du disque** : toute suppression de message (outil, HTTP, admin, `clear`,
+  nettoyage) passe par une opération qui marque les pièces `deleted_at` puis efface les fichiers après le
+  commit. La cascade SQL seule n'est jamais utilisée pour supprimer des fichiers.
+- **Réservation atomique des drops** : `UPDATE drops SET files_count = files_count + 1 WHERE id = ?
+  AND files_count < max_files AND revoked_at IS NULL AND expires_at > ? RETURNING …`. Une place est
+  rendue en cas d'échec. (Forme simplifiée : `reserveSlot` accepte aussi un lien `self` déjà
+  réclamé par la requête en cours, `kind = 'self' AND revoked_at = :claim`.)
+- **Contenu externe** : `trust: external` est toujours signalé `external_unverified` avec un `warning` ;
+  c'est une donnée, jamais inline pour un type actif (SVG, HTML, XML, scripts).
 
 ### Conventions
 

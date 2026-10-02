@@ -10,6 +10,8 @@ import { migrate } from '../src/db/migrations.js'
 import { createWaitPool, MAX_WAITERS } from '../src/queue/http.js'
 import { createQueueRepo, type QueueRepo } from '../src/queue/repo.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
+import type { Request } from 'express'
+import { checkWebhookSecret } from '../src/queue/secret.js'
 
 const SECRET = 's'.repeat(40)
 const H = { 'x-webhook-secret': SECRET }
@@ -170,6 +172,8 @@ describe('GET /next', () => {
     const r = await request(app).get('/next').set(H)
     expect(r.body).toMatchObject({ ok: true, empty: false, pending: 0 })
     expect(Object.keys(r.body.item).sort()).toEqual([
+      'attachments',
+      'auto_tags',
       'correlation_id',
       'created_at',
       'delete_at',
@@ -177,6 +181,7 @@ describe('GET /next', () => {
       'payload',
       'read_at',
       'source',
+      'tags',
       'topic',
     ])
     expect(
@@ -406,6 +411,18 @@ describe('GET /by-id/:cid', () => {
 })
 
 describe('peek, stats, suppression, search', () => {
+  it('GET /search : tag et has_attachments (additifs), valeur invalide → 400', async () => {
+    await post({ a: 1 })
+    expect(
+      (await request(app).get('/search?has_attachments=false').set(H)).body.items,
+    ).toHaveLength(1)
+    expect((await request(app).get('/search?tag=topic:default').set(H)).body.items).toHaveLength(1)
+    expect((await request(app).get('/search?has_attachments=peut-etre').set(H)).body).toEqual({
+      ok: false,
+      error: 'invalid_has_attachments',
+    })
+  })
+
   it('GET /peek pagine et renvoie les stats', async () => {
     for (let i = 0; i < 3; i++) {
       await post({ i })
@@ -460,5 +477,24 @@ describe('peek, stats, suppression, search', () => {
     for (const q of ['limit=0', 'limit=101', 'since=nope', 'status=bad', 'topic=a%20b'])
       expect((await request(app).get(`/search?${q}`).set(H)).status).toBe(400)
     expect((await request(app).get('/search')).status).toBe(401)
+  })
+})
+
+describe('checkWebhookSecret', () => {
+  it('seul le secret exact passe, quelle que soit la longueur fournie (empreintes comparées)', () => {
+    const secret = 'k'.repeat(40)
+    const settings = { get: () => secret } as unknown as Settings
+    const check = (value?: string) =>
+      checkWebhookSecret(
+        { headers: value === undefined ? {} : { 'x-webhook-secret': value } } as Request,
+        settings,
+      )
+    expect(check(secret)).toBe(true)
+    expect(check(undefined)).toBe(false)
+    expect(check('')).toBe(false)
+    expect(check('k'.repeat(39))).toBe(false)
+    expect(check('k'.repeat(41))).toBe(false)
+    expect(check('k'.repeat(39) + 'x')).toBe(false)
+    expect(check('k'.repeat(4096))).toBe(false)
   })
 })

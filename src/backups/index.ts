@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
+import { log } from '../log.js'
 import type { Settings } from '../settings/index.js'
 
 export interface BackupInfo {
@@ -50,6 +51,10 @@ export const BACKUP_NAME_REGEX =
 
 /** Enfants avant parents : ordre de suppression ; l'insertion suit l'ordre inverse. */
 const TABLES = [
+  'drop_events',
+  'drop_tags',
+  'message_tags',
+  'attachments',
   'oauth_tokens',
   'oauth_codes',
   'admin_sessions',
@@ -58,6 +63,8 @@ const TABLES = [
   'users',
   'settings',
   'messages',
+  'drops',
+  'tags',
 ] as const
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1')
@@ -99,6 +106,7 @@ export function createBackups(deps: {
   dir: string
   settings: Settings
   now?: () => number
+  onRestore?: () => void
 }): Backups {
   const { db, dir, settings } = deps
   const now = deps.now ?? Date.now
@@ -194,6 +202,15 @@ export function createBackups(deps: {
       db.exec('DETACH DATABASE src')
     }
     settings.reload()
+    // Après restauration : les liens signés émis avant ne doivent pas se réveiller.
+    // Les données sont déjà restaurées : un échec du hook est journalisé sans sauter la purge.
+    try {
+      deps.onRestore?.()
+    } catch (err) {
+      log('error', 'Échec du hook après restauration', {
+        error: err instanceof Error ? err.name : 'unknown',
+      })
+    }
     // Purge seulement après succès, sans jamais toucher la sauvegarde restaurée.
     prune(name)
   }

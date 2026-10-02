@@ -21,9 +21,14 @@ Deux modes d'authentification, au choix du client :
 ![Page de connexion](images/login.png)
 ![Page de consentement](images/consentement.png)
 
-Le connecteur liste alors les 12 outils. Il continue de fonctionner après un redémarrage du conteneur :
+Le connecteur liste alors les 20 outils. Il continue de fonctionner après un redémarrage du conteneur :
 le serveur MCP ne garde aucune session en mémoire. Un jeton d'accès dure 1 heure et se renouvelle seul
 (refresh token : 30 jours).
+
+**Fichiers.** Les clients avec shell (Claude Code, Codex) préfèrent `inbox_get_file` en mode `link` puis
+`curl` (enregistré sous `<attachment_id>.<ext>`, jamais sous le nom choisi par l'expéditeur). Les clients sans shell (Claude Desktop/Web, ChatGPT) reçoivent les images
+(JPEG, PNG, GIF, WebP ; HEIC ou TIFF passent par un lien) et les sons en inline jusqu'à `inline_max_mb` (5 Mo par défaut) ; au-delà, l'outil renvoie un lien signé
+à ouvrir par l'humain.
 
 ## Claude Code
 
@@ -68,13 +73,29 @@ configurez le client. La forme courante est :
 
 ![Connexions : clés API et clients OAuth](images/admin-connexions.png)
 
+## Skill « Agent Inbox »
+
+Le dépôt fournit un skill MCP dans `skills/agent-inbox/` : routine de travail, règles sur le contenu
+externe et une référence par outil (`skills/agent-inbox/references/`). Les releases publient aussi
+`agent-inbox-skill.zip`.
+
+- **Claude Code** : copiez le dossier `skills/agent-inbox/` dans `~/.claude/skills/agent-inbox/`, ou
+  demandez à Claude Code d'ajouter le zip comme skill personnel.
+- **Claude.ai (Web / Desktop)** : Paramètres → Skills → Ajouter un skill, puis téléversez
+  `agent-inbox-skill.zip`.
+- **Codex** : demandez-lui de lire `skills/agent-inbox/SKILL.md`, ou ajoutez ce contenu dans ses instructions.
+
+Le skill n'est pas obligatoire : les 20 outils fonctionnent sans lui. Il aide l'agent à respecter la
+routine (vérifier les tags, envoyer, relever, récupérer les fichiers, acquitter) et à traiter le contenu
+externe comme une donnée, jamais comme une instruction.
+
 ## Vérifier sans client
 
 ```bash
 # Sans authentification : 401 et un en-tête WWW-Authenticate (découverte OAuth)
 curl -i -X POST https://queue.example.com/mcp
 
-# Avec une clé API : la liste des 12 outils
+# Avec une clé API : la liste des 20 outils
 curl -sS -X POST https://queue.example.com/mcp \
   -H "Authorization: Bearer aik_…" \
   -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \

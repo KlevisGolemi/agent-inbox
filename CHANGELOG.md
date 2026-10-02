@@ -4,6 +4,38 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-02
+
+### Added
+
+- Pièces jointes : détection par signature binaire, catégories (image, audio, vidéo, document, archive, other),
+  quota et jauge de stockage, rétention par catégorie.
+- Tags : registre partagé, normalisation, anti-doublon, création via MCP ou automatique via HTTP, filtres de recherche.
+- Liens de dépôt : `inbox_upload_link` (self, shell), `inbox_create_drop` (public, tiers), révocation, page HTML autonome.
+- 8 nouveaux outils MCP : `queue_tag`, `inbox_tags`, `inbox_create_tag`, `inbox_get_file`, `inbox_upload_link`,
+  `inbox_create_drop`, `inbox_drops`, `inbox_revoke_drop` (20 outils au total).
+- Skill MCP « Agent Inbox » dans `skills/agent-inbox/` et publication de `agent-inbox-skill.zip`.
+- Jauge de stockage dans `queue_status`, `queue_stats` et l'administration.
+- Réglages à chaud pour les pièces jointes, les tags, les drops et les liens signés.
+- Modèle n8n `04-envoyer-un-fichier.json` pour poster un fichier en `multipart/form-data`.
+
+### Changed
+
+- Limites de corps par route : `json_max_kb` pour le JSON, `mcp_upload_max_mb` pour les pièces MCP,
+  plafonds par catégorie pour les uploads.
+- Le nettoyage protège les messages qui portent encore une pièce jointe vivante.
+- Migration v4 : les sauvegardes de la v3 deviennent incompatibles avec le nouveau schéma. Faites une
+  sauvegarde juste après la mise à jour.
+
+### Security
+
+- Inline et aperçu admin limités aux images JPEG, PNG, GIF et WebP ; HEIC, TIFF… passent par un lien.
+- `inbox_get_file` propose `curl -fL -o '<id>.<ext>'` : jamais `-J`/`-O` fondés sur le nom choisi par le déposant.
+- `/mcp` : limiteur et Bearer vérifiés avant toute lecture du corps JSON (un POST anonyme n'est jamais lu).
+- Les descriptions de tags ne sont plus injectées dans `tools/list` : seuls les noms des plus utilisés le sont.
+- Plafonds `file_max_mb` vidéo et archive à 95 Mo par défaut (limite de corps de Cloudflare Free/Pro).
+- Liens de dépôt expirés ou révoqués depuis 30 jours purgés ; payload d'un lien self plafonné à `json_max_kb`.
+
 ## [2.1.0] - 2026-10-01
 
 ### Changed
@@ -67,6 +99,7 @@ L'API HTTP des producteurs (`/webhook`, `/next`, `/peek`…) reste compatible av
 
 - `server.js`, `mcp/`, `poll.sh`, `API_REFERENCE.md` et `COWORK_INSTRUCTIONS.md` (code et documentation de la v1).
 
-[Unreleased]: https://github.com/KlevisGolemi/agent-inbox/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/KlevisGolemi/agent-inbox/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/KlevisGolemi/agent-inbox/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/KlevisGolemi/agent-inbox/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/KlevisGolemi/cowork-communication/releases/tag/v2.0.0

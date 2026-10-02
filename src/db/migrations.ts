@@ -63,13 +63,90 @@ function up3(db: Database.Database): void {
   `)
 }
 
+/** Migration 4 (v2.2) : pièces jointes (contenu sur disque), registre de tags, liens de dépôt. */
+function up4(db: Database.Database): void {
+  db.exec(`
+    -- deleted_reason : expired | consumed (une pièce disparaît avec son message par cascade)
+    CREATE TABLE attachments (
+      id                  TEXT PRIMARY KEY,
+      message_id          TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      filename            TEXT NOT NULL,
+      mime_type           TEXT NOT NULL,
+      category            TEXT NOT NULL,
+      size_bytes          INTEGER NOT NULL,
+      sha256              TEXT NOT NULL,
+      on_download         TEXT NOT NULL DEFAULT 'keep',
+      created_at          INTEGER NOT NULL,
+      expires_at          INTEGER NOT NULL,
+      downloads           INTEGER NOT NULL DEFAULT 0,
+      first_downloaded_at INTEGER,
+      deleted_at          INTEGER,
+      deleted_reason      TEXT
+    );
+    CREATE INDEX idx_attachments_message ON attachments(message_id);
+    CREATE INDEX idx_attachments_live    ON attachments(expires_at) WHERE deleted_at IS NULL;
+
+    CREATE TABLE tags (
+      name              TEXT PRIMARY KEY,
+      description       TEXT NOT NULL,
+      created_by        TEXT NOT NULL,
+      created_at        INTEGER NOT NULL,
+      usage_count       INTEGER NOT NULL DEFAULT 0,
+      last_used_at      INTEGER,
+      needs_description INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE message_tags (
+      message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      tag        TEXT NOT NULL REFERENCES tags(name) ON UPDATE CASCADE ON DELETE CASCADE,
+      PRIMARY KEY (message_id, tag)
+    );
+
+    CREATE TABLE drops (
+      id                 TEXT PRIMARY KEY,
+      token_hash         TEXT NOT NULL UNIQUE,
+      kind               TEXT NOT NULL,
+      label              TEXT NOT NULL,
+      topic              TEXT NOT NULL,
+      max_files          INTEGER NOT NULL,
+      files_count        INTEGER NOT NULL DEFAULT 0,
+      max_file_mb        INTEGER NOT NULL,
+      allowed_categories TEXT NOT NULL,
+      message_payload    TEXT,
+      correlation_id     TEXT,
+      on_download        TEXT,
+      created_by         TEXT NOT NULL,
+      created_at         INTEGER NOT NULL,
+      expires_at         INTEGER NOT NULL,
+      revoked_at         INTEGER
+    );
+    CREATE TABLE drop_tags (
+      drop_id TEXT NOT NULL REFERENCES drops(id) ON DELETE CASCADE,
+      tag     TEXT NOT NULL REFERENCES tags(name) ON UPDATE CASCADE ON DELETE CASCADE,
+      PRIMARY KEY (drop_id, tag)
+    );
+    CREATE TABLE drop_events (
+      id         INTEGER PRIMARY KEY,
+      drop_id    TEXT NOT NULL REFERENCES drops(id) ON DELETE CASCADE,
+      at         INTEGER NOT NULL,
+      outcome    TEXT NOT NULL,
+      files      INTEGER NOT NULL DEFAULT 0,
+      bytes      INTEGER NOT NULL DEFAULT 0,
+      message_id TEXT
+    );
+
+    ALTER TABLE messages ADD COLUMN trust   TEXT NOT NULL DEFAULT 'internal';
+    ALTER TABLE messages ADD COLUMN drop_id TEXT;
+  `)
+}
+
 export const MIGRATIONS: Migration[] = [
   { version: 1, up: up1 },
   { version: 2, up: up2 },
   { version: 3, up: up3 },
+  { version: 4, up: up4 },
 ]
 
-export const LATEST_VERSION = 3
+export const LATEST_VERSION = 4
 
 /**
  * Applique les migrations en attente, chacune dans sa propre transaction

@@ -2,7 +2,8 @@ import type Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { openDb } from '../src/db/index.js'
 import { migrate } from '../src/db/migrations.js'
-import { startCleanup } from '../src/jobs/cleanup.js'
+import { createDropsRepo } from '../src/drops/repo.js'
+import { DROP_RETENTION_MS, startCleanup } from '../src/jobs/cleanup.js'
 import { createQueueRepo, type QueueRepo } from '../src/queue/repo.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
 
@@ -194,6 +195,52 @@ describe('planification', () => {
     expect(timers).toHaveLength(n)
   })
 
+  it('purge les drops expirés ou révoqués depuis plus de 30 jours, avec leurs événements et tags', () => {
+    expect(DROP_RETENTION_MS).toBe(30 * 24 * HOUR)
+    const drops = createDropsRepo(db, { now: () => clock })
+    db.prepare(
+      "INSERT INTO tags (name, description, created_by, created_at) VALUES ('t', 'description du tag', 'x', 0)",
+    ).run()
+    const make = (expiresAt: number) =>
+      drops.create({
+        kind: 'public',
+        label: 'l',
+        topic: 'drops',
+        tags: ['t'],
+        maxFiles: 1,
+        maxFileMb: 1,
+        allowedCategories: ['image'],
+        expiresAt,
+        createdBy: 'x',
+      }).drop.id
+    const day = 24 * HOUR
+    const oldExpired = make(clock - 31 * day)
+    const recentExpired = make(clock - 29 * day)
+    const oldRevoked = make(clock + 10 * day)
+    const recentRevoked = make(clock + 10 * day)
+    const active = make(clock + day)
+    db.prepare('UPDATE drops SET revoked_at = ? WHERE id = ?').run(clock - 31 * day, oldRevoked)
+    db.prepare('UPDATE drops SET revoked_at = ? WHERE id = ?').run(clock - 29 * day, recentRevoked)
+    for (const id of [oldExpired, oldRevoked, active])
+      drops.addEvent({ dropId: id, outcome: 'ok', files: 1, bytes: 1, messageId: null })
+    // Le démarrage lance un premier passage.
+    const { job, log } = start()
+    expect(log).toHaveBeenCalledWith(
+      'info',
+      'Nettoyage effectué',
+      expect.objectContaining({ dropsDeleted: 2 }),
+    )
+    expect(job.runOnce().dropsDeleted).toBe(0)
+    const ids = (db.prepare('SELECT id FROM drops').all() as { id: string }[]).map((r) => r.id)
+    expect(ids.sort()).toEqual([recentExpired, recentRevoked, active].sort())
+    expect(db.prepare('SELECT drop_id FROM drop_events').all()).toEqual([{ drop_id: active }])
+    expect(
+      db
+        .prepare('SELECT COUNT(*) AS n FROM drop_tags WHERE drop_id IN (?, ?)')
+        .get(oldExpired, oldRevoked),
+    ).toEqual({ n: 0 })
+  })
+
   it('runOnce direct ne lève pas : log error et rapport à zéro', () => {
     const { job, log } = start()
     vi.spyOn(repo, 'deleteExpired').mockImplementation(() => {
@@ -205,6 +252,11 @@ describe('planification', () => {
       oauthDeleted: 0,
       clientsDeleted: 0,
       sessionsDeleted: 0,
+      dropsDeleted: 0,
+      filesExpired: 0,
+      filesConsumed: 0,
+      orphansDeleted: 0,
+      tempsDeleted: 0,
     })
     expect(log).toHaveBeenCalledWith('error', expect.any(String), { error: 'boom' })
   })

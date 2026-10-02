@@ -5,6 +5,10 @@ import type Database from 'better-sqlite3'
 import type { Response } from 'supertest'
 import { createApp, type AppDeps } from '../../src/app.js'
 import { createBackups } from '../../src/backups/index.js'
+import { createDropsRepo } from '../../src/drops/repo.js'
+import { createAttachmentsRepo } from '../../src/files/attachments.js'
+import { createFileStore } from '../../src/files/store.js'
+import { createUploadManager } from '../../src/files/uploads.js'
 import { createApiKeys } from '../../src/auth/apiKeys.js'
 import { SqliteOAuthProvider } from '../../src/auth/oauth/provider.js'
 import { createAdminSessions } from '../../src/auth/sessions.js'
@@ -13,7 +17,8 @@ import { openDb } from '../../src/db/index.js'
 import { migrate } from '../../src/db/migrations.js'
 import type { Env } from '../../src/env.js'
 import { createQueueRepo } from '../../src/queue/repo.js'
-import { createSettings, seedSettings } from '../../src/settings/index.js'
+import { createSettings, rotateFileSigningSecret, seedSettings } from '../../src/settings/index.js'
+import { createTagRegistry } from '../../src/tags/registry.js'
 import { createVersionService } from '../../src/version/index.js'
 
 /** Env de test : https, NODE_ENV=test (cookies Secure). */
@@ -47,10 +52,27 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
   if (!over.settings) seedSettings(settings, db, {}, () => 'g'.repeat(64))
   const env = over.env ?? testEnv()
   const sessions = over.sessions ?? createAdminSessions(db)
+  const files =
+    over.files ??
+    createFileStore({ db, root: mkdtempSync(join(tmpdir(), 'inbox-files-')), log: () => {} })
+  if (!over.files) files.init()
+  const uploads =
+    over.uploads ??
+    createUploadManager({
+      store: files,
+      settings,
+      statfs: () => ({ bavail: 1e12, bsize: 1 }),
+      log: () => {},
+    })
   return {
     db,
     settings,
-    repo: over.repo ?? createQueueRepo(db),
+    repo: over.repo ?? createQueueRepo(db, { files, settings }),
+    files,
+    uploads,
+    attachments: over.attachments ?? createAttachmentsRepo(db, { files, settings }),
+    tags: over.tags ?? createTagRegistry(db, { settings }),
+    drops: over.drops ?? createDropsRepo(db),
     version: over.version ?? '0.0.0-test',
     versions:
       over.versions ??
@@ -69,7 +91,12 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     oauthProvider: over.oauthProvider ?? new SqliteOAuthProvider({ db, sessions, env }),
     backups:
       over.backups ??
-      createBackups({ db, dir: mkdtempSync(join(tmpdir(), 'cq-backups-')), settings }),
+      createBackups({
+        db,
+        dir: mkdtempSync(join(tmpdir(), 'cq-backups-')),
+        settings,
+        onRestore: () => rotateFileSigningSecret(settings),
+      }),
     waits: over.waits,
   }
 }

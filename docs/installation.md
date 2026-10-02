@@ -91,12 +91,29 @@ l'adresse canonique (métadonnées OAuth, URLs affichées dans l'interface).
 `CQ_BEHIND_CLOUDFLARE=1` règle `TRUST_PROXY=2`. Sans cela, l'adresse IP vue par l'application est celle de
 Cloudflare et la limite de débit s'applique à tous les clients en même temps.
 
+**Taille des envois derrière Cloudflare.** Cloudflare refuse tout corps de requête au-delà de **100 Mo**
+(offres Free et Pro) ou **200 Mo** (Business), avant même d'atteindre le serveur. C'est pourquoi les plafonds
+par défaut `file_max_mb` de `video` et `archive` sont de **95 Mo**. Ne les montez au-delà que si l'hôte n'est
+**pas** derrière le proxy Cloudflare (DNS seul, nuage gris) ou s'il est en offre Business (jusqu'à 195 Mo
+environ). Une installation existante garde ses réglages : vérifiez-les dans Admin → Réglages.
+
 ### Ne publiez jamais le port de l'application
 
 La limite de débit (`/webhook`, `/login`, `/token`…) lit l'adresse du client dans `X-Forwarded-For` en ne
 faisant confiance qu'à **exactement `TRUST_PROXY` proxys** (1 par défaut, 0 à 5). Si le port 3000 est joignable
 directement, n'importe qui peut forger l'en-tête et contourner la limite. N'ajoutez donc pas de `ports:` au
 service `app`.
+
+**`TRUST_PROXY` = nombre exact de sauts.** Comptez les proxys réellement traversés : 1 pour Caddy ou Traefik
+seul, 2 pour Cloudflare puis Traefik. Une valeur trop haute fait lire une adresse que le client a lui-même
+écrite dans `X-Forwarded-For` ; trop basse, tous les clients partagent l'adresse du proxy.
+
+**Derrière Cloudflare, fermez l'origine.** Avec `TRUST_PROXY=2`, l'application fait confiance à l'avant-dernière
+adresse de `X-Forwarded-For`. Si le serveur reste joignable en direct (sans passer par Cloudflare), un client
+peut y placer une adresse de son choix et contourner la limite de débit. Restreignez donc l'accès aux ports
+80/443 aux [plages IP de Cloudflare](https://www.cloudflare.com/ips/) (pare-feu de l'hôte ou du fournisseur),
+et/ou déclarez-les dans Traefik (`entryPoints.<nom>.forwardedHeaders.trustedIPs`) pour que Traefik ignore un
+`X-Forwarded-For` venu d'ailleurs. Sans l'une de ces deux mesures, `X-Forwarded-For` reste forgeable.
 
 **Port interne.** L'application écoute sur `PORT` (3000 par défaut). Les healthchecks (`Dockerfile`,
 `docker-compose.yml`, `deploy/docker-compose.traefik.yml`), `deploy/Caddyfile` et le label Traefik
@@ -148,11 +165,23 @@ sauvegarde manuelle, téléchargement et restauration à chaud. Les fichiers son
 (`queue-AAAAMMJJ-HHMMSS.db`) dans `/data/backups`. Une restauration crée d'abord une sauvegarde de
 sécurité et refuse une sauvegarde d'une autre version du schéma.
 
-**Volume complet** (à faire avant une migration ou une désinstallation) :
+**Les sauvegardes de l'interface ne contiennent pas les fichiers** (`/data/files`) : après une restauration, une
+pièce jointe dont le fichier n'est plus sur le disque répond `410 file_gone`. Pour garder les pièces, sauvegardez
+le volume complet.
+
+**Volume complet** (à faire avant une migration ou une désinstallation). L'application doit être **arrêtée**
+pendant la copie : un `tar` de la base SQLite en cours d'écriture (WAL) ou de fichiers en cours d'envoi donne une
+archive incohérente.
 
 ```bash
+# Arrêt de l'application (le proxy peut rester actif)
+docker compose stop app
+
 # Sauvegarde
 docker run --rm -v agent-inbox-data:/data:ro -v "$PWD":/b alpine tar czf /b/agent-inbox-backup.tgz -C /data .
+
+# Redémarrage
+docker compose start app
 
 # Restauration dans un volume vide (application arrêtée : docker compose down)
 docker run --rm -v agent-inbox-data:/data -v "$PWD":/b alpine tar xzf /b/agent-inbox-backup.tgz -C /data
@@ -161,6 +190,80 @@ docker run --rm -v agent-inbox-data:/data alpine chown -R 1000:1000 /data
 
 Le volume s'appelle `agent-inbox-data`, ou la valeur de `QUEUE_VOLUME_NAME` (`docker volume ls`).
 Les sauvegardes de l'interface contiennent comptes, clés API (condensés) et secret du webhook : protégez-les.
+
+## Fichiers et journaux du proxy
+
+Le volume `/data` contient la base, `backups/` et `files/` : les pièces jointes et les fichiers reçus
+par les liens de dépôt. Le dossier `files/` n'est **pas** inclus dans les sauvegardes de l'interface
+(seule la base l'est) ; prévoyez-le dans l'espace disque du volume et dans votre sauvegarde du
+volume complet. Deux réglages (Admin → Réglages) le bornent : `storage_quota_gb` (5 par défaut) et
+`storage_min_free_gb` (espace disque libre à préserver, 2 par défaut).
+
+**Durée de vie effective.** Un message avec une pièce jointe vivante n'est pas supprimé par le nettoyage
+automatique tant qu'une de ses pièces n'est pas expirée. La durée de vie effective est donc
+`max(TTL du topic, rétention de ses pièces)`. Les liens de dépôt expirés ou révoqués depuis plus de
+30 jours sont purgés avec leur journal (`drop_events`) ; les messages déjà reçus restent.
+
+**Secret de signature régénéré après restauration.** Après toute restauration d'une sauvegarde, le réglage
+`file_signing_secret` est recréé : les anciens liens signés (`/files/<id>?exp=…&sig=…`) ne fonctionnent
+plus. Les fichiers sans ligne en base sont effacés au nettoyage suivant.
+
+**Mise à jour 2.1 → 2.2 (migration v4).** Les sauvegardes de la v3 ne sont pas compatibles avec le
+schéma v4. Après la montée de version, faites immédiatement une sauvegarde fraîche avant de compter
+sur la restauration à chaud.
+
+**Attention au journal d'accès de votre reverse proxy.** Il enregistre les URL complètes, donc les
+jetons des liens de dépôt (`/d/<jeton>`) et les signatures des liens de fichier
+(`/files/<id>?exp=…&sig=…`) : quiconque lit ces journaux peut déposer des fichiers ou télécharger
+une pièce jointe encore valide. L'application elle-même ne les journalise jamais. Le `Caddyfile`
+fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins.
+
+L'en-tête `Connection` est hop-by-hop : il ne vaut que pour un saut de connexion. La fermeture après une
+erreur d'envoi (lingering) de l'application ne concerne donc que la connexion proxy → application. Caddy ou
+Traefik décident eux-mêmes, indépendamment, de garder ou de fermer leur propre connexion avec le client ;
+ils lui relaient seulement la réponse d'erreur.
+
+Caddy (bloc `log` ajouté au site) :
+
+```caddyfile
+log {
+	format filter {
+		request>uri regexp ^/(d|files)/.* /$1/[masqué]
+	}
+}
+```
+
+Traefik (journal d'accès activé, drapeaux de la configuration statique). Le format par défaut,
+`common`, écrit le chemin dans chaque ligne et **ne permet pas** de masquer des champs : il faut passer
+au format JSON, puis supprimer les champs qui contiennent le chemin.
+
+```text
+--accesslog.format=json
+--accesslog.fields.names.RequestPath=drop
+--accesslog.fields.names.RequestLine=drop
+--accesslog.fields.queryparameters.defaultmode=drop
+```
+
+`RequestPath` est l'URI de la requête et `RequestLine` (méthode, chemin et protocole) la contient aussi :
+supprimez les deux, ainsi que les paramètres de requête (signatures `?sig=`). Gardez `RequestHost` et
+`DownstreamStatus`. Les en-têtes ne sont pas journalisés par défaut : si vous passez
+`--accesslog.fields.headers.defaultmode=keep`, ajoutez `--accesslog.fields.headers.names.Referer=drop`.
+Les mêmes réglages en YAML (configuration statique) :
+
+```yaml
+accessLog:
+  format: json
+  fields:
+    names:
+      RequestPath: drop
+      RequestLine: drop
+    queryParameters:
+      defaultMode: drop
+    headers:
+      defaultMode: keep   # seulement si vous journalisez des en-têtes
+      names:
+        Referer: drop
+```
 
 ## Migration depuis la v1
 
