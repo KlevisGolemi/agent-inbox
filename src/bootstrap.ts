@@ -12,6 +12,7 @@ import { openDb } from './db/index.js'
 import { migrate } from './db/migrations.js'
 import type { Env } from './env.js'
 import { startBackups } from './jobs/backup.js'
+import { createDropsRepo } from './drops/repo.js'
 import { createAttachmentsRepo } from './files/attachments.js'
 import { createFileStore, type FileStore } from './files/store.js'
 import { createUploadManager, type UploadManager } from './files/uploads.js'
@@ -87,6 +88,7 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     uploads,
     attachments,
     tags: createTagRegistry(db, { settings }),
+    drops: createDropsRepo(db),
     version: VERSION,
     versions: createVersionService({ settings, fetch, current: VERSION, repo: env.updateRepo }),
     env,

@@ -5,6 +5,7 @@ import type Database from 'better-sqlite3'
 import type { Response } from 'supertest'
 import { createApp, type AppDeps } from '../../src/app.js'
 import { createBackups } from '../../src/backups/index.js'
+import { createDropsRepo } from '../../src/drops/repo.js'
 import { createAttachmentsRepo } from '../../src/files/attachments.js'
 import { createFileStore } from '../../src/files/store.js'
 import { createUploadManager } from '../../src/files/uploads.js'
@@ -71,6 +72,7 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     uploads,
     attachments: over.attachments ?? createAttachmentsRepo(db, { files, settings }),
     tags: over.tags ?? createTagRegistry(db, { settings }),
+    drops: over.drops ?? createDropsRepo(db),
     version: over.version ?? '0.0.0-test',
     versions:
       over.versions ??

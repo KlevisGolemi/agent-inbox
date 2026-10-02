@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import type { DropsRepo } from '../drops/repo.js'
 import { newAttachments, type AttachmentsRepo } from '../files/attachments.js'
 import { decodeBase64Attachments } from '../files/base64.js'
 import { attachmentSummary } from '../files/http.js'
@@ -15,11 +16,19 @@ import {
   type WaitPool,
 } from '../queue/http.js'
 import type { AckResult, EnqueueResult, QueueRepo, QueueItem } from '../queue/repo.js'
-import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 import type { Settings } from '../settings/index.js'
 import type { NewTag } from '../tags/attach.js'
 import type { TagRegistry } from '../tags/registry.js'
-import { fail, newTagSchema, resolveFailure, result, tagsSchema } from './common.js'
+import {
+  correlationSchema,
+  fail,
+  newTagSchema,
+  resolveFailure,
+  result,
+  tagsSchema,
+  topicSchema,
+} from './common.js'
+import { registerDropTools } from './dropTools.js'
 import { registerFileTools } from './fileTools.js'
 import { registerTagTools } from './tagTools.js'
 
@@ -32,17 +41,9 @@ export interface McpToolDeps {
   uploads: UploadManager
   attachments: AttachmentsRepo
   tags: TagRegistry
+  drops: DropsRepo
   publicUrl: URL
 }
-
-const topicSchema = z
-  .string()
-  .regex(TOPIC_REGEX, 'Topic invalide : ^[A-Za-z0-9_-]{1,128}$')
-  .optional()
-  .describe('Canal de la file (défaut : tous les topics en lecture, « default » en écriture).')
-const correlationSchema = z
-  .string()
-  .regex(CORRELATION_ID_REGEX, 'Format attendu : ^[A-Za-z0-9_-]{1,128}$')
 
 const LEASE_HINT =
   'Le message est emprunté (bail limité dans le temps) : appelle queue_ack({lease_id}) une fois ' +
@@ -505,4 +506,5 @@ export function registerTools(server: McpServer, deps: McpToolDeps): void {
 
   registerTagTools(server, deps)
   registerFileTools(server, deps)
+  registerDropTools(server, deps)
 }

@@ -11,6 +11,8 @@ import { createAuthPagesRouter } from './auth/pages.js'
 import { requireAdminSession, type AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
 import type { Backups } from './backups/index.js'
+import { createDropsRouter } from './drops/routes.js'
+import type { DropsRepo } from './drops/repo.js'
 import type { AttachmentsRepo } from './files/attachments.js'
 import type { FileStore } from './files/store.js'
 import type { UploadManager } from './files/uploads.js'
@@ -35,6 +37,7 @@ export interface AppDeps {
   uploads: UploadManager
   attachments: AttachmentsRepo
   tags: TagRegistry
+  drops: DropsRepo
   version: string
   versions: VersionService
   /** Remplaçable en test ; `fetch` global par défaut. */
@@ -137,6 +140,14 @@ export function createApp(deps: AppDeps): Express {
     }),
   )
   app.use(
+    createDropsRouter({
+      drops: deps.drops,
+      repo: deps.repo,
+      uploads: deps.uploads,
+      settings: deps.settings,
+    }),
+  )
+  app.use(
     createMcpRouter({
       repo: deps.repo,
       settings: deps.settings,
@@ -146,6 +157,7 @@ export function createApp(deps: AppDeps): Express {
       uploads: deps.uploads,
       attachments: deps.attachments,
       tags: deps.tags,
+      drops: deps.drops,
       publicUrl: deps.env.publicUrl,
       bearer: createBearerMiddleware({
         provider: deps.oauthProvider,
