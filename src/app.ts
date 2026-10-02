@@ -20,6 +20,7 @@ import { log } from './log.js'
 import './zod.js'
 import { createMcpRouter } from './mcp/server.js'
 import { createWaitPool, type WaitPool } from './queue/http.js'
+import { createFilesRouter } from './files/routes.js'
 import { createQueueRouter } from './queue/routes.js'
 import type { QueueRepo } from './queue/repo.js'
 import type { Settings } from './settings/index.js'
@@ -119,7 +120,22 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()), version: deps.version })
   })
   const waits = deps.waits ?? createWaitPool()
-  app.use(createQueueRouter({ repo: deps.repo, settings: deps.settings, waits }))
+  app.use(
+    createQueueRouter({
+      repo: deps.repo,
+      settings: deps.settings,
+      waits,
+      uploads: deps.uploads,
+      tags: deps.tags,
+    }),
+  )
+  app.use(
+    createFilesRouter({
+      attachments: deps.attachments,
+      files: deps.files,
+      settings: deps.settings,
+    }),
+  )
   app.use(
     createMcpRouter({
       repo: deps.repo,
