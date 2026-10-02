@@ -24,6 +24,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage
 - Limites de corps par route : `json_max_kb` pour le JSON, `mcp_upload_max_mb` pour les pièces MCP,
   plafonds par catégorie pour les uploads.
 - Le nettoyage protège les messages qui portent encore une pièce jointe vivante.
+- Migration v4 : les sauvegardes de la v3 deviennent incompatibles avec le nouveau schéma. Faites une
+  sauvegarde juste après la mise à jour.
 
 ## [2.1.0] - 2026-10-01
 

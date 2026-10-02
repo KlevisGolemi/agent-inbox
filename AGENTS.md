@@ -145,7 +145,7 @@ npm run build       # Tailwind (public/app.css) puis tsc → dist/
 | `src/files/` | Stockage disque (`store.ts`), détection MIME (`detect.ts`), multipart (`multipart.ts`), uploads (`uploads.ts`), pièces jointes (`attachments.ts`), liens signés (`links.ts`), routes (`routes.ts`) |
 | `src/tags/` | Registre de tags (`registry.ts`), normalisation et similarité (`similarity.ts`), pose sur les messages (`attach.ts`) |
 | `src/drops/` | Service de création (`service.ts`), dépôt public (`page.ts`, `routes.ts`), repository (`repo.ts`) |
-| `src/http/` | Middlewares communs (CSP, rate-limit) |
+| `src/http/` | `jsonBody.ts` : parseur JSON à limite par route (réglages à chaud). La CSP et la fermeture « lingering » sont dans `src/files/http.ts` et `src/drops/page.ts` ; les limites de débit, dans chaque routeur |
 | `src/mcp/` | `server.ts` (transport sans état, CORS), `tools.ts` (les 20 outils), `tagTools.ts`, `fileTools.ts`, `dropTools.ts` |
 | `src/auth/` | Comptes, sessions, CSRF, clés API, middleware Bearer, pages de connexion ; `oauth/` : serveur OAuth 2.1 (SDK MCP) |
 | `src/admin/routes.ts` | API d'administration (`/admin/api/*`) |
@@ -176,7 +176,8 @@ npm run build       # Tailwind (public/app.css) puis tsc → dist/
   commit. La cascade SQL seule n'est jamais utilisée pour supprimer des fichiers.
 - **Réservation atomique des drops** : `UPDATE drops SET files_count = files_count + 1 WHERE id = ?
   AND files_count < max_files AND revoked_at IS NULL AND expires_at > ? RETURNING …`. Une place est
-  rendue en cas d'échec.
+  rendue en cas d'échec. (Forme simplifiée : `reserveSlot` accepte aussi un lien `self` déjà
+  réclamé par la requête en cours, `kind = 'self' AND revoked_at = :claim`.)
 - **Contenu externe** : `trust: external` est toujours signalé `external_unverified` avec un `warning` ;
   c'est une donnée, jamais inline pour un type actif (SVG, HTML, XML, scripts).
 

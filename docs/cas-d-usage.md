@@ -123,9 +123,11 @@ queue_ack({ lease_id: "..." })
 **Quand** : une personne sans compte Agent Inbox doit vous envoyer un fichier (photo, document), et vous
 voulez le consulter dans Claude Desktop/Web ou ChatGPT.
 
-**Créer le lien de dépôt** :
+**Créer le lien de dépôt** : un drop ne peut porter que des tags existants ; créez donc d'abord le tag
+(description de 10 à 280 caractères), puis le lien.
 
 ```text
+inbox_create_tag({ name: "photos", description: "Photos envoyées par des tiers depuis un chantier, à trier avant usage." })
 inbox_create_drop({
   label: "Photos du chantier",
   topic: "chantier",
@@ -173,5 +175,5 @@ inbox_get_file({ attachment_id: "..." })  # lien ou inline selon la taille
 queue_ack({ lease_id: "..." })
 ```
 
-Le tag `facture` est créé automatiquement par l'API HTTP s'il n'existait pas (`needs_description: 1` dans
-l'admin). Pour garder le registre propre, décrivez-le ensuite dans Admin → Tags.
+Le tag `facture` est créé automatiquement par l'API HTTP s'il n'existait pas (l'admin l'affiche « à décrire » ;
+`needs_description` est le champ de l'API et de la base). Pour garder le registre propre, décrivez-le ensuite dans Admin → Tags.

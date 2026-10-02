@@ -14,12 +14,13 @@
     },
     {
       "parameters": {
-        "filePath": "/tmp/facture.pdf",
+        "operation": "read",
+        "fileSelector": "/tmp/facture.pdf",
         "options": {}
       },
-      "id": "c2f0b3a1-4d5e-5f9f-0c3b-2d4e6f8g0b1c",
+      "id": "c2f0b3a1-4d5e-4f9f-8c3b-2d4e6f8a0b1c",
       "name": "Lire le fichier",
-      "type": "n8n-nodes-base.readBinaryFile",
+      "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
       "position": [
         220,
@@ -62,7 +63,7 @@
         },
         "options": {}
       },
-      "id": "d3g1c4b2-5e6f-6a0g-1d4c-3e5f7g9h1c2d",
+      "id": "d3a1c4b2-5e6f-4a0b-9d4c-3e5f7a9b1c2d",
       "name": "Envoyer le fichier",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,

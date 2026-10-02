@@ -69,13 +69,14 @@ curl -X POST "$QUEUE_URL/webhook" \
   -H "x-webhook-secret: $WEBHOOK_SECRET" -H "x-topic: compta" -H "x-tags: facture" \
   -F "payload={\"source\":\"n8n\",\"note\":\"Facture du mois\"}" \
   -F "file=@facture.pdf"
-# {"ok":true,"id":"<uuid>","pending":1,"topic":"compta","tags":["facture"],"attachments":[{"id":"...","filename":"facture.pdf","mime_type":"application/pdf","category":"document","size_bytes":...}]}
+# {"ok":true,"id":"<uuid>","correlation_id":null,"pending":1,"topic":"compta","tags":["facture"],"attachments":[{"id":"...","filename":"facture.pdf","mime_type":"application/pdf","category":"document","size_bytes":...}]}
 ```
 
 | Code | `error` | Cause |
 |---|---|---|
 | 400 | `invalid_correlation_id`, `invalid_topic` | Valeur hors motif |
 | 400 | `invalid_source` | `x-source` de plus de 100 caractères |
+| 400 | `too_many_tags` | Plus de 20 tags dans `x-tags` |
 | 400 | `invalid_tags` | Tag dont le nom normalisé est hors de `^[a-z0-9][a-z0-9-]{0,47}$` |
 | 400 | `invalid_on_download` | Valeur autre que `keep` ou `consume` |
 | 400 | `invalid_json` | Champ `payload` multipart illisible |
@@ -84,12 +85,16 @@ curl -X POST "$QUEUE_URL/webhook" \
 | 403 | `attachments_disabled` | Pièces jointes désactivées |
 | 409 | `duplicate_correlation_id` | Déjà utilisé (même pour un message déjà lu) ; la réponse contient `existing_id` |
 | 413 | `payload_too_large` | JSON au-delà de `json_max_kb` |
+| 413 | `field_too_large` | Champ `payload` multipart au-delà de `json_max_kb` |
 | 413 | `file_too_large` | Fichier au-delà du plafond de sa catégorie |
 | 413 | `too_many_files` | Plus de fichiers que `attachments_max_per_message` |
 | 415 | `category_not_allowed` | Catégorie refusée par `file_allowed_categories` |
 | 415 | `extension_blocked` | Extension dans `file_blocked_extensions` |
 | 507 | `quota_exceeded` | Quota `storage_quota_gb` atteint |
 | 507 | `disk_full` | Disque insuffisant compte tenu de `storage_min_free_gb` |
+
+Pour les envois multipart, les requêtes interrompues ou refusées en cours d'envoi, l'en-tête `Connection`
+et les journaux d'accès du proxy : [Fichiers et journaux du proxy](installation.md#fichiers-et-journaux-du-proxy).
 
 ### `GET /next`
 
@@ -201,13 +206,11 @@ Un paramètre invalide donne `400 invalid_<paramètre>` (ex. `invalid_status`).
 
 ```json
 { "ok": true, "uptime_s": 86400, "ttl_hours": 48, "cleanup_interval_min": 60,
-  "stats": { "total": 3, "pending": 2, "leased": 0, "read_count": 1, "topics": { "events": 3 } },
-  "storage": { "used_bytes": 0, "reserved_bytes": 0, "quota_bytes": 5368709120,
-               "disk_free_bytes": 107374182400, "min_free_bytes": 2147483648,
-               "files_count": 0, "accepting": true } }
+  "stats": { "total": 3, "pending": 2, "leased": 0, "read_count": 1, "topics": { "events": 3 } } }
 ```
 
-`?topic=` limite les compteurs à un topic. La section `storage` donne la jauge de stockage des fichiers.
+`?topic=` limite les compteurs à un topic. La jauge de stockage des fichiers n'est pas dans cette route :
+elle est dans les outils MCP `queue_status` et `queue_stats` et dans l'administration.
 
 ### Suppression
 
@@ -263,6 +266,9 @@ curl -F file=@photo.jpg 'https://queue.example.com/d/<jeton>'
 | 403 | `attachments_disabled` | Pièces jointes désactivées |
 | 507 | `quota_exceeded`, `disk_full` | Quota ou disque insuffisant |
 | 503 | `aborted`, `shutting_down` | Envoi interrompu ou arrêt du serveur |
+
+Le jeton figure dans l'URL : voir [Fichiers et journaux du proxy](installation.md#fichiers-et-journaux-du-proxy)
+pour masquer ces chemins dans les journaux d'accès et pour la remarque sur `Connection`.
 | 409 | `duplicate_correlation_id` | `correlation_id` déjà utilisé (lien self) |
 
 ## Topics

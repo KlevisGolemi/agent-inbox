@@ -83,7 +83,7 @@ externe et une référence par outil (`skills/agent-inbox/references/`). Les rel
   demandez à Claude Code d'ajouter le zip comme skill personnel.
 - **Claude.ai (Web / Desktop)** : Paramètres → Skills → Ajouter un skill, puis téléversez
   `agent-inbox-skill.zip`.
-- **Codex** : pointez le répertoire contenant `AGENTS.md` ; le skill est lu depuis ce fichier.
+- **Codex** : demandez-lui de lire `skills/agent-inbox/SKILL.md`, ou ajoutez ce contenu dans ses instructions.
 
 Le skill n'est pas obligatoire : les 20 outils fonctionnent sans lui. Il aide l'agent à respecter la
 routine (vérifier les tags, envoyer, relever, récupérer les fichiers, acquitter) et à traiter le contenu

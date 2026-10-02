@@ -186,9 +186,10 @@ sur la restauration à chaud.
 jetons des liens de dépôt (`/d/<jeton>`) et les signatures des liens de fichier
 (`/files/<id>?exp=…&sig=…`) : quiconque lit ces journaux peut déposer des fichiers ou télécharger
 une pièce jointe encore valide. L'application elle-même ne les journalise jamais. Le `Caddyfile`
-fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins. L'en-tête
-`Connection` est hop-by-hop : derrière Caddy ou Traefik, c'est la connexion proxy → application qui
-est gérée par le proxy, le client ne voit que la réponse relaée.
+fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins.
+
+L'en-tête `Connection` est hop-by-hop : derrière Caddy ou Traefik, c'est la connexion proxy → application
+qui est gérée par l'application (fermeture après une erreur d'envoi), le client ne voit que la réponse relayée par le proxy.
 
 Caddy (bloc `log` ajouté au site) :
 

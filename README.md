@@ -96,8 +96,8 @@ est **emprunté** (statut `leased`) : acquittez-le avec `queue_ack`, sinon il es
 | `queue_wait`        | Attend un message (attente longue) puis l'emprunte                                             | `topic` ou `correlation_id`, `timeout_sec` (1–50, 30)                      |
 | `queue_ack`         | Confirme qu'un message emprunté est traité (statut `read`)                                     | `lease_id`                                                                 |
 | `queue_nack`        | Remet un message emprunté en file (statut `pending`)                                           | `lease_id`                                                                 |
-| `queue_send`        | Dépose un message (réponse ou tâche pour n8n), éventuellement avec fichiers et tags            | `payload`, `correlation_id`, `source` (`claude`), `topic`, `attachments`, `tags`, `new_tags` |
-| `queue_tag`         | Pose ou retire des tags sur un message existant                                                | `message_id`, `add`, `remove`, `new_tags`                                  |
+| `queue_send`        | Dépose un message (réponse ou tâche pour n8n), éventuellement avec fichiers et tags            | `payload`, `correlation_id`, `source` (`claude`), `topic`, `attachments`, `tags`, `new_tags`, `force_new_tags` |
+| `queue_tag`         | Pose ou retire des tags sur un message existant                                                | `message_id`, `add`, `remove`, `new_tags`, `force_new_tags`                    |
 | `queue_delete`      | Supprime un message (irréversible)                                                             | `id` (UUID)                                                                |
 | `queue_clear`       | Vide toute la file (irréversible) ; renvoie `{ ok, deleted }` (nombre de messages supprimés)   | `confirm: true`                                                            |
 | `inbox_tags`        | Liste le registre de tags partagés                                                             | `query`, `limit`                                                           |
@@ -141,6 +141,9 @@ combien de temps.
 - **Ce qui sort.** Uniquement ce que l'assistant lit explicitement via un outil MCP (`queue_peek`,
   `queue_next`, `queue_search`…). Seule autre requête sortante : la vérification des nouvelles versions
   auprès de GitHub, désactivable dans Réglages.
+
+- **Journaux du reverse proxy.** Les URL des liens de dépôt et des liens de fichier contiennent un jeton ou
+  une signature : voir [Fichiers et journaux du proxy](docs/installation.md#fichiers-et-journaux-du-proxy).
 
 Détails et signalement d'une faille : [SECURITY.md](SECURITY.md).
 

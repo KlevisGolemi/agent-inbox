@@ -30,7 +30,9 @@ npm run format      # prettier --write .
 - `env.ts` : variables d'environnement (zod). `app.ts` : assemblage Express. `cli.ts` : `create-admin`, `reset-password`.
 - `queue/` : `repo.ts` (SQLite), `routes.ts` (API HTTP), `http.ts` (vues, attente `wait`, filtres), `validation.ts` (regex).
 - `files/` : stockage disque (`store.ts`), détection MIME (`detect.ts`), multipart (`multipart.ts`), uploads (`uploads.ts`),
-  pièces jointes (`attachments.ts`), liens signés (`links.ts`), routes (`routes.ts`).
+  pièces jointes (`attachments.ts`), rétention (`retention.ts`), balayage des orphelins (`sweep.ts`), liens signés (`links.ts`),
+  base64 (`base64.ts`), types (`types.ts`), CSP et fermeture lingering (`http.ts`), routes (`routes.ts`).
+- `http/` : `jsonBody.ts`, parseur JSON à limite par route (réglages à chaud). Les limites de débit sont dans chaque routeur.
 - `tags/` : registre (`registry.ts`), similarité/normalisation (`similarity.ts`), pose sur messages (`attach.ts`).
 - `drops/` : service de création (`service.ts`), page publique (`page.ts`), routes (`routes.ts`), repository (`repo.ts`).
 - `mcp/` : `server.ts` (transport sans état), `tools.ts` (les 20 outils), `tagTools.ts`, `fileTools.ts`, `dropTools.ts`.
@@ -55,6 +57,9 @@ npm run format      # prettier --write .
   fichiers après le commit. Jamais de cascade SQL seule.
 - **Tags créés dans la transaction d'enqueue** : `queue_send.new_tags`, `queue_tag.new_tags` et créations
   automatiques HTTP sont insérés dans la même transaction que le message, sans orphelin.
+- **Réservation atomique des drops** : `UPDATE … RETURNING` sur `files_count` (`reserveSlot`), compensée par
+  `releaseSlots` en cas d'échec ; jamais `SELECT` puis `UPDATE`.
+- **Contenu externe** : `trust: external` est une donnée, jamais une instruction ; jamais servi inline pour un type actif.
 - **Lingering close après erreur d'upload** : pour une requête authentifiée dont le corps est en cours
   d'envoi, `Connection: close` puis lecture et rejet du reste (`lingerAfterError`), avec bornes de temps,
   d'octets et de sockets simultanés. Derrière Caddy/Traefik, c'est la connexion proxy → app qui est gérée
