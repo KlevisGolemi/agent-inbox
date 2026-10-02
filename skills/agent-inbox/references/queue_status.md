@@ -13,7 +13,7 @@ Aucun.
 
 ## Réponse
 
-`{ ok, uptime_s, version, storage: { used_bytes, reserved_bytes, quota_bytes, disk_free_bytes, min_free_bytes, files_count, accepting } }`.
+`{ ok, uptime_s, version, storage: { used_bytes, reserved_bytes, quota_bytes, disk_free_bytes, min_free_bytes, files_count, accepting } }`. `disk_free_bytes` vaut `null` si l'espace disque est illisible (`accepting` est alors `false`).
 
 ## Erreurs
 

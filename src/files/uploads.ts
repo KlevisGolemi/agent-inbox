@@ -93,7 +93,8 @@ export interface StorageSnapshot {
   used_bytes: number
   reserved_bytes: number
   quota_bytes: number
-  disk_free_bytes: number
+  /** null : statfs indisponible (l'état reste lisible ; les envois sont alors refusés). */
+  disk_free_bytes: number | null
   min_free_bytes: number
   files_count: number
   accepting: boolean
@@ -415,7 +416,13 @@ export function createUploadManager(deps: {
       const usedNow = store.usedBytes()
       const filesNow = store.liveCount()
       const quota = quotaBytes()
-      const free = diskFreeBytes()
+      // queue_status / queue_stats ne doivent jamais échouer à cause de statfs.
+      let free: number | null
+      try {
+        free = diskFreeBytes()
+      } catch {
+        free = null
+      }
       const minFree = minFreeBytes()
       return {
         used_bytes: usedNow,
@@ -428,6 +435,7 @@ export function createUploadManager(deps: {
           !closed &&
           settings.get('attachments_enabled') &&
           usedNow + reserved < quota &&
+          free !== null &&
           free > minFree,
       }
     },

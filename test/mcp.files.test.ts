@@ -1,5 +1,6 @@
 import request from 'supertest'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { createUploadManager } from '../src/files/uploads.js'
 import { EXTERNAL_WARNING } from '../src/queue/http.js'
 import {
   finalFiles,
@@ -335,6 +336,24 @@ describe('recherche et stockage', () => {
     await call(ctx, 'queue_send', { payload: {} })
     expect(data(await call(ctx, 'queue_search', { tag: 'type:image' })).items).toHaveLength(1)
     expect(data(await call(ctx, 'queue_search', { has_attachments: false })).items).toHaveLength(1)
+  })
+
+  it('statfs en erreur : queue_stats et queue_status répondent, disk_free_bytes null', async () => {
+    const ctx = mcpSetup()
+    const broken = createUploadManager({
+      store: ctx.files,
+      settings: ctx.settings,
+      statfs: () => {
+        throw Object.assign(new Error('EIO'), { code: 'EIO' })
+      },
+      log: () => {},
+    })
+    vi.spyOn(ctx.uploads, 'snapshot').mockImplementation(() => broken.snapshot())
+    for (const tool of ['queue_stats', 'queue_status']) {
+      const out = data(await call(ctx, tool))
+      expect(out.ok).toBe(true)
+      expect(out.storage).toMatchObject({ disk_free_bytes: null, accepting: false })
+    }
   })
 
   it('queue_stats et queue_status exposent storage', async () => {
