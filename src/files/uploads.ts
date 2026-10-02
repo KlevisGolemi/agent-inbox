@@ -3,7 +3,13 @@ import { createWriteStream, statfsSync } from 'node:fs'
 import { finished as streamFinished } from 'node:stream/promises'
 import { log as defaultLog } from '../log.js'
 import type { Settings } from '../settings/index.js'
-import { DETECTION_BYTES, detectFile, extensionOf, sanitizeFilename, type Detected } from './detect.js'
+import {
+  DETECTION_BYTES,
+  detectFile,
+  extensionOf,
+  sanitizeFilename,
+  type Detected,
+} from './detect.js'
 import type { FileStore } from './store.js'
 import { MB, type FileCategory, type InlineKind, type LogFn } from './types.js'
 
@@ -143,9 +149,13 @@ export function createUploadManager(deps: {
   }
 
   function begin(opts: { signal?: AbortSignal } = {}): UploadSession {
-    if (closed) throw new UploadError('shutting_down', 'Le serveur s’arrête : réessayez dans un instant.')
+    if (closed)
+      throw new UploadError('shutting_down', 'Le serveur s’arrête : réessayez dans un instant.')
     if (!settings.get('attachments_enabled')) {
-      throw new UploadError('attachments_disabled', 'Les pièces jointes sont désactivées sur ce serveur.')
+      throw new UploadError(
+        'attachments_disabled',
+        'Les pièces jointes sont désactivées sur ce serveur.',
+      )
     }
 
     // Une lecture SQL au début seulement ; les commits suivants sont suivis en mémoire.
@@ -219,14 +229,23 @@ export function createUploadManager(deps: {
         .get('file_allowed_categories')
         .filter((category) => sopts.allowedCategories?.includes(category) ?? true)
       if (allowed.length === 0) {
-        throw new UploadError('category_not_allowed', 'Aucune catégorie de fichier n’est acceptée ici.')
+        throw new UploadError(
+          'category_not_allowed',
+          'Aucune catégorie de fichier n’est acceptée ici.',
+        )
       }
       const maxMb = settings.get('file_max_mb')
       const capFor = (categories: readonly FileCategory[]) =>
-        Math.min(sopts.maxBytes ?? Number.POSITIVE_INFINITY, Math.max(...categories.map((category) => maxMb[category])) * MB)
+        Math.min(
+          sopts.maxBytes ?? Number.POSITIVE_INFINITY,
+          Math.max(...categories.map((category) => maxMb[category])) * MB,
+        )
       let limit = capFor(allowed)
       const tooLarge = () =>
-        new UploadError('file_too_large', `Fichier trop volumineux (maximum ${Math.floor(limit / MB)} Mo).`)
+        new UploadError(
+          'file_too_large',
+          `Fichier trop volumineux (maximum ${Math.floor(limit / MB)} Mo).`,
+        )
 
       const id = store.newTempId()
       temps.push(id)
@@ -249,7 +268,8 @@ export function createUploadManager(deps: {
             done()
           }
           const onDrain = () => settle(resolve)
-          const onClose = () => settle(() => reject(outputError ?? new Error('Flux de sortie fermé')))
+          const onClose = () =>
+            settle(() => reject(outputError ?? new Error('Flux de sortie fermé')))
           out.on('drain', onDrain)
           out.on('error', onClose)
           out.on('close', onClose)
@@ -263,7 +283,10 @@ export function createUploadManager(deps: {
         const result = await detectFile(Buffer.concat(head), filename)
         detected = result
         if (!allowed.includes(result.category)) {
-          throw new UploadError('category_not_allowed', `Catégorie « ${result.category} » non acceptée ici.`)
+          throw new UploadError(
+            'category_not_allowed',
+            `Catégorie « ${result.category} » non acceptée ici.`,
+          )
         }
         limit = capFor([result.category])
         if (size > limit) throw tooLarge()
@@ -401,7 +424,11 @@ export function createUploadManager(deps: {
         disk_free_bytes: free,
         min_free_bytes: minFree,
         files_count: filesNow,
-        accepting: !closed && settings.get('attachments_enabled') && usedNow + reserved < quota && free > minFree,
+        accepting:
+          !closed &&
+          settings.get('attachments_enabled') &&
+          usedNow + reserved < quota &&
+          free > minFree,
       }
     },
     async shutdown() {

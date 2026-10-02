@@ -11,7 +11,11 @@ export interface ShutdownDeps {
     closeIdleConnections(): void
     closeAllConnections(): void
   }
-  runtime: { shutdown: AbortController; db: { close(): unknown }; uploads?: { shutdown(): Promise<void> } }
+  runtime: {
+    shutdown: AbortController
+    db: { close(): unknown }
+    uploads?: { shutdown(): Promise<void> }
+  }
   jobs: { stop(): void }
   exit: (code: number) => void
   log: (level: LogLevel, msg: string, fields?: Record<string, unknown>) => void

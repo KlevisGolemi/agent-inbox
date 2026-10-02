@@ -57,9 +57,19 @@ describe('arrêt : uploads en cours', () => {
     let release!: () => void
     const uploads = { shutdown: vi.fn(() => new Promise<void>((r) => (release = r))) }
     const db = { close: vi.fn() }
-    const server = { close: (cb?: (err?: Error) => void) => cb?.(), closeIdleConnections() {}, closeAllConnections() {} }
+    const server = {
+      close: (cb?: (err?: Error) => void) => cb?.(),
+      closeIdleConnections() {},
+      closeAllConnections() {},
+    }
     const exit = vi.fn()
-    createShutdown({ server, runtime: { shutdown: new AbortController(), db, uploads }, jobs: { stop() {} }, exit, log: () => {} })('SIGTERM')
+    createShutdown({
+      server,
+      runtime: { shutdown: new AbortController(), db, uploads },
+      jobs: { stop() {} },
+      exit,
+      log: () => {},
+    })('SIGTERM')
     expect(uploads.shutdown).toHaveBeenCalledOnce()
     await new Promise((r) => setImmediate(r))
     expect(db.close).not.toHaveBeenCalled()
@@ -102,7 +112,11 @@ describe('createShutdown', () => {
   })
 
   it('arrêt pendant un upload multipart réel : zéro temporaire, zéro ligne, base fermée', async () => {
-    const env = loadEnv({ PUBLIC_URL: 'http://localhost:3000', NODE_ENV: 'development', DB_PATH: join(dir, 'queue.db') })
+    const env = loadEnv({
+      PUBLIC_URL: 'http://localhost:3000',
+      NODE_ENV: 'development',
+      DB_PATH: join(dir, 'queue.db'),
+    })
     const runtime = await buildRuntime(env)
     runtime.settings.set('webhook_secret', SECRET)
     runtime.settings.set('storage_min_free_gb', 0)
@@ -113,10 +127,16 @@ describe('createShutdown', () => {
       port,
       method: 'POST',
       path: '/webhook',
-      headers: { ...H, 'content-type': `multipart/form-data; boundary=${boundary}`, 'content-length': String(50 * 1024 * 1024) },
+      headers: {
+        ...H,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+        'content-length': String(50 * 1024 * 1024),
+      },
     })
     req.on('error', () => {})
-    req.write(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.pdf"\r\n\r\n`)
+    req.write(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.pdf"\r\n\r\n`,
+    )
     req.write(sized(PDF_MINI, 256 * 1024))
     await vi.waitFor(() => expect(runtime.uploads.reservedBytes()).toBeGreaterThan(0))
     const exit = vi.fn()
@@ -131,7 +151,11 @@ describe('createShutdown', () => {
   })
 
   it('un socket en fermeture lingering après une erreur d’upload n’empêche pas l’arrêt', async () => {
-    const env = loadEnv({ PUBLIC_URL: 'http://localhost:3000', NODE_ENV: 'development', DB_PATH: join(dir, 'queue.db') })
+    const env = loadEnv({
+      PUBLIC_URL: 'http://localhost:3000',
+      NODE_ENV: 'development',
+      DB_PATH: join(dir, 'queue.db'),
+    })
     const runtime = await buildRuntime(env)
     runtime.settings.set('webhook_secret', SECRET)
     runtime.settings.set('attachments_enabled', false) // refus avant lecture : réponse d'erreur, puis lingering

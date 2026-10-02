@@ -16,7 +16,11 @@ vi.mock('node:fs', async (importOriginal) => {
       const failure = sim.writeError
       if (!failure) return actual.createWriteStream(path as never, options as never)
       const fail = (cb: (error?: Error | null) => void) =>
-        cb(Object.assign(new Error(`${failure.code}: erreur simulée, write '${path}'`), { code: failure.code }))
+        cb(
+          Object.assign(new Error(`${failure.code}: erreur simulée, write '${path}'`), {
+            code: failure.code,
+          }),
+        )
       return new Writable({
         construct(cb) {
           if (failure.when === 'open') setImmediate(() => fail(cb))
@@ -44,7 +48,14 @@ import { migrate } from '../src/db/migrations.js'
 import type { FileStore } from '../src/files/store.js'
 import { UploadError, type UploadManager } from '../src/files/uploads.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
-import { chunked, cleanupFixtures, filesFixture, PDF_MINI, sized, tempFiles } from './helpers/files.js'
+import {
+  chunked,
+  cleanupFixtures,
+  filesFixture,
+  PDF_MINI,
+  sized,
+  tempFiles,
+} from './helpers/files.js'
 
 let db: Database.Database
 let settings: Settings
@@ -75,18 +86,24 @@ const outcome = async (promise: Promise<unknown>) => {
 }
 
 describe('erreurs du flux de sortie (jamais de blocage)', () => {
-  it.each(['open', 'write', 'final'] as const)('ENOSPC pendant %s : disk_full, réservation libérée, zéro résidu', async (when) => {
-    sim.writeError = { code: 'ENOSPC', when }
-    const session = uploads.begin()
-    const error = await outcome(session.stage(chunked(sized(PDF_MINI, 300 * 1024), 64 * 1024), 'a.pdf'))
-    expect(error).toBeInstanceOf(UploadError)
-    expect((error as UploadError).code).toBe('disk_full')
-    expect(error?.message).not.toContain(root)
-    expect(uploads.reservedBytes()).toBe(0)
-    expect(tempFiles(root)).toEqual([])
-    await session.abort()
-    await uploads.shutdown()
-  }, 3000)
+  it.each(['open', 'write', 'final'] as const)(
+    'ENOSPC pendant %s : disk_full, réservation libérée, zéro résidu',
+    async (when) => {
+      sim.writeError = { code: 'ENOSPC', when }
+      const session = uploads.begin()
+      const error = await outcome(
+        session.stage(chunked(sized(PDF_MINI, 300 * 1024), 64 * 1024), 'a.pdf'),
+      )
+      expect(error).toBeInstanceOf(UploadError)
+      expect((error as UploadError).code).toBe('disk_full')
+      expect(error?.message).not.toContain(root)
+      expect(uploads.reservedBytes()).toBe(0)
+      expect(tempFiles(root)).toEqual([])
+      await session.abort()
+      await uploads.shutdown()
+    },
+    3000,
+  )
 
   it('ENOSPC à l’ouverture, petit fichier en un bloc : pas de blocage sur finish', async () => {
     sim.writeError = { code: 'ENOSPC', when: 'open' }
@@ -123,7 +140,9 @@ describe('erreurs du flux de sortie (jamais de blocage)', () => {
   it('autre erreur disque : message sans chemin', async () => {
     sim.writeError = { code: 'EIO', when: 'write' }
     const session = uploads.begin()
-    const error = await outcome(session.stage(chunked(sized(PDF_MINI, 300 * 1024), 64 * 1024), 'a.pdf'))
+    const error = await outcome(
+      session.stage(chunked(sized(PDF_MINI, 300 * 1024), 64 * 1024), 'a.pdf'),
+    )
     expect(error).toBeInstanceOf(Error)
     expect(error).not.toBeInstanceOf(UploadError)
     expect(error?.message).not.toContain(root)
@@ -136,7 +155,9 @@ describe('erreurs du flux de sortie (jamais de blocage)', () => {
     sim.writeError = null
     rmSync(`${root}/.tmp`, { recursive: true, force: true })
     const session = uploads.begin()
-    const error = await outcome(session.stage(chunked(sized(PDF_MINI, 300 * 1024), 64 * 1024), 'a.pdf'))
+    const error = await outcome(
+      session.stage(chunked(sized(PDF_MINI, 300 * 1024), 64 * 1024), 'a.pdf'),
+    )
     expect(error).toBeInstanceOf(Error)
     expect(error?.message).not.toContain(root)
     expect(uploads.reservedBytes()).toBe(0)
@@ -156,7 +177,9 @@ describe('erreurs du flux de sortie (jamais de blocage)', () => {
 
 describe('snapshot', () => {
   it('reflète les pièces vivantes sans begin() préalable', () => {
-    db.prepare(`INSERT INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`).run()
+    db.prepare(
+      `INSERT INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`,
+    ).run()
     db.prepare(
       `INSERT INTO attachments (id, message_id, filename, mime_type, category, size_bytes, sha256, created_at, expires_at)
        VALUES ('00000000-0000-4000-8000-000000000000', 'm', 'f', 'application/pdf', 'document', 1234, 'h', 1, 9e15)`,

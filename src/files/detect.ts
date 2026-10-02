@@ -36,7 +36,17 @@ const ACTIVE_MIMES = new Set([
   'application/javascript',
   'text/javascript',
 ])
-const ACTIVE_EXTENSIONS = new Set(['svg', 'svgz', 'html', 'htm', 'xhtml', 'xml', 'xsl', 'js', 'mjs'])
+const ACTIVE_EXTENSIONS = new Set([
+  'svg',
+  'svgz',
+  'html',
+  'htm',
+  'xhtml',
+  'xml',
+  'xsl',
+  'js',
+  'mjs',
+])
 const INLINE_TEXT_MIMES = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/json'])
 /** Repli sur l'extension pour du texte seulement : une image, un son ou une vidéo exigent une signature. */
 const TEXT_EXT_MIMES: Record<string, string> = {

@@ -31,12 +31,20 @@ describe('interface : aucun texte externe interprété comme HTML', () => {
 
   it('syntaxHL échappe un payload déposé par un tiers', () => {
     const syntaxHL = new Function('json', methodBody('syntaxHL(json) {')) as (j: string) => string
-    const out = syntaxHL(JSON.stringify({ text: '<img src=x onerror=alert(1)>', label: '"><script>alert(1)</script>' }, null, 2))
+    const out = syntaxHL(
+      JSON.stringify(
+        { text: '<img src=x onerror=alert(1)>', label: '"><script>alert(1)</script>' },
+        null,
+        2,
+      ),
+    )
     expect(out).not.toMatch(/<img|<script/)
     expect(out).toContain('&lt;img src=x onerror=alert(1)&gt;')
   })
 
   it('l’aperçu n’est demandé que pour les images non actives', () => {
-    expect(html).toContain("att.category === 'image' && att.status === 'available' && att.mime_type !== 'image/svg+xml'")
+    expect(html).toContain(
+      "att.category === 'image' && att.status === 'available' && att.mime_type !== 'image/svg+xml'",
+    )
   })
 })

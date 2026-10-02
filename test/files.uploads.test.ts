@@ -8,7 +8,16 @@ import { migrate } from '../src/db/migrations.js'
 import type { FileStore } from '../src/files/store.js'
 import { UploadError, type UploadManager } from '../src/files/uploads.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
-import { chunked, cleanupFixtures, filesFixture, finalFiles, PDF_MINI, PNG_1X1, sized, tempFiles } from './helpers/files.js'
+import {
+  chunked,
+  cleanupFixtures,
+  filesFixture,
+  finalFiles,
+  PDF_MINI,
+  PNG_1X1,
+  sized,
+  tempFiles,
+} from './helpers/files.js'
 
 const MB = 1024 * 1024
 const GB = 1024 ** 3
@@ -30,7 +39,9 @@ afterEach(cleanupFixtures)
 /** Occupe le quota sauf `free` octets (ligne vivante factice). */
 function fillQuota(free: number) {
   settings.set('storage_quota_gb', 0.1)
-  db.prepare(`INSERT INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`).run()
+  db.prepare(
+    `INSERT INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`,
+  ).run()
   db.prepare(
     `INSERT INTO attachments (id, message_id, filename, mime_type, category, size_bytes, sha256, created_at, expires_at)
      VALUES ('00000000-0000-4000-8000-000000000000', 'm', 'f', 'application/pdf', 'document', ?, 'h', 1, 9e15)`,
@@ -71,15 +82,28 @@ describe('UploadSession', () => {
     expect(first.commit(() => ({ ok: false })).ok).toBe(false)
     const second = uploads.begin()
     await second.stage(Readable.from([PDF_MINI]), 'b.pdf')
-    expect(() => second.commit(() => { throw new Error('boom') })).toThrow('boom')
+    expect(() =>
+      second.commit(() => {
+        throw new Error('boom')
+      }),
+    ).toThrow('boom')
     expect(finalFiles(root)).toEqual([])
     expect(uploads.reservedBytes()).toBe(0)
   })
 
   it('limite par catégorie : 413 file_too_large au fil de l’eau ; abort efface tout', async () => {
-    settings.set('file_max_mb', { image: 1, audio: 50, video: 200, document: 50, archive: 500, other: 100 })
+    settings.set('file_max_mb', {
+      image: 1,
+      audio: 50,
+      video: 200,
+      document: 50,
+      archive: 500,
+      other: 100,
+    })
     const session = uploads.begin()
-    expect(await codeOf(session.stage(chunked(sized(PNG_1X1, 2 * MB)), 'big.png'))).toBe('file_too_large')
+    expect(await codeOf(session.stage(chunked(sized(PNG_1X1, 2 * MB)), 'big.png'))).toBe(
+      'file_too_large',
+    )
     await session.abort()
     expect(tempFiles(root)).toEqual([])
     expect(uploads.reservedBytes()).toBe(0)
@@ -87,19 +111,32 @@ describe('UploadSession', () => {
 
   it('StageOptions.maxBytes (drop) plafonne en dessous de la catégorie', async () => {
     const session = uploads.begin()
-    expect(await codeOf(session.stage(chunked(sized(PDF_MINI, 2 * MB)), 'a.pdf', { maxBytes: MB }))).toBe('file_too_large')
+    expect(
+      await codeOf(session.stage(chunked(sized(PDF_MINI, 2 * MB)), 'a.pdf', { maxBytes: MB })),
+    ).toBe('file_too_large')
     await session.abort()
   })
 
   it.each([
-    ['extension bloquée', () => settings.set('file_blocked_extensions', ['pdf']), 'extension_blocked'],
-    ['catégorie refusée', () => settings.set('file_allowed_categories', ['image']), 'category_not_allowed'],
+    [
+      'extension bloquée',
+      () => settings.set('file_blocked_extensions', ['pdf']),
+      'extension_blocked',
+    ],
+    [
+      'catégorie refusée',
+      () => settings.set('file_allowed_categories', ['image']),
+      'category_not_allowed',
+    ],
     ['trop de fichiers', () => settings.set('attachments_max_per_message', 1), 'too_many_files'],
   ])('%s', async (_label, arrange, code) => {
     arrange()
     const session = uploads.begin()
     const first = await codeOf(session.stage(Readable.from([PDF_MINI]), 'a.pdf'))
-    const second = code === 'too_many_files' ? await codeOf(session.stage(Readable.from([PDF_MINI]), 'b.pdf')) : first
+    const second =
+      code === 'too_many_files'
+        ? await codeOf(session.stage(Readable.from([PDF_MINI]), 'b.pdf'))
+        : first
     expect(second).toBe(code)
     await session.abort()
     expect(tempFiles(root)).toEqual([])
@@ -107,7 +144,11 @@ describe('UploadSession', () => {
 
   it('catégorie refusée par StageOptions.allowedCategories', async () => {
     const session = uploads.begin()
-    expect(await codeOf(session.stage(Readable.from([PDF_MINI]), 'a.pdf', { allowedCategories: ['image'] }))).toBe('category_not_allowed')
+    expect(
+      await codeOf(
+        session.stage(Readable.from([PDF_MINI]), 'a.pdf', { allowedCategories: ['image'] }),
+      ),
+    ).toBe('category_not_allowed')
     await session.abort()
   })
 
@@ -125,7 +166,9 @@ describe('UploadSession', () => {
   it('quota : 507 quota_exceeded sans résidu', async () => {
     fillQuota(1000)
     const session = uploads.begin()
-    expect(await codeOf(session.stage(Readable.from([sized(PDF_MINI, 2000)]), 'a.pdf'))).toBe('quota_exceeded')
+    expect(await codeOf(session.stage(Readable.from([sized(PDF_MINI, 2000)]), 'a.pdf'))).toBe(
+      'quota_exceeded',
+    )
     await session.abort()
     expect(tempFiles(root)).toEqual([])
   })
@@ -160,7 +203,9 @@ describe('UploadSession', () => {
     const realWrite = fs.write
     const spy = vi.spyOn(fs, 'write').mockImplementation(((...args: unknown[]) => {
       const cb = args.pop() as (...r: unknown[]) => void
-      ;(realWrite as (...a: unknown[]) => void)(...args, (...r: unknown[]) => held.push(() => cb(...r)))
+      ;(realWrite as (...a: unknown[]) => void)(...args, (...r: unknown[]) =>
+        held.push(() => cb(...r)),
+      )
     }) as typeof fs.write)
     try {
       async function* source() {

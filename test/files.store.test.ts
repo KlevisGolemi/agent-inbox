@@ -26,7 +26,9 @@ beforeEach(() => {
 afterEach(cleanupFixtures)
 
 function insertAttachment(id: string, size: number, deleted = false) {
-  db.prepare(`INSERT OR IGNORE INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`).run()
+  db.prepare(
+    `INSERT OR IGNORE INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`,
+  ).run()
   db.prepare(
     `INSERT INTO attachments (id, message_id, filename, mime_type, category, size_bytes, sha256, created_at, expires_at, deleted_at)
      VALUES (?, 'm', 'f', 'application/pdf', 'document', ?, 'h', 1, 2, ?)`,
@@ -36,11 +38,19 @@ function insertAttachment(id: string, size: number, deleted = false) {
 describe('computeExpiresAt', () => {
   it('par catégorie, ramené à file_retention_large_hours au-delà de file_retention_large_mb', () => {
     const time = 1_000
-    expect(computeExpiresAt({ createdAt: time, category: 'image', sizeBytes: MB }, settings)).toBe(time + 168 * HOUR)
-    expect(computeExpiresAt({ createdAt: time, category: 'image', sizeBytes: 60 * MB }, settings)).toBe(time + 24 * HOUR)
-    expect(computeExpiresAt({ createdAt: time, category: 'video', sizeBytes: MB }, settings)).toBe(time + 24 * HOUR)
+    expect(computeExpiresAt({ createdAt: time, category: 'image', sizeBytes: MB }, settings)).toBe(
+      time + 168 * HOUR,
+    )
+    expect(
+      computeExpiresAt({ createdAt: time, category: 'image', sizeBytes: 60 * MB }, settings),
+    ).toBe(time + 24 * HOUR)
+    expect(computeExpiresAt({ createdAt: time, category: 'video', sizeBytes: MB }, settings)).toBe(
+      time + 24 * HOUR,
+    )
     settings.set('file_retention_large_hours', 12)
-    expect(computeExpiresAt({ createdAt: time, category: 'image', sizeBytes: 60 * MB }, settings)).toBe(time + 12 * HOUR)
+    expect(
+      computeExpiresAt({ createdAt: time, category: 'image', sizeBytes: 60 * MB }, settings),
+    ).toBe(time + 12 * HOUR)
   })
 })
 

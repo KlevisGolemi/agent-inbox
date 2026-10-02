@@ -127,7 +127,9 @@ describe('migrations', () => {
        VALUES ('m1', 'n8n', '{"a":1}', 'pending', 1, 't', 'c1')`,
     ).run()
     expect(migrate(db, silent)).toBe(4)
-    expect(db.prepare('SELECT payload, topic, correlation_id, trust, drop_id FROM messages').get()).toEqual({
+    expect(
+      db.prepare('SELECT payload, topic, correlation_id, trust, drop_id FROM messages').get(),
+    ).toEqual({
       payload: '{"a":1}',
       topic: 't',
       correlation_id: 'c1',

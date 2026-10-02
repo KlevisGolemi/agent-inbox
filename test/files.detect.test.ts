@@ -5,16 +5,66 @@ import { HTML_PAGE, PDF_MINI, PNG_1X1, SVG_ACTIVE } from './helpers/files.js'
 
 describe('detectFile', () => {
   it.each([
-    ['PNG', PNG_1X1, 'photo.png', { mime: 'image/png', category: 'image', inline: 'image', active: false }],
-    ['PNG nommé .pdf (signature prioritaire)', PNG_1X1, 'x.pdf', { mime: 'image/png', category: 'image', inline: 'image', active: false }],
-    ['PDF', PDF_MINI, 'devis.pdf', { mime: 'application/pdf', category: 'document', inline: null, active: false }],
-    ['gzip', gzipSync(Buffer.from('bonjour')), 'a.gz', { mime: 'application/gzip', category: 'archive', inline: null, active: false }],
-    ['SVG nommé photo.png (type actif)', SVG_ACTIVE, 'photo.png', { mime: 'image/svg+xml', category: 'document', inline: null, active: true }],
-    ['HTML nommé notes.txt', HTML_PAGE, 'notes.txt', { mime: 'text/html', category: 'document', inline: null, active: true }],
-    ['Markdown', Buffer.from('# Titre\n'), 'notes.md', { mime: 'text/markdown', category: 'document', inline: 'text', active: false }],
-    ['JSON', Buffer.from('{"a":1}'), 'data.json', { mime: 'application/json', category: 'document', inline: 'text', active: false }],
-    ['binaire sans signature nommé .jpg', Buffer.from([0, 159, 146, 150, 1, 2, 3]), 'photo.jpg', { mime: 'application/octet-stream', category: 'other', inline: null, active: false }],
-    ['texte nommé .html sans balise', Buffer.from('bonjour'), 'page.html', { mime: 'text/html', category: 'document', inline: null, active: true }],
+    [
+      'PNG',
+      PNG_1X1,
+      'photo.png',
+      { mime: 'image/png', category: 'image', inline: 'image', active: false },
+    ],
+    [
+      'PNG nommé .pdf (signature prioritaire)',
+      PNG_1X1,
+      'x.pdf',
+      { mime: 'image/png', category: 'image', inline: 'image', active: false },
+    ],
+    [
+      'PDF',
+      PDF_MINI,
+      'devis.pdf',
+      { mime: 'application/pdf', category: 'document', inline: null, active: false },
+    ],
+    [
+      'gzip',
+      gzipSync(Buffer.from('bonjour')),
+      'a.gz',
+      { mime: 'application/gzip', category: 'archive', inline: null, active: false },
+    ],
+    [
+      'SVG nommé photo.png (type actif)',
+      SVG_ACTIVE,
+      'photo.png',
+      { mime: 'image/svg+xml', category: 'document', inline: null, active: true },
+    ],
+    [
+      'HTML nommé notes.txt',
+      HTML_PAGE,
+      'notes.txt',
+      { mime: 'text/html', category: 'document', inline: null, active: true },
+    ],
+    [
+      'Markdown',
+      Buffer.from('# Titre\n'),
+      'notes.md',
+      { mime: 'text/markdown', category: 'document', inline: 'text', active: false },
+    ],
+    [
+      'JSON',
+      Buffer.from('{"a":1}'),
+      'data.json',
+      { mime: 'application/json', category: 'document', inline: 'text', active: false },
+    ],
+    [
+      'binaire sans signature nommé .jpg',
+      Buffer.from([0, 159, 146, 150, 1, 2, 3]),
+      'photo.jpg',
+      { mime: 'application/octet-stream', category: 'other', inline: null, active: false },
+    ],
+    [
+      'texte nommé .html sans balise',
+      Buffer.from('bonjour'),
+      'page.html',
+      { mime: 'text/html', category: 'document', inline: null, active: true },
+    ],
   ])('%s', async (_label, buffer, name, expected) => {
     expect(await detectFile(buffer, name)).toEqual(expected)
   })
@@ -48,7 +98,10 @@ describe('sanitizeFilename', () => {
 
 describe('detectFile : petits tampons', () => {
   it('un binaire minuscule (< DETECTION_BYTES) n’est pas classé texte', async () => {
-    const result = await detectFile(Buffer.from([0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0xff, 0xfe, 0xfd]), 'x.bin')
+    const result = await detectFile(
+      Buffer.from([0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0xff, 0xfe, 0xfd]),
+      'x.bin',
+    )
     expect(result.category).toBe('other')
     expect(result.inline).toBeNull()
   })

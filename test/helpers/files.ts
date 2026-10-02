@@ -15,7 +15,9 @@ export const PDF_MINI = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%
 export const SVG_ACTIVE = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
 )
-export const HTML_PAGE = Buffer.from('<!doctype html><html><body><script>alert(1)</script></body></html>')
+export const HTML_PAGE = Buffer.from(
+  '<!doctype html><html><body><script>alert(1)</script></body></html>',
+)
 
 /** Tampon de `size` octets commençant par `head` (signature conservée). */
 export function sized(head: Buffer, size: number): Buffer {
@@ -51,7 +53,12 @@ export function filesFixture(db: Database.Database, settings: Settings, freeByte
   fixtureRoots.push(root)
   const store = createFileStore({ db, root, log: () => {} })
   store.init()
-  const uploads = createUploadManager({ store, settings, statfs: fakeStatfs(freeBytes), log: () => {} })
+  const uploads = createUploadManager({
+    store,
+    settings,
+    statfs: fakeStatfs(freeBytes),
+    log: () => {},
+  })
   return { root, store, uploads }
 }
 

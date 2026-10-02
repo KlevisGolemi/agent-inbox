@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 describe('modèle n8n « envoyer un fichier »', () => {
   it('JSON valide : POST multipart sur /webhook avec x-tags, credential Agent Inbox', () => {
-    const wf = JSON.parse(readFileSync(new URL('../examples/n8n/04-envoyer-un-fichier.json', import.meta.url), 'utf8'))
+    const wf = JSON.parse(
+      readFileSync(new URL('../examples/n8n/04-envoyer-un-fichier.json', import.meta.url), 'utf8'),
+    )
     const http = wf.nodes.find((n: { type: string }) => n.type === 'n8n-nodes-base.httpRequest')
     expect(http.parameters.url).toContain('/webhook')
     expect(http.parameters.contentType).toBe('multipart-form-data')
@@ -13,7 +15,9 @@ describe('modèle n8n « envoyer un fichier »', () => {
   })
 
   it('lecture par readWriteFile et identifiants de nœuds en UUID valides', () => {
-    const wf = JSON.parse(readFileSync(new URL('../examples/n8n/04-envoyer-un-fichier.json', import.meta.url), 'utf8'))
+    const wf = JSON.parse(
+      readFileSync(new URL('../examples/n8n/04-envoyer-un-fichier.json', import.meta.url), 'utf8'),
+    )
     const types = wf.nodes.map((n: { type: string }) => n.type)
     expect(types).toContain('n8n-nodes-base.readWriteFile')
     expect(types).not.toContain('n8n-nodes-base.readBinaryFile')

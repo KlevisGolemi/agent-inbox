@@ -28,7 +28,12 @@ function runInstall(env: Record<string, string>) {
       ...env,
     },
   })
-  return { status: res.status, stderr: res.stderr, stdout: res.stdout, envWritten: existsSync(join(dir, '.env')) }
+  return {
+    status: res.status,
+    stderr: res.stderr,
+    stdout: res.stdout,
+    envWritten: existsSync(join(dir, '.env')),
+  }
 }
 
 describe.skipIf(process.platform === 'win32')('install.sh : valeurs Traefik', () => {

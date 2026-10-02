@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, statSync, unlinkSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
 import { log as defaultLog } from '../log.js'
@@ -28,7 +36,11 @@ export interface FileStore {
  * Seul propriétaire du disque : temporaires dans `.tmp/`, fichiers définitifs nommés par uuid.
  * Aucune méthode ne reçoit de nom d'origine ; un identifiant invalide lève une erreur.
  */
-export function createFileStore(deps: { db: Database.Database; root: string; log?: LogFn }): FileStore {
+export function createFileStore(deps: {
+  db: Database.Database
+  root: string
+  log?: LogFn
+}): FileStore {
   const { db, root } = deps
   const log = deps.log ?? defaultLog
   const tmpDir = join(root, '.tmp')
