@@ -1,4 +1,6 @@
 import express, { type RequestHandler } from 'express'
+import { closeAfterResponse, lingerAfterError } from '../files/http.js'
+import { checkWebhookSecret } from '../queue/secret.js'
 import type { Settings } from '../settings/index.js'
 
 export const DEFAULT_JSON_LIMIT_BYTES = 1024 * 1024
@@ -29,6 +31,15 @@ export function createJsonBody(settings: Settings): RequestHandler {
   const parsers = new Map<number, RequestHandler>()
   return (req, res, next) => {
     const limit = jsonLimitFor(req.path, settings)
+    // Corps JSON annoncé trop gros : refus immédiat (express.json le lirait en entier avant de
+    // répondre). Producteur authentifié (secret webhook valide) : lingering borné pour qu'il lise
+    // bien le 413 ; sinon fermeture immédiate, rien n'est lu pour un inconnu.
+    if (req.is('application/json') && Number(req.headers['content-length']) > limit) {
+      if (req.path === '/webhook' && checkWebhookSecret(req, settings)) lingerAfterError(req, res)
+      else closeAfterResponse(req, res)
+      res.status(413).json({ ok: false, error: 'payload_too_large' })
+      return
+    }
     let parser = parsers.get(limit)
     if (!parser) {
       parser = express.json({ limit })

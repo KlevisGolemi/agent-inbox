@@ -2,7 +2,12 @@ import { randomBytes } from 'node:crypto'
 import { Router, type Response } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { newAttachments } from '../files/attachments.js'
-import { attachmentSummary, lingerAfterError, sendUploadError } from '../files/http.js'
+import {
+  attachmentSummary,
+  earlyResponsePolicy,
+  sendUploadError,
+  setEarlyResponsePolicy,
+} from '../files/http.js'
 import { MultipartError, receiveUpload } from '../files/multipart.js'
 import type { FileCategory } from '../files/types.js'
 import { UploadError, type UploadManager } from '../files/uploads.js'
@@ -27,6 +32,9 @@ export function createDropsRouter(deps: {
 }): Router {
   const { drops, repo, uploads, settings } = deps
   const router = Router()
+  // Réponse avant la fin du corps : fermeture immédiate (429, jeton invalide) ; lingering borné
+  // une fois le jeton reconnu.
+  router.use('/d', earlyResponsePolicy('close'))
   router.use(
     '/d',
     rateLimit({
@@ -73,12 +81,11 @@ export function createDropsRouter(deps: {
   router.post('/d/:token', async (req, res) => {
     const drop = drops.findActiveByToken(String(req.params.token))
     if (!drop || (drop.kind === 'public' && !settings.get('drops_enabled'))) {
-      lingerAfterError(req, res)
       unavailableJson(res)
       return
     }
+    setEarlyResponsePolicy(req, res, 'linger')
     if (!req.is('multipart/form-data')) {
-      lingerAfterError(req, res)
       res.status(415).json({
         ok: false,
         error: 'multipart_required',
@@ -89,7 +96,6 @@ export function createDropsRouter(deps: {
     // Lien self : réservé atomiquement pour CETTE requête dès le début (une seule requête).
     const claimAt = drop.kind === 'self' ? Date.now() : null
     if (claimAt !== null && !drops.claimSelf(drop.id, claimAt)) {
-      lingerAfterError(req, res)
       unavailableJson(res)
       return
     }
@@ -187,7 +193,7 @@ export function createDropsRouter(deps: {
     } catch (err) {
       if (err instanceof UploadError || err instanceof MultipartError) {
         compensate(err.code)
-        sendUploadError(req, res, err)
+        sendUploadError(res, err)
         return
       }
       compensate('internal_error')

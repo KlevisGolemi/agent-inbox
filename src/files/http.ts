@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { resolve } from 'node:path'
-import type { Request, Response } from 'express'
+import type { Request, RequestHandler, Response } from 'express'
 import type { AttachmentRow, AttachmentsRepo } from './attachments.js'
 import type { MultipartError } from './multipart.js'
 import type { FileStore } from './store.js'
@@ -24,38 +24,108 @@ export function contentDisposition(
   return `${type}; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
 }
 
-/** Durée maximale pendant laquelle on lit et jette le reste d'un corps refusé avant de fermer. */
+const MB = 1024 * 1024
+/** Durée maximale du lingering, comptée dès l'appel à `lingerAfterError`. */
 export const LINGER_MS = 10_000
+/** Octets de corps refusé lus et jetés au plus par connexion, puis coupure. */
+export const LINGER_MAX_BYTES = 16 * MB
+/** Connexions en lingering simultanées au plus (tout le processus) ; au-delà, coupure immédiate. */
+export const LINGER_MAX_SOCKETS = 32
+
+export interface LingerLimits {
+  ms?: number
+  maxBytes?: number
+  maxSockets?: number
+}
+
+let lingering = 0
+/** Nombre de connexions actuellement en lingering. */
+export function lingeringCount(): number {
+  return lingering
+}
 
 /**
- * Réponse d'erreur envoyée avant la fin du corps : fermeture « lingering » (nginx, Apache).
- * Node détruit le socket dès la réponse envoyée (`destroySoon`, connexion `close`) : les octets
- * que le client envoie encore reçoivent alors un RST, et le client peut perdre la réponse
- * (EPIPE/ECONNRESET). Ici : `Connection: close`, puis, la réponse partie, demi-fermeture (FIN) et
- * lecture du reste du corps, jeté, jusqu'à ce que le client ferme, au plus `ms`. Sans effet si le
+ * Refus d'un inconnu (401, 429, jeton invalide, corps annoncé trop gros) avant la fin du corps :
+ * `Connection: close`, et Node détruit le socket dès la réponse partie. Aucune ressource n'est
+ * offerte pour lire le reste ; le client peut recevoir un RST, c'est assumé. Sans effet si le
  * corps a déjà été lu en entier.
  */
-export function lingerAfterError(req: Request, res: Response, ms = LINGER_MS): void {
+export function closeAfterResponse(req: Request, res: Response): void {
   if (req.complete || res.headersSent) return
-  const socket = req.socket
   res.set('Connection', 'close')
+}
+
+/**
+ * Refus d'une requête AUTHENTIFIÉE avant la fin du corps : fermeture « lingering » (nginx,
+ * Apache). Node détruit le socket dès la réponse partie (`destroySoon`, connexion `close`) : les
+ * octets que le client envoie encore reçoivent un RST et le client peut perdre la réponse
+ * (EPIPE/ECONNRESET). Ici : `Connection: close`, puis, la réponse partie, demi-fermeture (FIN) et
+ * lecture du reste du corps, jeté, jusqu'à ce que le client ferme. Bornes : `ms` dès cet appel,
+ * `maxBytes` jetés, `maxSockets` connexions simultanées (au-delà : comme `closeAfterResponse`).
+ * `Connection` est un en-tête hop-by-hop : derrière Traefik/Caddy, c'est la connexion
+ * proxy → application qui est ainsi gérée ; le proxy relaie la réponse au client.
+ */
+export function lingerAfterError(req: Request, res: Response, limits: LingerLimits = {}): void {
+  if (req.complete || res.headersSent) return
+  const { ms = LINGER_MS, maxBytes = LINGER_MAX_BYTES, maxSockets = LINGER_MAX_SOCKETS } = limits
+  res.set('Connection', 'close')
+  if (lingering >= maxSockets) return
+  const socket = req.socket
+  lingering++
+  const timer = setTimeout(() => socket.destroy(), ms)
+  timer.unref()
+  socket.once('close', () => {
+    lingering--
+    clearTimeout(timer)
+  })
+  let discarded = 0
+  const discard = (chunk: Buffer) => {
+    discarded += chunk.length
+    if (discarded > maxBytes) socket.destroy()
+  }
+  req.on('data', discard)
   req.resume()
   socket.destroySoon = () => {
     socket.end()
-    const timer = setTimeout(() => socket.destroy(), ms)
-    timer.unref()
-    socket.once('close', () => clearTimeout(timer))
+    // Une fois la réponse finie, Node retire les écouteurs `data` (req._dump) : on remet le compteur.
+    if (req.listenerCount('data') === 0) req.on('data', discard)
   }
 }
 
-/** Réponse d'erreur d'envoi : message sans chemin ni nom de fichier, fermeture lingering. */
-export function sendUploadError(
+export type EarlyResponsePolicy = 'close' | 'linger'
+const policies = new WeakMap<Response, EarlyResponsePolicy>()
+
+/**
+ * Politique pour toute réponse envoyée avant la fin du corps, appliquée au moment où les en-têtes
+ * partent : `close` par défaut (inconnu), `linger` une fois la requête authentifiée.
+ */
+export function setEarlyResponsePolicy(
   req: Request,
   res: Response,
-  err: UploadError | MultipartError,
+  policy: EarlyResponsePolicy,
 ): void {
+  const hooked = policies.has(res)
+  policies.set(res, policy)
+  if (hooked) return
+  const writeHead = res.writeHead
+  res.writeHead = function (this: Response, ...args: Parameters<typeof writeHead>) {
+    if (policies.get(res) === 'linger') lingerAfterError(req, res)
+    else closeAfterResponse(req, res)
+    return writeHead.apply(this, args)
+  } as typeof writeHead
+}
+
+/** Middleware : fixe la politique de réponse anticipée (voir `setEarlyResponsePolicy`). */
+export function earlyResponsePolicy(policy: EarlyResponsePolicy): RequestHandler {
+  return (req, res, next) => {
+    setEarlyResponsePolicy(req, res, policy)
+    next()
+  }
+}
+
+/** Réponse d'erreur d'envoi : message sans chemin ni nom de fichier. */
+export function sendUploadError(res: Response, err: UploadError | MultipartError): void {
   if (res.headersSent || res.destroyed) return
-  lingerAfterError(req, res)
   res.status(err.status).json({ ok: false, error: err.code, message: err.message })
 }
 
@@ -131,6 +201,8 @@ export function sendAttachment(
  * `finish` : avec Content-Length, le client a déjà tout et peut fermer avant que `end()` ne soit
  * appelé (la fin du fichier se lit par une lecture de plus) ; la livraison doit quand même compter.
  * Client coupé avant, fichier disparu ou erreur de lecture : `false`, rien n'est compté.
+ * Au plus une fois : « remis au socket » ne prouve pas que le client a lu les octets (noyau,
+ * proxy) ; la grâce du mode consume couvre ce cas.
  */
 function streamWhole(path: string, size: number, res: Response): Promise<boolean> {
   return new Promise((done) => {

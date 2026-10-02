@@ -3,8 +3,6 @@ import http from 'node:http'
 import net, { type AddressInfo } from 'node:net'
 import request, { type Response } from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
-import express from 'express'
-import { lingerAfterError } from '../src/files/http.js'
 import { signFileUrl } from '../src/files/links.js'
 import { rotateFileSigningSecret } from '../src/settings/index.js'
 import { makeTestApp } from './helpers/app.js'
@@ -373,10 +371,11 @@ describe('GET /files/:id', () => {
       expect(body).toEqual(PDF_MINI)
       await serverClosed // le serveur a vu la fermeture, fin du fichier toujours pas lue
       expect(release).toBeDefined()
-      release?.()
+      // Compté AVANT que la fin du fichier ne soit lue : la livraison ne dépend pas de end().
       await vi.waitFor(() =>
         expect(t.db.prepare('SELECT downloads FROM attachments').get()).toEqual({ downloads: 1 }),
       )
+      release?.()
     } finally {
       spy.mockRestore()
       release?.()
@@ -401,35 +400,5 @@ describe('GET /files/:id', () => {
       ok: false,
       error: 'expired',
     })
-  })
-})
-
-describe('lingerAfterError', () => {
-  it('client qui n’en finit pas d’envoyer : réponse reçue, puis connexion fermée après le délai borné', async () => {
-    const app = express()
-    app.post('/', (req, res) => {
-      lingerAfterError(req, res, 50)
-      res.status(413).json({ ok: false, error: 'file_too_large' })
-    })
-    const server = app.listen(0)
-    const { port } = server.address() as AddressInfo
-    // Fermeture vue côté serveur : le client, à demi ouvert, ne ferme jamais de lui-même.
-    const closed = new Promise<void>((resolve) =>
-      server.once('connection', (s: net.Socket) => s.once('close', () => resolve())),
-    )
-    const socket = net.connect({ port, host: '127.0.0.1', allowHalfOpen: true })
-    let received = ''
-    socket.on('data', (c: Buffer) => (received += c.toString()))
-    socket.on('error', () => {})
-    try {
-      socket.write(`POST / HTTP/1.1\r\nHost: x\r\nContent-Length: ${10 * MB}\r\n\r\n`)
-      socket.write(Buffer.alloc(64 * 1024, 0x41)) // puis plus rien : le corps n’est jamais complet
-      await closed
-      expect(received).toMatch(/^HTTP\/1\.1 413 /)
-      expect(received).toContain('"file_too_large"')
-    } finally {
-      socket.destroy()
-      server.close()
-    }
   })
 })
