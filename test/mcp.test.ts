@@ -71,13 +71,16 @@ describe('MCP stateless', () => {
     expect(body.result.serverInfo).toMatchObject({ name: 'agent-inbox', version: '0.0.0-test' })
   })
 
-  it('tools/list sans initialize préalable : 12 outils', async () => {
+  it('tools/list sans initialize préalable : 16 outils', async () => {
     const ctx = setup()
     const { res, body } = await rpc(ctx, 'tools/list')
     expect(res.status).toBe(200)
     const names = body.result.tools.map((t: { name: string }) => t.name).sort()
     expect(names).toEqual(
       [
+        'inbox_create_tag',
+        'inbox_get_file',
+        'inbox_tags',
         'queue_ack',
         'queue_by_id',
         'queue_clear',
@@ -89,6 +92,7 @@ describe('MCP stateless', () => {
         'queue_send',
         'queue_stats',
         'queue_status',
+        'queue_tag',
         'queue_wait',
       ].sort(),
     )
@@ -326,7 +330,7 @@ describe('MCP stateless', () => {
     const ctx2 = { app: app2, key: first.key }
     const { res, body } = await rpc(ctx2, 'tools/list')
     expect(res.status).toBe(200)
-    expect(body.result.tools).toHaveLength(12)
+    expect(body.result.tools).toHaveLength(16)
     expect(data(await call(ctx2, 'queue_peek', {})).items).toHaveLength(1)
   })
 

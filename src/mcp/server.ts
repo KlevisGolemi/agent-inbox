@@ -3,18 +3,9 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { Router, type RequestHandler } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { log } from '../log.js'
-import type { WaitPool } from '../queue/http.js'
-import type { QueueRepo } from '../queue/repo.js'
-import type { Settings } from '../settings/index.js'
-import { registerTools } from './tools.js'
+import { registerTools, type McpToolDeps } from './tools.js'
 
-export interface McpRouterDeps {
-  repo: QueueRepo
-  settings: Settings
-  bearer: RequestHandler
-  version: string
-  waits: WaitPool
-}
+export type McpRouterDeps = McpToolDeps & { bearer: RequestHandler }
 
 /** Limite de débit de `POST /mcp` (requêtes par minute et par IP). */
 export const MCP_RATE_LIMIT_PER_MIN = 600
@@ -30,7 +21,7 @@ const methodNotAllowed: RequestHandler = (_req, res) => {
  * Serveur MCP sans état : chaque POST crée son propre serveur + transport (sans session), donc
  * rien à perdre au redémarrage. Les 401 portent WWW-Authenticate (exposé en CORS).
  */
-export function createMcpRouter({ repo, settings, bearer, version, waits }: McpRouterDeps): Router {
+export function createMcpRouter({ bearer, ...toolDeps }: McpRouterDeps): Router {
   const router = Router()
   const mcpLimiter = rateLimit({
     windowMs: 60_000,
@@ -61,8 +52,8 @@ export function createMcpRouter({ repo, settings, bearer, version, waits }: McpR
   })
 
   router.post('/mcp', mcpLimiter, bearer, async (req, res) => {
-    const server = new McpServer({ name: 'agent-inbox', version })
-    registerTools(server, { repo, settings, version, waits })
+    const server = new McpServer({ name: 'agent-inbox', version: toolDeps.version })
+    registerTools(server, toolDeps)
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
     res.on('close', () => {
       void transport.close()

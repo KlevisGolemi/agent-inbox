@@ -142,6 +142,11 @@ export function createApp(deps: AppDeps): Express {
       settings: deps.settings,
       version: deps.version,
       waits,
+      files: deps.files,
+      uploads: deps.uploads,
+      attachments: deps.attachments,
+      tags: deps.tags,
+      publicUrl: deps.env.publicUrl,
       bearer: createBearerMiddleware({
         provider: deps.oauthProvider,
         apiKeys: deps.apiKeys,
