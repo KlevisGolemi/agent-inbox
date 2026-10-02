@@ -73,8 +73,17 @@ npm run format      # prettier --write .
   `COMPOSE_FILE=deploy/docker-compose.traefik.yml`, `TRUST_PROXY=2`, `TRAEFIK_RULE` sur `queue.` et `mcp.igk-digital.cloud`.
 - Données : volume historique `webhook-queue_queue_data` (`QUEUE_VOLUME_NAME`), propriétaire uid 1000 (utilisateur `node`).
 - Déployer : `git pull --ff-only` → `docker compose build app` (l'ancien conteneur tourne encore) → `docker compose up -d app`
-  → vérifier `/healthz` sur les deux domaines, le `401` + `WWW-Authenticate` de `POST /mcp`, et un aller-retour `/webhook`.
-- Sauvegardes manuelles avant toute migration : `/root/backups/` (tar du volume + copie du `.env`).
+  → vérifier `/healthz` sur les deux domaines, le `401` + `WWW-Authenticate` de `POST /mcp`, un aller-retour `/webhook`
+  en JSON **et** en multipart, et qu'un fichier trop gros reçoit bien son `413` à travers Cloudflare/Traefik.
+- Tests en prod sans exposer le secret : script Node copié dans le conteneur (`docker cp`), qui lit `webhook_secret` dans
+  `/data/queue.db` et appelle l'URL publique ; n'afficher que les statuts. Les fichiers copiés appartiennent à root :
+  les supprimer avec `docker exec -u root`. Nettoyer ensuite messages et tags de recette (topic `recette-prod`).
+- Sauvegardes : tar du volume + copie du `.env` dans `/root/backups/` **avant** toute migration, et **juste après**
+  (une sauvegarde d'un ancien schéma n'est plus restaurable par l'admin). Les fichiers joints ne sont pas dans les
+  sauvegardes de l'admin ; le tar du volume les contient (application arrêtée pour un tar cohérent).
+- Cloudflare (offre gratuite) refuse les corps > 100 Mo : défauts `file_max_mb` vidéo/archive à 95 Mo, ne pas les monter.
+- Journal d'accès Traefik désactivé sur le VPS : s'il est activé un jour, format JSON et `RequestPath`/`RequestLine`
+  masqués (jetons de drop et signatures dans l'URL), voir `docs/installation.md`.
 
 ## Pièges connus
 
@@ -88,6 +97,20 @@ npm run format      # prettier --write .
 - `.env` : `TRAEFIK_RULE` contient des backticks ; ne pas l'écrire via un heredoc non quoté (le shell les exécute).
 - `better-sqlite3` est compilé sans URI SQLite : pas de `file:…?mode=ro` ; vérifier l'existence du fichier avant `ATTACH`.
 - Ne jamais stocker ni utiliser une clé API collée dans la conversation : la faire révoquer et passer par le connecteur MCP.
+- **Un test instable cache presque toujours un bug de flux** (2.2 : `once(out,'close')` qui rejette après `destroy`,
+  livraison comptée trop tard, réponse d'erreur perdue en EPIPE, compteur jamais décrémenté). Diagnostiquer la cause
+  sous charge (boucle de 20+ exécutions) avant de toucher au test ; ne jamais « relancer jusqu'au vert ».
+- Descriptions d'outils MCP : n'y injecter que des données sûres (noms de tags `[a-z0-9-]`), jamais un texte écrit par
+  un agent ou un tiers (une description de tag deviendrait une instruction persistante pour tous les clients).
+- Images inline : seulement JPEG, PNG, GIF, WebP (Claude refuse HEIC/TIFF…) ; les autres formats passent par lien.
+  `file-type` ne reconnaît pas certains TIFF big-endian sur les 4 100 premiers octets → classés `other` (limite assumée).
+- Commande de téléchargement proposée aux agents : `curl -fL -o <id>.<ext>`, jamais `-J`/`-O` (le déposant choisirait
+  le nom du fichier écrit dans le projet de l'agent : `conftest.py`, `.envrc`…).
+- Alpine : un `:style` remplace l'attribut `style` statique de l'élément → mettre les dimensions fixes en classes Tailwind.
+- Agents de soutien : Codex (`codex-rescue`) et Kimi tournent en bac à sable sans `git commit` ni écoute loopback
+  (tests Supertest impossibles) → un sous-agent Claude relance `npm run check` et commite. Compte ChatGPT : famille
+  `gpt-5.6-*` (Terra courant, Sol pour la réflexion) ; seul `gpt-6-astra` existe en famille 6. Un job Codex peut
+  partir en arrière-plan : demander « mode synchrone » ou lire le résultat via `codex-companion.mjs result <id>`.
 
 ## Communication
 
