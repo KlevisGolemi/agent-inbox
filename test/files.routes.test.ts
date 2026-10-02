@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import request, { type Response } from 'supertest'
@@ -265,6 +266,56 @@ describe('GET /files/:id', () => {
           .get(),
       ).toEqual({ downloads: 2, first: 1 }),
     )
+  })
+
+  it('consume : client qui ferme dès le dernier octet reçu, avant la fin du flux de lecture : livraison comptée', async () => {
+    const t = setup()
+    const id = (await upload(t, { 'x-on-download': 'consume' })).body.attachments[0].id
+    // Le flux de lecture ne voit la fin du fichier qu'à une lecture supplémentaire. On la retient
+    // jusqu'à ce que le client ait fermé : c'est l'ordre observé sous charge (client servi, puis
+    // connexion fermée, avant que le serveur n'appelle end()).
+    const realRead = fs.read.bind(fs) as (...a: unknown[]) => void
+    let reads = 0
+    let release: (() => void) | undefined
+    const spy = vi.spyOn(fs, 'read').mockImplementation(((...args: unknown[]) => {
+      const cb = args.pop() as (...r: unknown[]) => void
+      if (++reads === 1) return realRead(...args, cb)
+      // Lecture de fin de fichier : émise, mais exécutée seulement quand le test la libère.
+      release = () => {
+        release = () => undefined
+        realRead(...args, cb)
+      }
+    }) as never)
+    const server = t.app.listen(0)
+    const serverClosed = new Promise((resolve) =>
+      server.once('connection', (socket) => socket.once('close', resolve)),
+    )
+    try {
+      const { port } = server.address() as AddressInfo
+      const body = await new Promise<Buffer>((resolve, reject) => {
+        http
+          .get({ port, path: `/files/${id}`, headers: H, agent: false }, (res) => {
+            const chunks: Buffer[] = []
+            res.on('data', (c: Buffer) => chunks.push(c))
+            res.on('end', () => {
+              res.socket.destroy() // tout reçu (Content-Length) : le client ferme aussitôt
+              resolve(Buffer.concat(chunks))
+            })
+          })
+          .on('error', reject)
+      })
+      expect(body).toEqual(PDF_MINI)
+      await serverClosed // le serveur a vu la fermeture, fin du fichier toujours pas lue
+      expect(release).toBeDefined()
+      release?.()
+      await vi.waitFor(() =>
+        expect(t.db.prepare('SELECT downloads FROM attachments').get()).toEqual({ downloads: 1 }),
+      )
+    } finally {
+      spy.mockRestore()
+      release?.()
+      server.close()
+    }
   })
 
   it('nom accentué : filename ASCII de repli et filename* RFC 5987', async () => {

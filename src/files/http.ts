@@ -1,6 +1,5 @@
 import { createReadStream } from 'node:fs'
 import { resolve } from 'node:path'
-import { pipeline } from 'node:stream/promises'
 import type { Request, Response } from 'express'
 import type { AttachmentRow, AttachmentsRepo } from './attachments.js'
 import type { MultipartError } from './multipart.js'
@@ -92,12 +91,42 @@ export function sendAttachment(
     res.end()
     return
   }
-  pipeline(createReadStream(path), res).then(
-    () => {
-      if (count) deps.attachments.recordDelivery(row.id)
-    },
-    () => {
-      // Client coupé ou fichier disparu : pas de livraison complète, rien n'est compté.
-    },
-  )
+  void streamWhole(path, row.size_bytes, res).then((delivered) => {
+    if (delivered && count) deps.attachments.recordDelivery(row.id)
+  })
+}
+
+/**
+ * Envoie le fichier et résout `true` dès que tous ses octets ont été remis au socket (rappels de
+ * `write` sans erreur), ce qu'aurait garanti `finish`. On n'attend ni la fin du flux de lecture ni
+ * `finish` : avec Content-Length, le client a déjà tout et peut fermer avant que `end()` ne soit
+ * appelé (la fin du fichier se lit par une lecture de plus) ; la livraison doit quand même compter.
+ * Client coupé avant, fichier disparu ou erreur de lecture : `false`, rien n'est compté.
+ */
+function streamWhole(path: string, size: number, res: Response): Promise<boolean> {
+  return new Promise((done) => {
+    let flushed = 0
+    const src = createReadStream(path)
+    src.on('data', (chunk: string | Buffer) => {
+      const more = res.write(chunk, (err) => {
+        if (err) return
+        flushed += Buffer.byteLength(chunk)
+        if (flushed === size) done(true)
+      })
+      if (!more) {
+        src.pause()
+        res.once('drain', () => src.resume())
+      }
+    })
+    src.once('end', () => res.end())
+    src.once('error', () => {
+      res.destroy()
+      done(false)
+    })
+    res.once('finish', () => done(flushed === size))
+    res.once('close', () => {
+      src.destroy()
+      done(false)
+    })
+  })
 }
