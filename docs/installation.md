@@ -104,6 +104,17 @@ faisant confiance qu'à **exactement `TRUST_PROXY` proxys** (1 par défaut, 0 à
 directement, n'importe qui peut forger l'en-tête et contourner la limite. N'ajoutez donc pas de `ports:` au
 service `app`.
 
+**`TRUST_PROXY` = nombre exact de sauts.** Comptez les proxys réellement traversés : 1 pour Caddy ou Traefik
+seul, 2 pour Cloudflare puis Traefik. Une valeur trop haute fait lire une adresse que le client a lui-même
+écrite dans `X-Forwarded-For` ; trop basse, tous les clients partagent l'adresse du proxy.
+
+**Derrière Cloudflare, fermez l'origine.** Avec `TRUST_PROXY=2`, l'application fait confiance à l'avant-dernière
+adresse de `X-Forwarded-For`. Si le serveur reste joignable en direct (sans passer par Cloudflare), un client
+peut y placer une adresse de son choix et contourner la limite de débit. Restreignez donc l'accès aux ports
+80/443 aux [plages IP de Cloudflare](https://www.cloudflare.com/ips/) (pare-feu de l'hôte ou du fournisseur),
+et/ou déclarez-les dans Traefik (`entryPoints.<nom>.forwardedHeaders.trustedIPs`) pour que Traefik ignore un
+`X-Forwarded-For` venu d'ailleurs. Sans l'une de ces deux mesures, `X-Forwarded-For` reste forgeable.
+
 **Port interne.** L'application écoute sur `PORT` (3000 par défaut). Les healthchecks (`Dockerfile`,
 `docker-compose.yml`, `deploy/docker-compose.traefik.yml`), `deploy/Caddyfile` et le label Traefik
 `loadbalancer.server.port` supposent 3000 : gardez cette valeur, ou adaptez tous ces fichiers en même temps.
@@ -154,11 +165,23 @@ sauvegarde manuelle, téléchargement et restauration à chaud. Les fichiers son
 (`queue-AAAAMMJJ-HHMMSS.db`) dans `/data/backups`. Une restauration crée d'abord une sauvegarde de
 sécurité et refuse une sauvegarde d'une autre version du schéma.
 
-**Volume complet** (à faire avant une migration ou une désinstallation) :
+**Les sauvegardes de l'interface ne contiennent pas les fichiers** (`/data/files`) : après une restauration, une
+pièce jointe dont le fichier n'est plus sur le disque répond `410 file_gone`. Pour garder les pièces, sauvegardez
+le volume complet.
+
+**Volume complet** (à faire avant une migration ou une désinstallation). L'application doit être **arrêtée**
+pendant la copie : un `tar` de la base SQLite en cours d'écriture (WAL) ou de fichiers en cours d'envoi donne une
+archive incohérente.
 
 ```bash
+# Arrêt de l'application (le proxy peut rester actif)
+docker compose stop app
+
 # Sauvegarde
 docker run --rm -v agent-inbox-data:/data:ro -v "$PWD":/b alpine tar czf /b/agent-inbox-backup.tgz -C /data .
+
+# Redémarrage
+docker compose start app
 
 # Restauration dans un volume vide (application arrêtée : docker compose down)
 docker run --rm -v agent-inbox-data:/data -v "$PWD":/b alpine tar xzf /b/agent-inbox-backup.tgz -C /data
