@@ -186,17 +186,22 @@ log {
 }
 ```
 
-Traefik (journal d'accès activé, drapeaux de la configuration statique) :
+Traefik (journal d'accès activé, drapeaux de la configuration statique). Le format par défaut,
+`common`, écrit le chemin dans chaque ligne et **ne permet pas** de masquer des champs : il faut passer
+au format JSON, puis supprimer les champs qui contiennent le chemin.
 
 ```text
+--accesslog.format=json
 --accesslog.fields.names.RequestPath=drop
+--accesslog.fields.names.RequestLine=drop
+--accesslog.fields.queryparameters.defaultmode=drop
 ```
 
-`RequestPath` contient l'URI complète de la requête, query string comprise ; la supprimer retire
-les jetons et les signatures. Gardez `RequestHost` et `DownstreamStatus`. Les en-têtes ne sont pas
-journalisés par défaut : si vous passez `--accesslog.fields.headers.defaultmode=keep`, ajoutez
-`--accesslog.fields.headers.names.Referer=drop`. Les champs se règlent aussi en YAML
-(`accessLog.fields.names.RequestPath: drop`).
+`RequestPath` est l'URI de la requête et `RequestLine` (méthode, chemin et protocole) la contient aussi :
+supprimez les deux, ainsi que les paramètres de requête (signatures `?sig=`). Gardez `RequestHost` et
+`DownstreamStatus`. Les en-têtes ne sont pas journalisés par défaut : si vous passez
+`--accesslog.fields.headers.defaultmode=keep`, ajoutez `--accesslog.fields.headers.names.Referer=drop`.
+Les mêmes réglages existent en YAML (`accessLog.format: json`, `accessLog.fields.names.RequestPath: drop`).
 
 ## Migration depuis la v1
 
