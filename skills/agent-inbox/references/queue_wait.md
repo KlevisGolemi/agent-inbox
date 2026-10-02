@@ -4,11 +4,11 @@ Attend (long-polling, jusqu'à `timeout_sec` secondes) qu'un message arrive, pui
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `topic` | `^[A-Za-z0-9_-]{1,128}$` | — | Canal à attendre. |
-| `correlation_id` | `^[A-Za-z0-9_-]{1,128}$` | — | Attendre ce message (exclusif avec `topic`). |
-| `timeout_sec` | entier 1–50 | `30` | Attente maximale. |
+| Nom              | Type                     | Défaut | Rôle                                         |
+| ---------------- | ------------------------ | ------ | -------------------------------------------- |
+| `topic`          | `^[A-Za-z0-9_-]{1,128}$` | —      | Canal à attendre.                            |
+| `correlation_id` | `^[A-Za-z0-9_-]{1,128}$` | —      | Attendre ce message (exclusif avec `topic`). |
+| `timeout_sec`    | entier 1–50              | `30`   | Attente maximale.                            |
 
 ## Exemples
 
@@ -17,13 +17,14 @@ Attend (long-polling, jusqu'à `timeout_sec` secondes) qu'un message arrive, pui
 
 ## Réponse
 
-`{ ok, empty, item, pending, lease_id }` ou `{ ok, empty: true, item: null }`.
+`{ ok, empty: false, item: { id, source, correlation_id, topic, created_at, read_at, lease_until, lease_id, attempts, attachments, tags, auto_tags, payload }, pending }` (plus `trust` et `warning` pour un message externe). Le `lease_id` est dans `item.lease_id` (format `<id>.<tentative>`). Délai écoulé sans message : `{ ok: true, empty: true, item: null }`.
 
 ## Erreurs
 
-| Code | Sens | Que faire |
-|---|---|---|
-| `topic_and_correlation_id_are_exclusive` | Les deux filtres sont donnés. | N'en utiliser qu'un seul. |
-| `too_many_waiters` | Trop d'attentes simultanées. | Réessayer dans quelques secondes. |
-| `leased` | Message déjà emprunté. | Attendre la fin du bail. |
-| `already_read` | Message déjà consommé. | Inutile d'attendre. |
+| Code                                     | Sens                                                                       | Que faire                                           |
+| ---------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| `topic_and_correlation_id_are_exclusive` | Les deux filtres sont donnés.                                              | N'en utiliser qu'un seul.                           |
+| `too_many_waiters`                       | Trop d'attentes simultanées.                                               | Réessayer dans quelques secondes.                   |
+| `leased`                                 | Avec `correlation_id` : message déjà emprunté.                             | Attendre la fin du bail.                            |
+| `already_read`                           | Avec `correlation_id` : message déjà consommé.                             | Inutile d'attendre.                                 |
+| (validation du schéma)                   | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |

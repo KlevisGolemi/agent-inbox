@@ -4,9 +4,9 @@ Supprime TOUS les messages de tous les topics. Irréversible : n'utiliser que su
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `confirm` | `true` littéral | — | Doit valoir `true` pour confirmer. |
+| Nom       | Type            | Défaut | Rôle                               |
+| --------- | --------------- | ------ | ---------------------------------- |
+| `confirm` | `true` littéral | —      | Doit valoir `true` pour confirmer. |
 
 ## Exemples
 
@@ -18,6 +18,6 @@ Supprime TOUS les messages de tous les topics. Irréversible : n'utiliser que su
 
 ## Erreurs
 
-| Code | Sens | Que faire |
-|---|---|---|
-| `confirm` | `confirm` manquant ou différent de `true`. | Passer explicitement `confirm: true`. |
+| Code                   | Sens                                                                                          | Que faire                             |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------- |
+| (validation du schéma) | `confirm` absent ou différent de `true` : rejet par la validation du schéma, avant exécution. | Passer explicitement `confirm: true`. |

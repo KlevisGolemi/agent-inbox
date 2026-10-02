@@ -4,10 +4,10 @@ Liste le registre de tags partagé (nom, description, usage), du plus utilisé a
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `query` | string 1–100 | — | Filtre sur le nom ou la description. |
-| `limit` | entier 1–200 | `50` | Nombre maximum. |
+| Nom     | Type         | Défaut | Rôle                                 |
+| ------- | ------------ | ------ | ------------------------------------ |
+| `query` | string 1–100 | —      | Filtre sur le nom ou la description. |
+| `limit` | entier 1–200 | `50`   | Nombre maximum.                      |
 
 ## Exemples
 
@@ -20,4 +20,6 @@ Liste le registre de tags partagé (nom, description, usage), du plus utilisé a
 
 ## Erreurs
 
-Aucune.
+| Code                   | Sens                                                                       | Que faire                                           |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| (validation du schéma) | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |

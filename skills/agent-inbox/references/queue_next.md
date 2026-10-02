@@ -4,9 +4,9 @@ Emprunte le plus ancien message en attente (ordre d'arrivée) et le renvoie avec
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `topic` | `^[A-Za-z0-9_-]{1,128}$` | — | Canal à consommer. |
+| Nom     | Type                     | Défaut | Rôle               |
+| ------- | ------------------------ | ------ | ------------------ |
+| `topic` | `^[A-Za-z0-9_-]{1,128}$` | —      | Canal à consommer. |
 
 ## Exemples
 
@@ -15,8 +15,12 @@ Emprunte le plus ancien message en attente (ordre d'arrivée) et le renvoie avec
 
 ## Réponse
 
-`{ ok, empty, item, pending, lease_id }` ou `{ ok, empty: true, item: null }`.
+`{ ok, empty: false, item: { id, source, correlation_id, topic, created_at, read_at, lease_until, lease_id, attempts, attachments, tags, auto_tags, payload }, pending }` (plus `trust` et `warning` pour un message externe). Le `lease_id` est dans `item.lease_id` (format `<id>.<tentative>`). File vide : `{ ok: true, empty: true, item: null }`.
 
 ## Erreurs
 
-Aucune ; une file vide renvoie `empty: true`.
+Une file vide n'est pas une erreur (`empty: true`).
+
+| Code                   | Sens                                                                       | Que faire                                           |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| (validation du schéma) | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |

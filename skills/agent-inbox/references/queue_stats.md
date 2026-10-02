@@ -4,9 +4,9 @@ Compte les messages (total, pending, leased, read_count) et leur répartition pa
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `topic` | `^[A-Za-z0-9_-]{1,128}$` | — | Canal à restreindre. |
+| Nom     | Type                     | Défaut | Rôle                 |
+| ------- | ------------------------ | ------ | -------------------- |
+| `topic` | `^[A-Za-z0-9_-]{1,128}$` | —      | Canal à restreindre. |
 
 ## Exemples
 
@@ -15,10 +15,10 @@ Compte les messages (total, pending, leased, read_count) et leur répartition pa
 
 ## Réponse
 
-`{ ok, ttl_hours, stats: { total, pending, leased, read_count, by_topic: [{ topic, count }] }, storage }`.
+`{ ok, ttl_hours, stats: { total, pending, leased, read_count, topics: { "<topic>": nombre } }, storage }`.
 
 ## Erreurs
 
-| Code | Sens | Que faire |
-|---|---|---|
-| `invalid_topic` | Topic invalide (zod). | Vérifier le format `^[A-Za-z0-9_-]{1,128}$`. |
+| Code                   | Sens                                                                       | Que faire                                           |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| (validation du schéma) | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |

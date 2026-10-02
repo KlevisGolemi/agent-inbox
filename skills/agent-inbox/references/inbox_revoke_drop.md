@@ -4,9 +4,9 @@ Désactive immédiatement un lien de dépôt (`drop_id`) ; les messages déjà r
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `drop_id` | uuid | — | Identifiant du lien (`inbox_drops`). |
+| Nom       | Type | Défaut | Rôle                                 |
+| --------- | ---- | ------ | ------------------------------------ |
+| `drop_id` | uuid | —      | Identifiant du lien (`inbox_drops`). |
 
 ## Exemples
 
@@ -18,6 +18,7 @@ Désactive immédiatement un lien de dépôt (`drop_id`) ; les messages déjà r
 
 ## Erreurs
 
-| Code | Sens | Que faire |
-|---|---|---|
-| `not_found` | Lien inconnu ou déjà révoqué. | Vérifier le `drop_id`. |
+| Code                   | Sens                                                                       | Que faire                                           |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| `not_found`            | Lien inconnu ou déjà révoqué.                                              | Vérifier le `drop_id`.                              |
+| (validation du schéma) | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |

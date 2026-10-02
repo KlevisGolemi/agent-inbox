@@ -4,10 +4,10 @@ Récupère le message portant ce `correlation_id`. Par défaut (`peek: true`) il
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `correlation_id` | `^[A-Za-z0-9_-]{1,128}$` | — | Identifiant de corrélation du message. |
-| `peek` | booléen | `true` | `true` = consulter ; `false` = emprunter. |
+| Nom              | Type                     | Défaut | Rôle                                      |
+| ---------------- | ------------------------ | ------ | ----------------------------------------- |
+| `correlation_id` | `^[A-Za-z0-9_-]{1,128}$` | —      | Identifiant de corrélation du message.    |
+| `peek`           | booléen                  | `true` | `true` = consulter ; `false` = emprunter. |
 
 ## Exemples
 
@@ -16,12 +16,13 @@ Récupère le message portant ce `correlation_id`. Par défaut (`peek: true`) il
 
 ## Réponse
 
-`{ ok, peek, item }` ; si emprunté : `{ ok, empty, item, pending, lease_id }`.
+Consultation (`peek: true`) : `{ ok, peek: true, item }`, sans `lease_id`. Emprunt (`peek: false`) : `{ ok, empty: false, item, pending }` ; le `lease_id` est dans `item.lease_id`.
 
 ## Erreurs
 
-| Code | Sens | Que faire |
-|---|---|---|
-| `not_found` | Identifiant inconnu. | Vérifier le `correlation_id`. |
-| `already_read` | Déjà consommé. | Le message a déjà été traité. |
-| `leased` | Emprunté par un autre. | Attendre la fin du bail ou utiliser `queue_wait`. |
+| Code                   | Sens                                                                       | Que faire                                           |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| `not_found`            | Identifiant inconnu.                                                       | Vérifier le `correlation_id`.                       |
+| `already_read`         | Déjà consommé.                                                             | Le message a déjà été traité.                       |
+| `leased`               | Emprunté par un autre.                                                     | Attendre la fin du bail ou utiliser `queue_wait`.   |
+| (validation du schéma) | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |

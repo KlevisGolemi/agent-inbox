@@ -4,9 +4,9 @@ Supprime définitivement un message par son `id` (UUID, pas le `correlation_id`)
 
 ## Paramètres
 
-| Nom | Type | Défaut | Rôle |
-|---|---|---|---|
-| `id` | uuid | — | Identifiant (UUID) du message. |
+| Nom  | Type | Défaut | Rôle                           |
+| ---- | ---- | ------ | ------------------------------ |
+| `id` | uuid | —      | Identifiant (UUID) du message. |
 
 ## Exemples
 
@@ -18,6 +18,7 @@ Supprime définitivement un message par son `id` (UUID, pas le `correlation_id`)
 
 ## Erreurs
 
-| Code | Sens | Que faire |
-|---|---|---|
-| `not_found` | Identifiant inconnu. | Vérifier l'`id`. |
+| Code                   | Sens                                                                       | Que faire                                           |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
+| `not_found`            | Identifiant inconnu.                                                       | Vérifier l'`id`.                                    |
+| (validation du schéma) | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus. |
