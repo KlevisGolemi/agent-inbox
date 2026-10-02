@@ -69,19 +69,29 @@ export function lingerAfterError(req: Request, res: Response, limits: LingerLimi
   if (req.complete || res.headersSent) return
   const { ms = LINGER_MS, maxBytes = LINGER_MAX_BYTES, maxSockets = LINGER_MAX_SOCKETS } = limits
   res.set('Connection', 'close')
-  if (lingering >= maxSockets) return
   const socket = req.socket
+  // Socket déjà fermée (réponse tardive) : rien à lire, rien à compter.
+  if (socket.destroyed || res.destroyed || lingering >= maxSockets) return
   lingering++
-  const timer = setTimeout(() => socket.destroy(), ms)
-  timer.unref()
-  socket.once('close', () => {
+  // Exactement un décrément, quel que soit le chemin : fermeture, délai, plafond, arrêt.
+  let released = false
+  const release = () => {
+    if (released) return
+    released = true
     lingering--
     clearTimeout(timer)
-  })
+  }
+  const stop = () => {
+    release()
+    socket.destroy()
+  }
+  const timer = setTimeout(stop, ms)
+  timer.unref()
+  socket.once('close', release)
   let discarded = 0
   const discard = (chunk: Buffer) => {
     discarded += chunk.length
-    if (discarded > maxBytes) socket.destroy()
+    if (discarded > maxBytes) stop()
   }
   req.on('data', discard)
   req.resume()

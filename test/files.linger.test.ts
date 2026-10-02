@@ -19,7 +19,7 @@ const SECRET = 's'.repeat(40)
  * Attente d'une condition par `setImmediate` et l'heure réelle : `vi.waitFor` avance de lui-même
  * une horloge factice, ce qui fausserait les tests de délai.
  */
-async function until(check: () => void, ms = 3000): Promise<void> {
+async function until(check: () => void, ms = NET_MS): Promise<void> {
   const deadline = Date.now() + ms
   for (;;) {
     try {
@@ -34,8 +34,17 @@ async function until(check: () => void, ms = 3000): Promise<void> {
 const MB = 1024 * 1024
 const BOUNDARY = 'XBOUNDARY'
 
-afterEach(() => {
+/**
+ * Pas d'assertion sur l'heure réelle : les délais testés passent par une horloge factice ; les
+ * attentes réelles ci-dessous ne sont que des plafonds généreux d'événements réseau (charge).
+ */
+const NET_MS = 10_000
+vi.setConfig({ testTimeout: 30_000 })
+
+afterEach(async () => {
   vi.useRealTimers()
+  // Aucun lingering ne survit à un test : un reste serait imputé au test suivant.
+  await until(() => expect(lingeringCount()).toBe(0), NET_MS)
 })
 
 function multipartBody(size: number): Buffer {
@@ -136,7 +145,7 @@ describe('refus anticipés de /webhook et /d/:token', () => {
         await new Promise((resolve) => setImmediate(resolve))
       }
       c.socket.end()
-      await within(c.serverClosed, 3000, 'fermeture serveur')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
       expect(c.errors).toEqual([])
     } finally {
       c.socket.destroy()
@@ -158,7 +167,7 @@ describe('refus anticipés de /webhook et /d/:token', () => {
       const r = await c.response()
       expect(r.status).toBe(401)
       expect(r.head).toContain('connection: close')
-      await within(c.serverClosed, 3000, 'fermeture serveur')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
       expect(lingeringCount()).toBe(0)
       expect(t.uploads.reservedBytes()).toBe(0)
     } finally {
@@ -186,7 +195,7 @@ describe('refus anticipés de /webhook et /d/:token', () => {
       const r = await c.response()
       expect(r.status).toBe(429)
       expect(r.head).toContain('connection: close')
-      await within(c.serverClosed, 3000, 'fermeture serveur')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
     } finally {
       c.socket.destroy()
       server.close()
@@ -209,7 +218,7 @@ describe('refus anticipés de /webhook et /d/:token', () => {
       expect(r.status).toBe(413)
       expect(r.body).toEqual({ ok: false, error: 'payload_too_large' })
       expect(r.head).toContain('connection: close')
-      await within(c.serverClosed, 3000, 'fermeture serveur')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
       expect(lingeringCount()).toBe(0)
     } finally {
       c.socket.destroy()
@@ -240,7 +249,70 @@ describe('refus anticipés de /webhook et /d/:token', () => {
         await new Promise((resolve) => setImmediate(resolve))
       }
       c.socket.end()
-      await within(c.serverClosed, 3000, 'fermeture serveur')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
+      expect(c.errors).toEqual([])
+    } finally {
+      c.socket.destroy()
+      server.close()
+    }
+  })
+
+  it('MCP : JSON trop gros sans Bearer : 401 (WWW-Authenticate, CORS), fermeture immédiate', async () => {
+    const { t, server } = setup()
+    t.settings.set('json_max_kb', 16)
+    t.settings.set('mcp_upload_max_mb', 0)
+    const c = rawClient(server)
+    try {
+      await c.write(
+        head('/mcp', {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Content-Length': String(10 * MB),
+        }),
+      )
+      await c.write('{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"x":"')
+      const r = await c.response()
+      expect(r.status).toBe(401)
+      expect(r.head).toContain('www-authenticate: bearer')
+      expect(r.head).toContain('access-control-expose-headers: www-authenticate')
+      expect(r.head).toContain('connection: close')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
+      expect(lingeringCount()).toBe(0)
+    } finally {
+      c.socket.destroy()
+      server.close()
+    }
+  })
+
+  it('MCP : JSON trop gros avec clé API valide, client qui envoie encore : 413 lu, fermeture propre', async () => {
+    const { t, server } = setup()
+    t.settings.set('json_max_kb', 16)
+    t.settings.set('mcp_upload_max_mb', 0)
+    const { key } = t.apiKeys.create('test')
+    const body = Buffer.from(
+      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'x', params: { big: 'x'.repeat(MB) } }),
+    )
+    const c = rawClient(server)
+    try {
+      await c.write(
+        head('/mcp', {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Content-Length': String(body.length),
+          Connection: 'close',
+        }),
+      )
+      await c.write(body.subarray(0, 32 * 1024))
+      const r = await c.response()
+      expect(r.status).toBe(413)
+      expect(r.body).toEqual({ ok: false, error: 'payload_too_large' })
+      for (let i = 32 * 1024; i < body.length; i += 128 * 1024) {
+        await c.write(body.subarray(i, i + 128 * 1024))
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+      c.socket.end()
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
       expect(c.errors).toEqual([])
     } finally {
       c.socket.destroy()
@@ -262,7 +334,7 @@ describe('refus anticipés de /webhook et /d/:token', () => {
       const r = await c.response()
       expect(r.status).toBe(404)
       expect(r.head).toContain('connection: close')
-      await within(c.serverClosed, 3000, 'fermeture serveur')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
       expect(lingeringCount()).toBe(0)
     } finally {
       c.socket.destroy()
@@ -304,7 +376,7 @@ describe('lingerAfterError : bornes', () => {
       await new Promise((resolve) => setImmediate(resolve))
       expect(c.server()?.destroyed).toBe(false)
       vi.advanceTimersByTime(1)
-      await within(c.serverClosed, 3000, 'fermeture au délai')
+      await within(c.serverClosed, NET_MS, 'fermeture au délai')
       expect(lingeringCount()).toBe(0)
       expect(vi.getTimerCount()).toBe(0)
       expect(c.errors).toEqual([])
@@ -324,7 +396,7 @@ describe('lingerAfterError : bornes', () => {
       expect((await c.response()).status).toBe(413)
       await c.write(Buffer.alloc(MB - 64 * 1024, 0x41))
       c.socket.end()
-      await within(c.serverClosed, 3000, 'fermeture')
+      await within(c.serverClosed, NET_MS, 'fermeture')
       expect(vi.getTimerCount()).toBe(0)
       expect(lingeringCount()).toBe(0)
       expect(c.errors).toEqual([])
@@ -342,10 +414,41 @@ describe('lingerAfterError : bornes', () => {
       await startUpload(c)
       await until(() => expect(lingeringCount()).toBe(1))
       vi.advanceTimersByTime(10_000)
-      await within(c.serverClosed, 3000, 'fermeture au délai')
+      await within(c.serverClosed, NET_MS, 'fermeture au délai')
       expect(lingeringCount()).toBe(0)
     } finally {
       c.socket.destroy()
+      server.close()
+    }
+  })
+
+  it('socket déjà fermée à l’appel (réponse tardive) : compteur intact, aucun minuteur', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const app = express()
+    let entered = false
+    let done!: () => void
+    const handled = new Promise<void>((resolve) => (done = resolve))
+    app.post('/', (req, res) => {
+      entered = true
+      // Réponse tardive : le client est parti et la socket est fermée quand on refuse.
+      req.once('close', () => {
+        expect(req.socket.destroyed).toBe(true) // la socket se ferme avant la requête
+        lingerAfterError(req, res)
+        res.status(413).json({ ok: false, error: 'file_too_large' })
+        done()
+      })
+      req.resume() // sans lecture, la socket en pause ne verrait pas le départ du client
+    })
+    const server = app.listen(0)
+    const c = rawClient(server)
+    try {
+      await startUpload(c)
+      await until(() => expect(entered).toBe(true))
+      c.socket.destroy()
+      await within(handled, NET_MS, 'refus tardif')
+      expect(lingeringCount()).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
       server.close()
     }
   })
@@ -360,7 +463,7 @@ describe('lingerAfterError : bornes', () => {
         await c.write(Buffer.alloc(256 * 1024, 0x41))
         await new Promise((resolve) => setTimeout(resolve, 5))
       }
-      await within(c.serverClosed, 3000, 'fermeture au plafond')
+      await within(c.serverClosed, NET_MS, 'fermeture au plafond')
       expect(lingeringCount()).toBe(0)
     } finally {
       c.socket.destroy()
@@ -381,7 +484,7 @@ describe('lingerAfterError : bornes', () => {
         const r = await second.response()
         expect(r.status).toBe(413)
         expect(r.head).toContain('connection: close')
-        await within(second.serverClosed, 3000, 'fermeture immédiate')
+        await within(second.serverClosed, NET_MS, 'fermeture immédiate')
         expect(first.server()?.destroyed).toBe(false)
         expect(lingeringCount()).toBe(1)
       } finally {
@@ -389,7 +492,7 @@ describe('lingerAfterError : bornes', () => {
       }
     } finally {
       first.socket.destroy()
-      await within(first.serverClosed, 3000, 'fermeture du premier')
+      await within(first.serverClosed, NET_MS, 'fermeture du premier')
       expect(lingeringCount()).toBe(0)
       server.close()
     }
@@ -410,7 +513,7 @@ describe('lingerAfterError : bornes', () => {
         exit,
         log: () => undefined,
       })('SIGTERM')
-      await within(c.serverClosed, 3000, 'coupure à l’arrêt')
+      await within(c.serverClosed, NET_MS, 'coupure à l’arrêt')
       await until(() => expect(exit).toHaveBeenCalledWith(0))
       expect(lingeringCount()).toBe(0)
     } finally {

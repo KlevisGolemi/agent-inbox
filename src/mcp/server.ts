@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { Router, type RequestHandler } from 'express'
 import { rateLimit } from 'express-rate-limit'
+import { earlyResponsePolicy } from '../files/http.js'
+import { isJsonTooLarge, sendPayloadTooLarge } from '../http/jsonBody.js'
 import { log } from '../log.js'
 import { registerTools, type McpToolDeps } from './tools.js'
 
@@ -51,27 +53,40 @@ export function createMcpRouter({ bearer, ...toolDeps }: McpRouterDeps): Router 
     next()
   })
 
-  router.post('/mcp', mcpLimiter, bearer, async (req, res) => {
-    const server = new McpServer({ name: 'agent-inbox', version: toolDeps.version })
-    registerTools(server, toolDeps)
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    res.on('close', () => {
-      void transport.close()
-      void server.close()
-    })
-    try {
-      await server.connect(transport)
-      await transport.handleRequest(req, res, req.body)
-    } catch (err) {
-      log('error', 'Erreur MCP', { error: String(err) })
-      if (!res.headersSent)
-        res.status(500).json({
-          jsonrpc: '2.0',
-          error: { code: -32603, message: 'Internal server error' },
-          id: null,
-        })
-    }
-  })
+  // Réponse avant la fin du corps (JSON annoncé trop gros, non lu) : 401/429 → fermeture
+  // immédiate ; appelant authentifié par le Bearer → 413 et lingering borné.
+  router.post(
+    '/mcp',
+    earlyResponsePolicy('close'),
+    mcpLimiter,
+    bearer,
+    earlyResponsePolicy('linger'),
+    (req, res, next) => {
+      if (isJsonTooLarge(req)) sendPayloadTooLarge(res)
+      else next()
+    },
+    async (req, res) => {
+      const server = new McpServer({ name: 'agent-inbox', version: toolDeps.version })
+      registerTools(server, toolDeps)
+      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+      res.on('close', () => {
+        void transport.close()
+        void server.close()
+      })
+      try {
+        await server.connect(transport)
+        await transport.handleRequest(req, res, req.body)
+      } catch (err) {
+        log('error', 'Erreur MCP', { error: String(err) })
+        if (!res.headersSent)
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32603, message: 'Internal server error' },
+            id: null,
+          })
+      }
+    },
+  )
 
   router.get('/mcp', methodNotAllowed)
   router.delete('/mcp', methodNotAllowed)

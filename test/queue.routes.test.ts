@@ -10,6 +10,8 @@ import { migrate } from '../src/db/migrations.js'
 import { createWaitPool, MAX_WAITERS } from '../src/queue/http.js'
 import { createQueueRepo, type QueueRepo } from '../src/queue/repo.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
+import type { Request } from 'express'
+import { checkWebhookSecret } from '../src/queue/secret.js'
 
 const SECRET = 's'.repeat(40)
 const H = { 'x-webhook-secret': SECRET }
@@ -475,5 +477,24 @@ describe('peek, stats, suppression, search', () => {
     for (const q of ['limit=0', 'limit=101', 'since=nope', 'status=bad', 'topic=a%20b'])
       expect((await request(app).get(`/search?${q}`).set(H)).status).toBe(400)
     expect((await request(app).get('/search')).status).toBe(401)
+  })
+})
+
+describe('checkWebhookSecret', () => {
+  it('seul le secret exact passe, quelle que soit la longueur fournie (empreintes comparées)', () => {
+    const secret = 'k'.repeat(40)
+    const settings = { get: () => secret } as unknown as Settings
+    const check = (value?: string) =>
+      checkWebhookSecret(
+        { headers: value === undefined ? {} : { 'x-webhook-secret': value } } as Request,
+        settings,
+      )
+    expect(check(secret)).toBe(true)
+    expect(check(undefined)).toBe(false)
+    expect(check('')).toBe(false)
+    expect(check('k'.repeat(39))).toBe(false)
+    expect(check('k'.repeat(41))).toBe(false)
+    expect(check('k'.repeat(39) + 'x')).toBe(false)
+    expect(check('k'.repeat(4096))).toBe(false)
   })
 })
