@@ -88,6 +88,8 @@ jobs:
             notes="Version ${version}. Image : \`${IMAGE}:${version}\`."
           fi
           printf '%s\n' "$notes" > release-notes.md
+      - name: Empaqueter le skill Agent Inbox
+        run: cd skills && zip -r ../agent-inbox-skill.zip agent-inbox
       - name: Publier la release GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,4 +97,4 @@ jobs:
         run: |
           prerelease=""
           case "$TAG" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$TAG" --title "$TAG" --notes-file release-notes.md $prerelease
+          gh release create "$TAG" --title "$TAG" --notes-file release-notes.md $prerelease agent-inbox-skill.zip
