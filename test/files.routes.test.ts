@@ -392,6 +392,49 @@ describe('GET /files/:id', () => {
     )
   })
 
+  it('keep : erreur de lecture autre que ENOENT → 500 générique, log avec l’id seul', async () => {
+    const t = setup()
+    const id = (await upload(t)).body.attachments[0].id
+    // Le fichier devient un dossier : lecture impossible (EISDIR), même en root.
+    fs.rmSync(t.files.path(id))
+    fs.mkdirSync(t.files.path(id))
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      const res = await request(t.app).get(`/files/${id}`).set(H)
+      expect(res.status).toBe(500)
+      expect(res.body).toEqual({ ok: false, error: 'internal_error', message: 'Erreur interne.' })
+      const lines = err.mock.calls.map((c) => String(c[0])).join('')
+      expect(lines).toContain(id)
+      expect(lines).not.toContain('facture')
+      expect(lines).not.toContain(t.files.root)
+    } finally {
+      err.mockRestore()
+    }
+    expect(t.db.prepare('SELECT downloads FROM attachments').get()).toEqual({ downloads: 0 })
+  })
+
+  it('keep : fichier disparu entre le contrôle et la lecture (ENOENT) → 410 file_gone', async () => {
+    const t = setup()
+    const id = (await upload(t)).body.attachments[0].id
+    vi.spyOn(t.files, 'has').mockReturnValue(true)
+    fs.rmSync(t.files.path(id))
+    const res = await request(t.app).get(`/files/${id}`).set(H)
+    expect(res.status).toBe(410)
+    expect(res.body).toEqual({ ok: false, error: 'file_gone' })
+  })
+
+  it('consume : erreur de lecture avant le premier octet → 410 file_gone (pas de coupure)', async () => {
+    const t = setup()
+    const id = (await upload(t, { 'x-on-download': 'consume' })).body.attachments[0].id
+    fs.rmSync(t.files.path(id))
+    fs.mkdirSync(t.files.path(id))
+    const res = await request(t.app).get(`/files/${id}`).set(H)
+    expect(res.status).toBe(410)
+    expect(res.body).toEqual({ ok: false, error: 'file_gone' })
+    expect(res.headers['content-disposition']).toBeUndefined()
+    expect(t.db.prepare('SELECT downloads FROM attachments').get()).toEqual({ downloads: 0 })
+  })
+
   it('pièce expirée : 410 expired', async () => {
     const t = setup()
     const id = (await upload(t)).body.attachments[0].id

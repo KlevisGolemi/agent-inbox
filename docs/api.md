@@ -240,7 +240,8 @@ première livraison complète, ce qui permet une reprise en cas de crash ou de t
 |---|---|---|
 | 401 | `Unauthorized` | Secret absent ou faux |
 | 404 | `not_found` | Pièce inconnue, lien invalide ou expiré |
-| 410 | `expired` / `consumed` / `file_gone` | Rétention écoulée, pièce `consume` déjà livrée, ou fichier absent du disque |
+| 410 | `expired` / `consumed` / `file_gone` | Rétention écoulée, pièce `consume` déjà livrée, ou fichier absent du disque (pour une pièce `consume`, toute erreur de lecture avant le premier octet) |
+| 500 | `internal_error` | Fichier présent mais illisible (droits, E/S) ; journalisé avec l'identifiant seul |
 
 ### `GET /d/:token`
 

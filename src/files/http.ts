@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Request, RequestHandler, Response } from 'express'
+import { log } from '../log.js'
 import type { AttachmentRow, AttachmentsRepo } from './attachments.js'
 import type { MultipartError } from './multipart.js'
 import type { FileStore } from './store.js'
@@ -156,6 +157,21 @@ export function attachmentSummary(files: readonly StagedFile[]): {
 }
 
 /**
+ * Échec de lecture d'une pièce : réponse JSON si les en-têtes ne sont pas partis (en-têtes de fichier
+ * retirés), sinon coupure propre de la réponse (le client voit une réponse incomplète, jamais un blocage).
+ */
+function failRead(res: Response, status: 410 | 500): void {
+  if (res.headersSent) {
+    res.destroy()
+    return
+  }
+  for (const h of ['Content-Disposition', 'Content-Length', 'Content-Type', 'Accept-Ranges'])
+    res.removeHeader(h)
+  if (status === 410) res.status(410).json({ ok: false, error: 'file_gone' })
+  else res.status(500).json({ ok: false, error: 'internal_error', message: 'Erreur interne.' })
+}
+
+/**
  * Sert une pièce : `attachment` + nosniff + CSP sandbox. `keep` : Range accepté, mais seule une
  * réponse GET complète compte comme livraison. `consume` : jamais de Range.
  */
@@ -190,7 +206,16 @@ export function sendAttachment(
           if (count && !ranged) deps.attachments.recordDelivery(row.id)
           return
         }
-        if (!res.headersSent) res.status(410).json({ ok: false, error: 'file_gone' })
+        // Fichier absent : 410 ; autre erreur (droits, dossier, E/S) : 500 et log (id et code seuls).
+        const code = (err as NodeJS.ErrnoException).code
+        // Client parti en cours de route : rien à répondre ni à journaliser.
+        if (code === 'ECONNABORTED' || res.destroyed) return
+        if (code === 'ENOENT') {
+          failRead(res, 410)
+          return
+        }
+        log('error', 'Lecture de pièce impossible', { id: row.id, code: code ?? 'unknown' })
+        failRead(res, 500)
       },
     )
     return
@@ -230,8 +255,9 @@ function streamWhole(path: string, size: number, res: Response): Promise<boolean
       }
     })
     src.once('end', () => res.end())
+    // Erreur de lecture : 410 si rien n'est encore parti, sinon coupure (réponse incomplète).
     src.once('error', () => {
-      res.destroy()
+      failRead(res, 410)
       done(false)
     })
     res.once('finish', () => done(flushed === size))
