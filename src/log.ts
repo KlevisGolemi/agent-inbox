@@ -6,3 +6,8 @@ export function log(level: LogLevel, msg: string, fields: Record<string, unknown
   if (level === 'error') process.stderr.write(line)
   else process.stdout.write(line)
 }
+
+/** Chemin sûr pour les logs : jamais de jeton de dépôt ni d'identifiant de fichier signé (spec §11). */
+export function redactPath(path: string): string {
+  return path.replace(/^\/d\/[^/]+.*$/, '/d/…').replace(/^\/files\/[^/]+.*$/, '/files/…')
+}

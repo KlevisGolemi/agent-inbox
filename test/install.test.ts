@@ -28,7 +28,7 @@ function runInstall(env: Record<string, string>) {
       ...env,
     },
   })
-  return { status: res.status, stderr: res.stderr, envWritten: existsSync(join(dir, '.env')) }
+  return { status: res.status, stderr: res.stderr, stdout: res.stdout, envWritten: existsSync(join(dir, '.env')) }
 }
 
 describe.skipIf(process.platform === 'win32')('install.sh : valeurs Traefik', () => {
@@ -41,6 +41,11 @@ describe.skipIf(process.platform === 'win32')('install.sh : valeurs Traefik', ()
     expect(r.status).not.toBe(0)
     expect(r.stderr).toContain(`${name} invalide`)
     expect(r.envWritten).toBe(false)
+  })
+
+  it('le résumé mentionne le dossier des fichiers dans le volume /data', () => {
+    const r = runInstall({})
+    expect(r.stdout).toContain('/data/files')
   })
 
   it('valeurs sûres acceptées', () => {

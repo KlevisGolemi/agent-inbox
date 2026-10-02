@@ -275,6 +275,7 @@ echo
 ok "Agent Inbox est installé."
 echo "  Interface d'administration : $PUBLIC_URL/admin"
 echo "  Adresse MCP (Claude, ChatGPT) : $PUBLIC_URL/mcp"
+echo "  Données (volume /data) : base, sauvegardes et pièces jointes dans /data/files (non sauvegardées)"
 if ! $ADMIN_CREATED; then
   echo
   echo "  Aucun compte administrateur : ouvrez $PUBLIC_URL/setup et saisissez le code de setup :"

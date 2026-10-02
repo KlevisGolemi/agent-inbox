@@ -5,7 +5,7 @@ import { attachmentSummary, sendUploadError } from '../files/http.js'
 import { MultipartError, receiveUpload } from '../files/multipart.js'
 import type { OnDownload } from '../files/types.js'
 import { UploadError, type UploadManager } from '../files/uploads.js'
-import { log } from '../log.js'
+import { log, redactPath } from '../log.js'
 import type { Settings } from '../settings/index.js'
 import type { NewTag } from '../tags/attach.js'
 import { MAX_TAGS_PER_MESSAGE, type TagRegistry } from '../tags/registry.js'
@@ -44,7 +44,7 @@ export function createQueueRouter(deps: {
   // Le secret est relu à chaque requête : une rotation depuis l'administration est immédiate.
   function auth(req: Request, res: Response, next: NextFunction): void {
     if (!checkWebhookSecret(req, settings)) {
-      log('warn', 'Auth refusée', { ip: req.ip, path: req.path })
+      log('warn', 'Auth refusée', { ip: req.ip, path: redactPath(req.path) })
       res.status(401).json({ ok: false, error: 'Unauthorized' })
       return
     }

@@ -162,6 +162,42 @@ docker run --rm -v agent-inbox-data:/data alpine chown -R 1000:1000 /data
 Le volume s'appelle `agent-inbox-data`, ou la valeur de `QUEUE_VOLUME_NAME` (`docker volume ls`).
 Les sauvegardes de l'interface contiennent comptes, clés API (condensés) et secret du webhook : protégez-les.
 
+## Fichiers et journaux du proxy
+
+Le volume `/data` contient la base, `backups/` et `files/` : les pièces jointes et les fichiers reçus
+par les liens de dépôt. Le dossier `files/` n'est **pas** inclus dans les sauvegardes de l'interface
+(seule la base l'est) ; prévoyez-le dans l'espace disque du volume et dans votre sauvegarde du
+volume complet. Deux réglages (Admin → Réglages) le bornent : `storage_quota_gb` (5 par défaut) et
+`storage_min_free_gb` (espace disque libre à préserver, 2 par défaut).
+
+**Attention au journal d'accès de votre reverse proxy.** Il enregistre les URL complètes, donc les
+jetons des liens de dépôt (`/d/<jeton>`) et les signatures des liens de fichier
+(`/files/<id>?exp=…&sig=…`) : quiconque lit ces journaux peut déposer des fichiers ou télécharger
+une pièce jointe encore valide. L'application elle-même ne les journalise jamais. Le `Caddyfile`
+fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins.
+
+Caddy (bloc `log` ajouté au site) :
+
+```caddyfile
+log {
+	format filter {
+		request>uri regexp ^/(d|files)/.* /$1/[masqué]
+	}
+}
+```
+
+Traefik (journal d'accès activé, drapeaux de la configuration statique) :
+
+```text
+--accesslog.fields.names.RequestPath=drop
+```
+
+`RequestPath` contient l'URI complète de la requête, query string comprise ; la supprimer retire
+les jetons et les signatures. Gardez `RequestHost` et `DownstreamStatus`. Les en-têtes ne sont pas
+journalisés par défaut : si vous passez `--accesslog.fields.headers.defaultmode=keep`, ajoutez
+`--accesslog.fields.headers.names.Referer=drop`. Les champs se règlent aussi en YAML
+(`accessLog.fields.names.RequestPath: drop`).
+
 ## Migration depuis la v1
 
 La v2 reprend la base de la v1 telle quelle : messages, `correlation_id` et schéma sont conservés. Les

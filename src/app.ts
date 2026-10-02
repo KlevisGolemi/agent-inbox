@@ -18,7 +18,7 @@ import type { FileStore } from './files/store.js'
 import type { UploadManager } from './files/uploads.js'
 import type { Env } from './env.js'
 import { createJsonBody } from './http/jsonBody.js'
-import { log } from './log.js'
+import { log, redactPath } from './log.js'
 import './zod.js'
 import { createMcpRouter } from './mcp/server.js'
 import { createWaitPool, type WaitPool } from './queue/http.js'
@@ -87,16 +87,13 @@ const bodyErrors: ErrorRequestHandler = (err, _req, res, next) => {
   }
 }
 
-/** Les jetons de lien de dépôt (/d/<jeton>) ne sont jamais journalisés. */
-const loggablePath = (path: string) => (path.startsWith('/d/') ? '/d/[masqué]' : path)
-
 /**
  * Dernier recours : une ligne de log (chemin sans query string, première ligne du message,
  * jamais la pile) et une réponse JSON générique, sans détail interne.
  */
 const unhandledErrors: ErrorRequestHandler = (err, req, res, next) => {
   const message = (err instanceof Error ? err.message : String(err)).split('\n')[0]
-  log('error', 'Erreur non gérée', { path: loggablePath(req.path), error: message })
+  log('error', 'Erreur non gérée', { path: redactPath(req.path), error: message })
   if (res.headersSent) {
     next(err)
     return

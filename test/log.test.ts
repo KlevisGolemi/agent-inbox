@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { log } from '../src/log.js'
+import { log, redactPath } from '../src/log.js'
 
 describe('log', () => {
   afterEach(() => vi.restoreAllMocks())
@@ -19,4 +19,13 @@ describe('log', () => {
     log('error', 'boom')
     expect(err).toHaveBeenCalledOnce()
   })
+})
+
+describe('redactPath', () => {
+  it.each([
+    ['/d/abcDEF_123', '/d/…'],
+    ['/files/11111111-1111-4111-8111-111111111111', '/files/…'],
+    ['/next', '/next'],
+    ['/drops', '/drops'],
+  ])('%s → %s', (p, out) => expect(redactPath(p)).toBe(out))
 })

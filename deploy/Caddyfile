@@ -2,6 +2,7 @@
 # L'application ne fait confiance qu'à UN proxy (limiteur de débit) : on écrase donc
 # X-Forwarded-For avec l'adresse réelle du client au lieu d'y ajouter une valeur.
 {$SITE_HOST} {
+	# Pas de journal d'accès : il enregistrerait les jetons de dépôt (/d/…) et les signatures (/files/…?sig=).
 	encode zstd gzip
 
 	reverse_proxy app:3000 {

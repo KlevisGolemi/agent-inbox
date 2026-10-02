@@ -11,7 +11,7 @@ export interface ShutdownDeps {
     closeIdleConnections(): void
     closeAllConnections(): void
   }
-  runtime: { shutdown: AbortController; db: { close(): unknown } }
+  runtime: { shutdown: AbortController; db: { close(): unknown }; uploads?: { shutdown(): Promise<void> } }
   jobs: { stop(): void }
   exit: (code: number) => void
   log: (level: LogLevel, msg: string, fields?: Record<string, unknown>) => void
@@ -20,7 +20,7 @@ export interface ShutdownDeps {
 /**
  * Arrêt propre (SIGTERM / SIGINT) : les attentes longues se résolvent aussitôt en « vide »,
  * les tâches périodiques s'arrêtent, le serveur cesse d'accepter des connexions, puis la base
- * est fermée. Les connexions encore ouvertes sont coupées après `SHUTDOWN_GRACE_MS` ; sortie
+ * est fermée, une fois les uploads interrompus et leurs temporaires effacés. Les connexions encore ouvertes sont coupées après `SHUTDOWN_GRACE_MS` ; sortie
  * forcée après `SHUTDOWN_TIMEOUT_MS`. Idempotent.
  */
 export function createShutdown(deps: ShutdownDeps): (signal: string) => void {
@@ -31,11 +31,15 @@ export function createShutdown(deps: ShutdownDeps): (signal: string) => void {
     stopping = true
     log('info', 'Arrêt en cours', { signal })
     runtime.shutdown.abort()
+    // Uploads interrompus tout de suite ; la base n'est fermée qu'une fois leurs temporaires effacés.
+    const uploadsDone = runtime.uploads?.shutdown().catch(() => undefined) ?? Promise.resolve()
     jobs.stop()
     server.close(() => {
-      runtime.db.close()
-      log('info', 'Arrêt terminé')
-      exit(0)
+      void uploadsDone.then(() => {
+        runtime.db.close()
+        log('info', 'Arrêt terminé')
+        exit(0)
+      })
     })
     server.closeIdleConnections()
     setTimeout(() => server.closeAllConnections(), SHUTDOWN_GRACE_MS).unref()
