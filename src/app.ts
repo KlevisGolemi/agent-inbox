@@ -12,6 +12,7 @@ import { requireAdminSession, type AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
 import type { Backups } from './backups/index.js'
 import type { Env } from './env.js'
+import { createJsonBody } from './http/jsonBody.js'
 import { log } from './log.js'
 import './zod.js'
 import { createMcpRouter } from './mcp/server.js'
@@ -104,7 +105,7 @@ export function createApp(deps: AppDeps): Express {
   app.use(cookieParser())
   // L'API d'administration s'authentifie avant de lire le corps (JSON 401 toujours, jamais de redirection).
   app.use('/admin/api', requireAdminSession(deps.sessions, { json: true }))
-  app.use(express.json({ limit: '1mb' }))
+  app.use(createJsonBody(deps.settings))
 
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true, uptime_s: Math.floor(process.uptime()), version: deps.version })

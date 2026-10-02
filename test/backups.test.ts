@@ -67,7 +67,9 @@ describe('sauvegardes', () => {
     await backups.restore(b.name)
     const n = (t: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n
     expect(
-      ['tags', 'messages', 'message_tags', 'attachments', 'drops', 'drop_tags', 'drop_events'].map(n),
+      ['tags', 'messages', 'message_tags', 'attachments', 'drops', 'drop_tags', 'drop_events'].map(
+        n,
+      ),
     ).toEqual([1, 1, 1, 1, 1, 1, 1])
     expect(db.prepare('SELECT trust FROM messages').get()).toEqual({ trust: 'external' })
     expect(onRestore).toHaveBeenCalledOnce()
@@ -168,6 +170,35 @@ describe('sauvegardes', () => {
     await expect(backups.restore('queue-20260101-000000.db')).rejects.toMatchObject({
       code: 'not_found',
     })
+  })
+
+  it('après restauration, file_signing_secret est régénéré (application câblée)', async () => {
+    const t = makeTestApp()
+    const before = t.settings.get('file_signing_secret')
+    const b = await t.backups.run()
+    await t.backups.restore(b.name)
+    expect(t.settings.get('file_signing_secret')).not.toBe(before)
+  })
+
+  it('un échec de onRestore est journalisé et ne saute pas la purge', async () => {
+    settings.set('backup_retention', 1)
+    const old = await backups.run()
+    clock += HOUR
+    const keep = await backups.run()
+    clock += HOUR
+    backups = createBackups({
+      db,
+      dir,
+      settings,
+      now: () => clock,
+      onRestore: () => {
+        throw new Error('secret-à-ne-pas-journaliser')
+      },
+    })
+    await expect(backups.restore(keep.name)).resolves.toBeUndefined()
+    const names = backups.list().map((x) => x.name)
+    expect(names).toContain(keep.name)
+    expect(names).not.toContain(old.name)
   })
 })
 

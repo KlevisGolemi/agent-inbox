@@ -519,3 +519,17 @@ describe('version et mise à jour', () => {
     expect(other.body.error).toBe('updater_unreachable')
   })
 })
+
+describe('réglages v2.2 : secret de signature masqué', () => {
+  it('overview et PATCH /settings masquent file_signing_secret', async () => {
+    const { api, settings } = await setup()
+    const ov = await api('get', '/overview')
+    expect(ov.body.settings.file_signing_secret).toBe(
+      '••••' + settings.get('file_signing_secret').slice(-4),
+    )
+    const patched = await api('patch', '/settings').send({ inline_max_mb: 0 })
+    expect(patched.status).toBe(200)
+    expect(patched.body.settings.file_signing_secret).toMatch(/^••••.{4}$/)
+    expect(patched.body.settings.inline_max_mb).toBe(0)
+  })
+})

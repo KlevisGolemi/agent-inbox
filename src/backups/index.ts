@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
+import { log } from '../log.js'
 import type { Settings } from '../settings/index.js'
 
 export interface BackupInfo {
@@ -201,8 +202,15 @@ export function createBackups(deps: {
       db.exec('DETACH DATABASE src')
     }
     settings.reload()
-    // Après restauration : les liens signés émis avant ne doivent pas se réveiller (Task 2 câble la rotation).
-    deps.onRestore?.()
+    // Après restauration : les liens signés émis avant ne doivent pas se réveiller.
+    // Les données sont déjà restaurées : un échec du hook est journalisé sans sauter la purge.
+    try {
+      deps.onRestore?.()
+    } catch (err) {
+      log('error', 'Échec du hook après restauration', {
+        error: err instanceof Error ? err.name : 'unknown',
+      })
+    }
     // Purge seulement après succès, sans jamais toucher la sauvegarde restaurée.
     prune(name)
   }

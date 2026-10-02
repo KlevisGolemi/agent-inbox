@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import type Database from 'better-sqlite3'
@@ -17,7 +16,13 @@ import { startCleanup } from './jobs/cleanup.js'
 import { log } from './log.js'
 import { createWaitPool, type WaitPool } from './queue/http.js'
 import { createQueueRepo } from './queue/repo.js'
-import { createSettings, seedSettings, type Settings } from './settings/index.js'
+import {
+  createSettings,
+  generateSecret,
+  rotateFileSigningSecret,
+  seedSettings,
+  type Settings,
+} from './settings/index.js'
 import { createVersionService } from './version/index.js'
 
 /** Version courante : package.json, au même chemin relatif depuis src/ et dist/. */
@@ -45,7 +50,7 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
   const db = openDb(env.dbPath)
   migrate(db)
   const settings = createSettings(db)
-  seedSettings(settings, db, env.seed, () => randomBytes(32).toString('hex'))
+  seedSettings(settings, db, env.seed, generateSecret)
 
   const users = createUsers(db)
   const setupCode = { value: (await ensureAdmin({ users, env, log })).setupCode }
@@ -54,7 +59,12 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
   const repo = createQueueRepo(db, {
     leaseTimeoutMs: () => settings.get('lease_timeout_sec') * 1000,
   })
-  const backups = createBackups({ db, dir: join(dirname(env.dbPath), 'backups'), settings })
+  const backups = createBackups({
+    db,
+    dir: join(dirname(env.dbPath), 'backups'),
+    settings,
+    onRestore: () => rotateFileSigningSecret(settings),
+  })
   const shutdown = new AbortController()
   const waits = createWaitPool({ signal: shutdown.signal })
   const app = createApp({

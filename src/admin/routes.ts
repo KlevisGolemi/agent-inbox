@@ -44,7 +44,11 @@ function fail(res: Response, status: number, error: string, message: string, key
 /** Réglages pour l'interface : le secret du webhook est masqué (4 derniers caractères). */
 function maskedSettings(settings: Settings) {
   const all = settings.all()
-  return { ...all, webhook_secret: MASK + all.webhook_secret.slice(-4) }
+  return {
+    ...all,
+    webhook_secret: MASK + all.webhook_secret.slice(-4),
+    file_signing_secret: MASK + all.file_signing_secret.slice(-4),
+  }
 }
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>

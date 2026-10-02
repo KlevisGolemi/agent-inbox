@@ -13,7 +13,7 @@ import { openDb } from '../../src/db/index.js'
 import { migrate } from '../../src/db/migrations.js'
 import type { Env } from '../../src/env.js'
 import { createQueueRepo } from '../../src/queue/repo.js'
-import { createSettings, seedSettings } from '../../src/settings/index.js'
+import { createSettings, rotateFileSigningSecret, seedSettings } from '../../src/settings/index.js'
 import { createVersionService } from '../../src/version/index.js'
 
 /** Env de test : https, NODE_ENV=test (cookies Secure). */
@@ -69,7 +69,12 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     oauthProvider: over.oauthProvider ?? new SqliteOAuthProvider({ db, sessions, env }),
     backups:
       over.backups ??
-      createBackups({ db, dir: mkdtempSync(join(tmpdir(), 'cq-backups-')), settings }),
+      createBackups({
+        db,
+        dir: mkdtempSync(join(tmpdir(), 'cq-backups-')),
+        settings,
+        onRestore: () => rotateFileSigningSecret(settings),
+      }),
     waits: over.waits,
   }
 }

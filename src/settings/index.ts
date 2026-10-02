@@ -1,8 +1,16 @@
+import { randomBytes } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
-import { TOPIC_REGEX } from '../queue/validation.js'
+import { FILE_CATEGORIES } from '../files/types.js'
+import { EXTENSION_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 
 export { seedSettings } from './seed.js'
+
+/** Une valeur par catégorie de fichier, toutes obligatoires. */
+const perCategory = (min: number, max: number) => {
+  const n = z.number().int().min(min).max(max)
+  return z.object({ image: n, audio: n, video: n, document: n, archive: n, other: n }).strict()
+}
 
 export const SETTINGS = {
   ttl_hours: z.number().int().min(1).max(8760),
@@ -14,13 +22,45 @@ export const SETTINGS = {
   topic_ttl_overrides: z.record(z.string().regex(TOPIC_REGEX), z.number().int().min(1).max(8760)),
   backup_interval_hours: z.number().int().min(0).max(168),
   backup_retention: z.number().int().min(1).max(90),
+  json_max_kb: z.number().int().min(16).max(51200),
+  attachments_enabled: z.boolean(),
+  attachments_max_per_message: z.number().int().min(1).max(50),
+  file_max_mb: perCategory(1, 2048),
+  file_allowed_categories: z
+    .array(z.enum(FILE_CATEGORIES))
+    .max(FILE_CATEGORIES.length)
+    .refine((a) => new Set(a).size === a.length, 'Catégories en double'),
+  file_blocked_extensions: z.array(z.string().regex(EXTENSION_REGEX)).max(50),
+  storage_quota_gb: z.number().min(0.1).max(1000),
+  storage_min_free_gb: z.number().min(0).max(1000),
+  file_retention_hours: perCategory(1, 8760),
+  file_retention_large_mb: z.number().int().min(1).max(2048),
+  file_retention_large_hours: z.number().int().min(1).max(8760),
+  file_on_download_default: z.enum(['keep', 'consume']),
+  consume_grace_min: z.number().int().min(1).max(1440),
+  inline_max_mb: z.number().min(0).max(20),
+  mcp_upload_max_mb: z.number().min(0).max(20),
+  download_link_ttl_min: z.number().int().min(1).max(1440),
+  tags_injected_count: z.number().int().min(0).max(50),
+  drops_enabled: z.boolean(),
+  drop_default_hours: z.number().int().min(1).max(720),
+  drop_max_hours: z.number().int().min(1).max(720),
+  drop_default_max_files: z.number().int().min(1).max(1000),
+  drop_rate_limit_per_min: z.number().int().min(1).max(600),
+  file_signing_secret: z.string().min(32).max(256),
 } as const
 
 export type SettingKey = keyof typeof SETTINGS
 export type SettingValues = { [K in SettingKey]: z.infer<(typeof SETTINGS)[K]> }
 
-/** Valeurs par défaut ; webhook_secret n'en a pas (généré à l'amorçage). */
-export const DEFAULTS: Omit<SettingValues, 'webhook_secret'> = {
+/** Secrets générés à l'amorçage (jamais de valeur par défaut). */
+export const SECRET_KEYS = ['webhook_secret', 'file_signing_secret'] as const
+export type SecretKey = (typeof SECRET_KEYS)[number]
+export const isSecretKey = (key: SettingKey): key is SecretKey =>
+  (SECRET_KEYS as readonly string[]).includes(key)
+
+/** Valeurs par défaut ; les secrets n'en ont pas (générés à l'amorçage). */
+export const DEFAULTS: Omit<SettingValues, SecretKey> = {
   ttl_hours: 48,
   cleanup_interval_min: 60,
   webhook_rate_limit_per_min: 100,
@@ -29,6 +69,36 @@ export const DEFAULTS: Omit<SettingValues, 'webhook_secret'> = {
   topic_ttl_overrides: {},
   backup_interval_hours: 24,
   backup_retention: 7,
+  json_max_kb: 1024,
+  attachments_enabled: true,
+  attachments_max_per_message: 10,
+  file_max_mb: { image: 20, audio: 50, video: 200, document: 50, archive: 500, other: 100 },
+  file_allowed_categories: [...FILE_CATEGORIES],
+  file_blocked_extensions: [],
+  storage_quota_gb: 5,
+  storage_min_free_gb: 2,
+  file_retention_hours: { image: 168, audio: 72, video: 24, document: 72, archive: 24, other: 72 },
+  file_retention_large_mb: 50,
+  file_retention_large_hours: 24,
+  file_on_download_default: 'keep',
+  consume_grace_min: 10,
+  inline_max_mb: 5,
+  mcp_upload_max_mb: 5,
+  download_link_ttl_min: 60,
+  tags_injected_count: 15,
+  drops_enabled: true,
+  drop_default_hours: 24,
+  drop_max_hours: 168,
+  drop_default_max_files: 10,
+  drop_rate_limit_per_min: 10,
+}
+
+/** Secret aléatoire de 256 bits (hexadécimal). */
+export const generateSecret = (): string => randomBytes(32).toString('hex')
+
+/** Après une restauration : les liens signés émis auparavant deviennent invalides. */
+export function rotateFileSigningSecret(settings: Settings): void {
+  settings.set('file_signing_secret', generateSecret())
 }
 
 export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[]
@@ -80,10 +150,10 @@ export function createSettings(db: Database.Database): Settings {
     let value: unknown
     if (row) {
       value = parse(key, JSON.parse(row.value))
-    } else if (key === 'webhook_secret') {
-      throw new Error('Réglage « webhook_secret » absent de la base : amorçage non exécuté')
+    } else if (isSecretKey(key)) {
+      throw new Error(`Réglage « ${key} » absent de la base : amorçage non exécuté`)
     } else {
-      value = DEFAULTS[key]
+      value = DEFAULTS[key as Exclude<SettingKey, SecretKey>]
     }
     cache.set(key, value)
     return value as SettingValues[K]
