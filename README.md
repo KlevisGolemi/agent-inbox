@@ -5,11 +5,11 @@
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 [![Node 24](https://img.shields.io/badge/node-24-339933.svg)](package.json)
 
-**Votre IA ne voit que ce qu'on lui donne. Agent Inbox lui donne les événements de vos outils.**
+**Votre IA ne voit que ce qu'on lui donne. Agent Inbox lui donne les événements, les fichiers et les contextes de vos outils.**
 
 Une file d'attente auto-hébergée : vos automatisations (n8n, scripts, outils sans MCP) y déposent des
-événements, Claude et ChatGPT les lisent via MCP, et leur répondent par la même voie.
-Un conteneur, une base SQLite, douze outils MCP, une interface d'administration.
+événements et des fichiers, Claude et ChatGPT les lisent via MCP, et leur répondent par la même voie.
+Un conteneur, une base SQLite, vingt outils MCP, une interface d'administration.
 
 ![Démo : navigation dans l'administration, des messages arrivent en direct](docs/images/demo.gif)
 
@@ -27,9 +27,9 @@ Pensez à une **boîte aux lettres** entre vos automatisations et votre IA.
 
 ```mermaid
 flowchart LR
-  P["Producteurs<br/>n8n, scripts, cron"] -- "POST /webhook<br/>x-webhook-secret" --> Q[("Agent Inbox<br/>SQLite")]
+  P["Producteurs<br/>n8n, scripts, cron, tiers"] -- "POST /webhook<br/>x-webhook-secret" --> Q[("Agent Inbox<br/>SQLite + fichiers")]
   Q -- "MCP /mcp<br/>OAuth 2.1 ou clé API" --> A["Claude, ChatGPT"]
-  A -- "queue_send" --> Q
+  A -- "queue_send, inbox_*" --> Q
   Q -- "GET /next" --> P
 ```
 
@@ -41,6 +41,22 @@ flowchart LR
 
 L'assistant peut aussi écrire dans la boîte (`queue_send`) : n8n relève sa demande, puis la réponse revient
 par `correlation_id`.
+
+### Trois façons d'envoyer un fichier
+
+Agent Inbox 2.2 transforme la file en **boîte aux lettres pour LLM** : chaque message peut porter des
+fichiers, des tags et même venir d'un tiers qui n'a pas de compte.
+
+1. **Un gros zip depuis Codex.** `inbox_upload_link` crée un lien à usage unique, `curl -F file=@projet.zip <url>`
+   l'envoie, puis Claude Code relève le message et télécharge l'archive par un lien signé.
+2. **Une photo déposée par un tiers.** `inbox_create_drop` génère une URL publique montrée une seule fois ; le tiers
+   glisse-dépose sa photo, et Claude Desktop ou ChatGPT la reçoit inline, marquée « externe non vérifié ».
+3. **Un PDF depuis n8n.** Un nœud HTTP Request poste le fichier en `multipart/form-data` sur `/webhook` avec
+   `x-tags: facture` ; l'agent le récupère, tagué et prêt à être traité.
+
+Les fichiers sont détectés par signature binaire, classés par catégorie (image, audio, vidéo, document,
+archive, other) et stockés sur le disque de l'instance. Un réglage de quota et une jauge de stockage
+protègent l'espace disque.
 
 ## Essayer en 2 minutes
 
@@ -65,24 +81,36 @@ npm ci && npm run dev:ui   # http://localhost:3000/admin
 
 ## Ce que Claude peut faire
 
-Douze outils, tous sur `POST /mcp`. Un message lu par `queue_next`, `queue_wait` ou `queue_by_id(peek: false)`
+Vingt outils, tous sur `POST /mcp`. Un message lu par `queue_next`, `queue_wait` ou `queue_by_id(peek: false)`
 est **emprunté** (statut `leased`) : acquittez-le avec `queue_ack`, sinon il est servi à nouveau après
 `lease_timeout_sec` (300 s par défaut).
 
-| Outil          | Rôle                                                                                           | Paramètres                                                                 |
-| -------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `queue_status` | Vérifie que le serveur répond (`uptime_s`, `version`)                                          | —                                                                          |
-| `queue_stats`  | Compte les messages (`total`, `pending`, `leased`, `read_count`) et leur répartition par topic | `topic`                                                                    |
-| `queue_peek`   | Liste les messages, du plus récent au plus ancien, sans les consommer                          | `limit` (1–100, 50), `offset`, `topic`                                     |
-| `queue_search` | Cherche par topic, source, statut, période ou texte du payload, sans consommer                 | `topic`, `source`, `status`, `since`, `until`, `text`, `limit` (1–100, 50) |
-| `queue_by_id`  | Lit le message d'un `correlation_id` ; `peek: false` l'emprunte                                | `correlation_id`, `peek` (défaut `true`)                                   |
-| `queue_next`   | Emprunte le plus ancien message en attente                                                     | `topic`                                                                    |
-| `queue_wait`   | Attend un message (attente longue) puis l'emprunte                                             | `topic` ou `correlation_id`, `timeout_sec` (1–50, 30)                      |
-| `queue_ack`    | Confirme qu'un message emprunté est traité (statut `read`)                                     | `lease_id`                                                                 |
-| `queue_nack`   | Remet un message emprunté en file (statut `pending`)                                           | `lease_id`                                                                 |
-| `queue_send`   | Dépose un message (réponse ou tâche pour n8n)                                                  | `payload`, `correlation_id`, `source` (`claude`), `topic`                  |
-| `queue_delete` | Supprime un message (irréversible)                                                             | `id` (UUID)                                                                |
-| `queue_clear`  | Vide toute la file (irréversible) ; renvoie `{ ok, deleted }` (nombre de messages supprimés)   | `confirm: true`                                                            |
+| Outil               | Rôle                                                                                           | Paramètres                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `queue_status`      | Vérifie que le serveur répond (`uptime_s`, `version`, `storage`)                               | —                                                                          |
+| `queue_stats`       | Compte les messages (`total`, `pending`, `leased`, `read_count`) et leur répartition par topic | `topic`                                                                    |
+| `queue_peek`        | Liste les messages, du plus récent au plus ancien, sans les consommer                          | `limit` (1–100, 50), `offset`, `topic`                                     |
+| `queue_search`      | Cherche par topic, source, statut, période, texte, tag ou pièce jointe, sans consommer         | `topic`, `source`, `status`, `since`, `until`, `text`, `tag`, `has_attachments`, `limit` (1–100, 50) |
+| `queue_by_id`       | Lit le message d'un `correlation_id` ; `peek: false` l'emprunte                                | `correlation_id`, `peek` (défaut `true`)                                   |
+| `queue_next`        | Emprunte le plus ancien message en attente                                                     | `topic`                                                                    |
+| `queue_wait`        | Attend un message (attente longue) puis l'emprunte                                             | `topic` ou `correlation_id`, `timeout_sec` (1–50, 30)                      |
+| `queue_ack`         | Confirme qu'un message emprunté est traité (statut `read`)                                     | `lease_id`                                                                 |
+| `queue_nack`        | Remet un message emprunté en file (statut `pending`)                                           | `lease_id`                                                                 |
+| `queue_send`        | Dépose un message (réponse ou tâche pour n8n), éventuellement avec fichiers et tags            | `payload`, `correlation_id`, `source` (`claude`), `topic`, `attachments`, `tags`, `new_tags` |
+| `queue_tag`         | Pose ou retire des tags sur un message existant                                                | `message_id`, `add`, `remove`, `new_tags`                                  |
+| `queue_delete`      | Supprime un message (irréversible)                                                             | `id` (UUID)                                                                |
+| `queue_clear`       | Vide toute la file (irréversible) ; renvoie `{ ok, deleted }` (nombre de messages supprimés)   | `confirm: true`                                                            |
+| `inbox_tags`        | Liste le registre de tags partagés                                                             | `query`, `limit`                                                           |
+| `inbox_create_tag`  | Crée un tag dans le registre (anti-doublon)                                                    | `name`, `description`, `force`                                             |
+| `inbox_get_file`    | Récupère une pièce jointe : inline, lien signé ou `curl`                                       | `attachment_id`, `delivery` (`auto`, `inline`, `link`)                     |
+| `inbox_upload_link` | Crée un lien d'upload à usage unique pour un gros fichier                                      | `topic`, `tags`, `correlation_id`, `payload`, `on_download`                |
+| `inbox_create_drop` | Crée un lien de dépôt public pour un tiers                                                     | `label`, `topic`, `tags`, `expires_in_hours`, `max_files`, `max_file_mb`, `allowed_categories` |
+| `inbox_drops`       | Liste les liens de dépôt existants                                                             | `include_expired`                                                          |
+| `inbox_revoke_drop` | Révoque immédiatement un lien de dépôt                                                         | `drop_id`                                                                  |
+
+Les clients **avec shell** (Claude Code, Codex) téléchargent les gros fichiers par lien signé (`inbox_get_file`
+avec `delivery: link`). Les clients **sans shell** (Claude Desktop/Web, ChatGPT) reçoivent les images et
+les sons en inline jusqu'à `inline_max_mb` ; au-delà, l'outil renvoie un lien à ouvrir par l'humain.
 
 Ce que vous écrivez à Claude, tout simplement :
 
@@ -98,13 +126,18 @@ Un événement isolé est anodin. Mis bout à bout, des événements de CRM, de 
 racontent votre activité : clients, chiffre d'affaires, incidents. Voici ce qui est protégé, comment, et
 combien de temps.
 
-- **Où.** Les payloads restent dans la base SQLite de _votre_ serveur. Aucun service tiers ne les reçoit.
+- **Où.** Les payloads restent dans la base SQLite de _votre_ serveur. Les fichiers sont stockés sur le
+  disque de l'instance (`/data/files`). Aucun service tiers ne les reçoit.
 - **Comment.** Connexion MCP en OAuth 2.1 avec PKCE, ou clé API `aik_…` dont seul le hash SHA-256 est stocké.
   L'administration est derrière une session avec protection CSRF. Les logs ne reçoivent ni secret, ni jeton,
-  ni contenu de message.
+  ni contenu de message, ni nom de fichier.
 - **Combien de temps.** Durée de conservation (TTL) réglable globalement et **par topic** : par exemple
-  12 h pour le monitoring et 168 h pour un digest. Nettoyage automatique, sauvegardes avec rétention
-  configurable (7 par défaut).
+  12 h pour le monitoring et 168 h pour un digest. Les fichiers ont leur propre rétention par catégorie :
+  la durée de vie effective d'un message devient `max(TTL du topic, rétention de ses pièces)`. Nettoyage
+  automatique, sauvegardes avec rétention configurable (7 par défaut).
+- **Sauvegardes.** Les sauvegardes de l'interface contiennent la base, pas les fichiers. Pensez à sauvegarder
+  le volume complet (`/data`) si vous voulez conserver les pièces jointes. Après une restauration, le secret
+  de signature des liens est régénéré : les anciens liens signés ne fonctionnent plus.
 - **Ce qui sort.** Uniquement ce que l'assistant lit explicitement via un outil MCP (`queue_peek`,
   `queue_next`, `queue_search`…). Seule autre requête sortante : la vérification des nouvelles versions
   auprès de GitHub, désactivable dans Réglages.
@@ -147,8 +180,9 @@ industriel. En revanche, un seul conteneur, une base SQLite, et votre IA branch�
 
 ## Templates n8n
 
-Trois workflows prêts à importer, avec des nœuds standard : un événement vers Claude, un worker
-requête/réponse, un digest quotidien. Voir [examples/n8n/](examples/n8n/README.md).
+Quatre workflows prêts à importer, avec des nœuds standard : un événement vers Claude, un worker
+requête/réponse, un digest quotidien et l'envoi d'un fichier en `multipart/form-data`. Voir
+[examples/n8n/](examples/n8n/README.md).
 
 ## Documentation
 

@@ -9,6 +9,7 @@ sont dans [docs/cas-d-usage.md](../../docs/cas-d-usage.md).
 | [`01-evenement-vers-claude.json`](01-evenement-vers-claude.json) | Un événement (webhook n8n ou test manuel) est déposé sur le topic `events`. |
 | [`02-request-response.json`](02-request-response.json) | Un worker prend les demandes du topic `requests`, les traite, publie la réponse puis acquitte. |
 | [`03-digest-quotidien.json`](03-digest-quotidien.json) | Chaque matin, plusieurs sources sont réunies en un seul message sur le topic `digest`. |
+| [`04-envoyer-un-fichier.json`](04-envoyer-un-fichier.json) | Un fichier (PDF, image…) est posté en `multipart/form-data` sur `/webhook`, avec `x-tags`. |
 
 ## Préparer n8n (une seule fois)
 

@@ -170,11 +170,25 @@ par les liens de dépôt. Le dossier `files/` n'est **pas** inclus dans les sauv
 volume complet. Deux réglages (Admin → Réglages) le bornent : `storage_quota_gb` (5 par défaut) et
 `storage_min_free_gb` (espace disque libre à préserver, 2 par défaut).
 
+**Durée de vie effective.** Un message avec une pièce jointe vivante n'est pas supprimé par le nettoyage
+automatique tant qu'une de ses pièces n'est pas expirée. La durée de vie effective est donc
+`max(TTL du topic, rétention de ses pièces)`.
+
+**Secret de signature régénéré après restauration.** Après toute restauration d'une sauvegarde, le réglage
+`file_signing_secret` est recréé : les anciens liens signés (`/files/<id>?exp=…&sig=…`) ne fonctionnent
+plus. Les fichiers sans ligne en base sont effacés au nettoyage suivant.
+
+**Mise à jour 2.1 → 2.2 (migration v4).** Les sauvegardes de la v3 ne sont pas compatibles avec le
+schéma v4. Après la montée de version, faites immédiatement une sauvegarde fraîche avant de compter
+sur la restauration à chaud.
+
 **Attention au journal d'accès de votre reverse proxy.** Il enregistre les URL complètes, donc les
 jetons des liens de dépôt (`/d/<jeton>`) et les signatures des liens de fichier
 (`/files/<id>?exp=…&sig=…`) : quiconque lit ces journaux peut déposer des fichiers ou télécharger
 une pièce jointe encore valide. L'application elle-même ne les journalise jamais. Le `Caddyfile`
-fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins.
+fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins. L'en-tête
+`Connection` est hop-by-hop : derrière Caddy ou Traefik, c'est la connexion proxy → application qui
+est gérée par le proxy, le client ne voit que la réponse relaée.
 
 Caddy (bloc `log` ajouté au site) :
 

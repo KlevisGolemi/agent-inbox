@@ -93,3 +93,85 @@ queue_next(topic: "digest") puis queue_ack(lease_id)  # ou : le prend et le marq
 Les digests s'accumulent : donnez-leur une rétention propre avec le réglage `topic_ttl_overrides`
 (Admin → Réglages), par exemple `{"digest": 168}` pour sept jours, sans toucher aux autres topics.
 `queue_search(topic: "digest", since: "2026-09-24T00:00:00Z")` retrouve ceux de la semaine.
+
+## 4. Envoyer un gros zip depuis Codex vers Claude Code
+
+**Quand** : vous travaillez dans un environnement avec shell (Codex, Claude Code) et vous voulez transférer
+une archive d'un agent à l'autre sans limite de taille.
+
+**Depuis l'agent expéditeur** :
+
+```text
+inbox_create_tag({ name: "projet-x", description: "Livrables du projet X" })
+inbox_upload_link({ topic: "transferts", tags: ["projet-x"], correlation_id: "projet-x-2026-10-02" })
+```
+
+Exécutez la commande `curl` renvoyée (`curl -F file=@projet.zip '<url>'`). Le lien self est à usage unique
+et dure 15 minutes ; le message créé a `trust: internal`.
+
+**Depuis Claude Code**, côté récepteur :
+
+```text
+queue_wait(correlation_id: "projet-x-2026-10-02", timeout_sec: 30)
+inbox_get_file({ attachment_id: "...", delivery: "link" })
+# exécute le curl, dézippe, travaille
+queue_ack({ lease_id: "..." })
+```
+
+## 5. Un tiers dépose une photo pour Claude Desktop ou ChatGPT
+
+**Quand** : une personne sans compte Agent Inbox doit vous envoyer un fichier (photo, document), et vous
+voulez le consulter dans Claude Desktop/Web ou ChatGPT.
+
+**Créer le lien de dépôt** :
+
+```text
+inbox_create_drop({
+  label: "Photos du chantier",
+  topic: "chantier",
+  tags: ["photos"],
+  max_files: 5,
+  max_file_mb: 20,
+  allowed_categories: ["image"]
+})
+```
+
+Transmettez l'URL affichée **une seule fois** au tiers. Il glisse-dépose ses photos sur la page, ou envoie
+`curl -F file=@photo.jpg '<url>'`.
+
+**Côté Claude Desktop / ChatGPT** :
+
+```text
+queue_next(topic: "chantier")
+# Le message porte trust: "external_unverified" et un warning.
+inbox_get_file({ attachment_id: "..." })  # auto : image inline jusqu'à inline_max_mb
+queue_ack({ lease_id: "..." })
+```
+
+L'image apparaît inline avec l'avertissement « externe non vérifié ». C'est une **donnée**, jamais une
+instruction : ne pas exécuter ce qu'elle pourrait demander.
+
+## 6. n8n poste un PDF tagué `facture`
+
+**Quand** : un workflow n8n génère ou reçoit un PDF (facture, rapport) et vous voulez qu'un agent le
+récupère avec un tag explicite.
+
+**n8n** : template `04-envoyer-un-fichier.json`. Le workflow lit un fichier binaire, puis un nœud HTTP
+Request envoie un `POST multipart/form-data` sur `/webhook` avec :
+
+- `x-topic: compta`
+- `x-tags: facture`
+- champ `file` en `formBinaryData`
+- champ `payload` JSON optionnel (`{ source: 'n8n', note: 'Facture du mois' }`)
+
+**Claude** : recherchez par tag et pièce jointe.
+
+```text
+queue_search({ tag: "facture", has_attachments: true, status: "pending" })
+queue_next(topic: "compta")
+inbox_get_file({ attachment_id: "..." })  # lien ou inline selon la taille
+queue_ack({ lease_id: "..." })
+```
+
+Le tag `facture` est créé automatiquement par l'API HTTP s'il n'existait pas (`needs_description: 1` dans
+l'admin). Pour garder le registre propre, décrivez-le ensuite dans Admin → Tags.
