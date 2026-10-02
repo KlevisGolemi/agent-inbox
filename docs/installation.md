@@ -188,8 +188,10 @@ jetons des liens de dépôt (`/d/<jeton>`) et les signatures des liens de fichie
 une pièce jointe encore valide. L'application elle-même ne les journalise jamais. Le `Caddyfile`
 fourni n'active aucun journal d'accès. Si vous en activez un, masquez ces chemins.
 
-L'en-tête `Connection` est hop-by-hop : derrière Caddy ou Traefik, c'est la connexion proxy → application
-qui est gérée par l'application (fermeture après une erreur d'envoi), le client ne voit que la réponse relayée par le proxy.
+L'en-tête `Connection` est hop-by-hop : il ne vaut que pour un saut de connexion. La fermeture après une
+erreur d'envoi (lingering) de l'application ne concerne donc que la connexion proxy → application. Caddy ou
+Traefik décident eux-mêmes, indépendamment, de garder ou de fermer leur propre connexion avec le client ;
+ils lui relaient seulement la réponse d'erreur.
 
 Caddy (bloc `log` ajouté au site) :
 

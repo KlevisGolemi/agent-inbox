@@ -266,10 +266,10 @@ curl -F file=@photo.jpg 'https://queue.example.com/d/<jeton>'
 | 403 | `attachments_disabled` | Pièces jointes désactivées |
 | 507 | `quota_exceeded`, `disk_full` | Quota ou disque insuffisant |
 | 503 | `aborted`, `shutting_down` | Envoi interrompu ou arrêt du serveur |
+| 409 | `duplicate_correlation_id` | `correlation_id` déjà utilisé (lien self) |
 
 Le jeton figure dans l'URL : voir [Fichiers et journaux du proxy](installation.md#fichiers-et-journaux-du-proxy)
 pour masquer ces chemins dans les journaux d'accès et pour la remarque sur `Connection`.
-| 409 | `duplicate_correlation_id` | `correlation_id` déjà utilisé (lien self) |
 
 ## Topics
 
