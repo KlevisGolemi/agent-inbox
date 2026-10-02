@@ -217,9 +217,17 @@ export function createTagRegistry(
     const similar: Record<string, SimilarTag[]> = {}
     for (const [n, t] of fresh) {
       const c = check(t, input.force === true)
-      if (c.ok)
-        toCreate.push({ name: c.name, description: c.description, createdBy: input.createdBy })
-      else if (c.error === 'exists')
+      if (c.ok) {
+        // Même anti-doublon entre new_tags d'un même appel (sauf force).
+        const twins = input.force === true ? [] : toCreate.filter((t) => areSimilar(c.name, t.name))
+        if (twins.length > 0)
+          similar[n] = twins.map((t) => ({
+            name: t.name,
+            description: t.description,
+            usage_count: 0,
+          }))
+        else toCreate.push({ name: c.name, description: c.description, createdBy: input.createdBy })
+      } else if (c.error === 'exists')
         reused.push(n) // déjà là : simple réutilisation
       else if (c.error === 'similar_exists') similar[n] = c.similar ?? []
       else return { ok: false, error: c.error, message: c.message, hint: UNKNOWN_TAG_HINT }

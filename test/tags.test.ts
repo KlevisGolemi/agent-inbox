@@ -175,6 +175,26 @@ describe('résolution MCP et HTTP', () => {
     })
   })
 
+  it('MCP : deux new_tags proches dans un même appel : refusés sans force, acceptés avec force', () => {
+    const newTags = [
+      { name: 'client', description: D },
+      { name: 'clients', description: D },
+    ]
+    expect(tags.resolveForMcp({ newTags, createdBy: 'x' })).toMatchObject({
+      ok: false,
+      error: 'similar_exists',
+      similar: { clients: [{ name: 'client', description: D, usage_count: 0 }] },
+    })
+    expect(tags.resolveForMcp({ newTags, createdBy: 'x', force: true })).toEqual({
+      ok: true,
+      tags: [],
+      newTags: [
+        { name: 'client', description: D, createdBy: 'x' },
+        { name: 'clients', description: D, createdBy: 'x' },
+      ],
+    })
+  })
+
   it('MCP : plus de 20 tags refusés', () => {
     const many = Array.from({ length: 21 }, (_, i) => `t${i}`)
     expect(tags.resolveForMcp({ tags: many, createdBy: 'x' })).toMatchObject({
