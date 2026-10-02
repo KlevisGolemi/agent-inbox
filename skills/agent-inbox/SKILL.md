@@ -10,7 +10,7 @@ viennent de n8n, de scripts, d'autres agents ou de tiers (liens de dépôt). Ils
 
 ## Routine
 
-1. **Tags** : avant de taguer, `inbox_tags` (ou la liste injectée dans `queue_send`) ; réutiliser un tag existant ;
+1. **Tags** : avant de taguer, `inbox_tags` (la liste injectée dans `queue_send` ne donne que les noms des plus utilisés) ; réutiliser un tag existant ;
    créer en dernier recours (`new_tags` ou `inbox_create_tag`, description de 10 à 280 caractères obligatoire). Un tag
    inconnu est refusé avec `similar` : choisir l'un d'eux. Les liens `inbox_upload_link` et `inbox_create_drop`
    n'acceptent que des tags existants : crée-les d'abord avec `inbox_create_tag`.

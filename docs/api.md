@@ -311,7 +311,7 @@ Modifiables à chaud dans Admin → Réglages, sans redémarrage.
 | `inline_max_mb` | 5 | 0 – 20 | Seuil de livraison inline (0 = toujours un lien) |
 | `mcp_upload_max_mb` | 5 | 0 – 20 | Total des fichiers base64 d'un `queue_send` (taille décodée) |
 | `download_link_ttl_min` | 60 | 1 – 1440 | Durée de vie d'un lien signé |
-| `tags_injected_count` | 15 | 0 – 50 | Tags injectés dans les descriptions d'outils |
+| `tags_injected_count` | 15 | 0 – 50 | Noms des tags les plus utilisés injectés dans les descriptions d'outils (jamais leurs descriptions) |
 | `drops_enabled` | `true` | booléen | Liens de dépôt publics |
 | `drop_default_hours` | 24 | 1 – 720 | Durée par défaut d'un drop |
 | `drop_max_hours` | 168 | 1 – 720 | Durée maximum d'un drop |

@@ -169,7 +169,7 @@ describe('queue_tag, inbox_tags, inbox_create_tag', () => {
     ).toEqual(['facture', 'factures'])
   })
 
-  it('injection : descriptions de queue_send et queue_tag listent les tags triés par nom, à chaud', async () => {
+  it('injection : descriptions de queue_send et queue_tag listent les NOMS des tags triés, à chaud', async () => {
     const ctx = mcpSetup()
     ctx.tags.create({ name: 'zeta', description: D, createdBy: 't' })
     ctx.tags.create({ name: 'alpha', description: D, createdBy: 't' })
@@ -182,6 +182,8 @@ describe('queue_tag, inbox_tags, inbox_create_tag', () => {
       expect(d.indexOf('- alpha')).toBeGreaterThan(0)
       expect(d.indexOf('- alpha')).toBeLessThan(d.indexOf('- zeta'))
     }
+    // Noms seulement : les descriptions (texte libre) ne vont jamais dans tools/list.
+    for (const tool of ['queue_send', 'queue_tag']) expect(await desc(tool)).not.toContain(D)
     ctx.settings.set('tags_injected_count', 0)
     expect(await desc('queue_send')).not.toContain('- alpha')
   })

@@ -8,7 +8,8 @@ export const TAG_DESCRIPTION_MIN = 10
 export const TAG_DESCRIPTION_MAX = 280
 export const MAX_TAGS_PER_MESSAGE = 20
 export const INJECTION_MAX_CHARS = 1500
-const INJECTED_DESCRIPTION_CHARS = 80
+/** Seuls les noms de cette forme sont injectés dans tools/list. */
+const INJECTABLE_NAME = /^[a-z0-9-]+$/
 export const AUTO_TAG_DESCRIPTION = 'Créé automatiquement par l’API HTTP : description à compléter.'
 export const UNKNOWN_TAG_HINT =
   'Routine : vérifie le registre avec inbox_tags, réutilise un tag existant (voir « similar »), ' +
@@ -359,25 +360,27 @@ export function createTagRegistry(
       })()
     },
     remove: (name) => db.prepare('DELETE FROM tags WHERE name = ?').run(name).changes > 0,
+    /**
+     * Texte ajouté aux descriptions de queue_send et queue_tag : les NOMS des tags les plus utilisés,
+     * triés, filtrés sur [a-z0-9-]. Jamais les descriptions (texte libre, éventuellement venu d'un
+     * tiers via x-tags) : elles se lisent par inbox_tags, comme une donnée.
+     */
     injectionText() {
       const n = opts.settings.get('tags_injected_count')
       if (n === 0) return ''
-      const top = (
-        db
-          .prepare('SELECT name, description FROM tags ORDER BY usage_count DESC, name ASC LIMIT ?')
-          .all(n) as {
+      const names = (
+        db.prepare('SELECT name FROM tags ORDER BY usage_count DESC, name ASC LIMIT ?').all(n) as {
           name: string
-          description: string
         }[]
-      ).sort((a, b) => (a.name < b.name ? -1 : 1))
-      if (top.length === 0) return ''
-      let text = '\n\nTags existants (réutilise-les ; liste complète : inbox_tags) :'
-      for (const t of top) {
-        const d =
-          t.description.length > INJECTED_DESCRIPTION_CHARS
-            ? t.description.slice(0, INJECTED_DESCRIPTION_CHARS - 1) + '…'
-            : t.description
-        const line = `\n- ${t.name} : ${d}`
+      )
+        .map((r) => r.name)
+        .filter((name) => INJECTABLE_NAME.test(name))
+        .sort()
+      if (names.length === 0) return ''
+      let text =
+        '\n\nTags existants les plus utilisés (réutilise-les ; appelle inbox_tags pour leurs descriptions) :'
+      for (const name of names) {
+        const line = `\n- ${name}`
         if (text.length + line.length > INJECTION_MAX_CHARS) break
         text += line
       }
