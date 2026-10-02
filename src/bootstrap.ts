@@ -26,6 +26,7 @@ import {
   seedSettings,
   type Settings,
 } from './settings/index.js'
+import { createTagRegistry } from './tags/registry.js'
 import { createVersionService } from './version/index.js'
 
 /** Version courante : package.json, au même chemin relatif depuis src/ et dist/. */
@@ -85,6 +86,7 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     files,
     uploads,
     attachments,
+    tags: createTagRegistry(db, { settings }),
     version: VERSION,
     versions: createVersionService({ settings, fetch, current: VERSION, repo: env.updateRepo }),
     env,

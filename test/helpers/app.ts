@@ -17,6 +17,7 @@ import { migrate } from '../../src/db/migrations.js'
 import type { Env } from '../../src/env.js'
 import { createQueueRepo } from '../../src/queue/repo.js'
 import { createSettings, rotateFileSigningSecret, seedSettings } from '../../src/settings/index.js'
+import { createTagRegistry } from '../../src/tags/registry.js'
 import { createVersionService } from '../../src/version/index.js'
 
 /** Env de test : https, NODE_ENV=test (cookies Secure). */
@@ -69,6 +70,7 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
     files,
     uploads,
     attachments: over.attachments ?? createAttachmentsRepo(db, { files, settings }),
+    tags: over.tags ?? createTagRegistry(db, { settings }),
     version: over.version ?? '0.0.0-test',
     versions:
       over.versions ??

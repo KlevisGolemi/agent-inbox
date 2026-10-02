@@ -23,6 +23,7 @@ import { createWaitPool, type WaitPool } from './queue/http.js'
 import { createQueueRouter } from './queue/routes.js'
 import type { QueueRepo } from './queue/repo.js'
 import type { Settings } from './settings/index.js'
+import type { TagRegistry } from './tags/registry.js'
 import type { VersionService } from './version/index.js'
 
 export interface AppDeps {
@@ -32,6 +33,7 @@ export interface AppDeps {
   files: FileStore
   uploads: UploadManager
   attachments: AttachmentsRepo
+  tags: TagRegistry
   version: string
   versions: VersionService
   /** Remplaçable en test ; `fetch` global par défaut. */
