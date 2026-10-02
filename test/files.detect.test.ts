@@ -45,3 +45,11 @@ describe('sanitizeFilename', () => {
     expect(extensionOf('sans')).toBe('')
   })
 })
+
+describe('detectFile : petits tampons', () => {
+  it('un binaire minuscule (< DETECTION_BYTES) n’est pas classé texte', async () => {
+    const result = await detectFile(Buffer.from([0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0xff, 0xfe, 0xfd]), 'x.bin')
+    expect(result.category).toBe('other')
+    expect(result.inline).toBeNull()
+  })
+})

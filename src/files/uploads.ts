@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
 import { createWriteStream, statfsSync } from 'node:fs'
+import { finished as streamFinished } from 'node:stream/promises'
 import { log as defaultLog } from '../log.js'
 import type { Settings } from '../settings/index.js'
 import { DETECTION_BYTES, detectFile, extensionOf, sanitizeFilename, type Detected } from './detect.js'
@@ -108,6 +109,15 @@ type DestroyableSource = AsyncIterable<Buffer | Uint8Array | string> & {
   on?: (event: 'error', listener: (error: Error) => void) => unknown
 }
 
+/** Erreur d'écriture disque sans chemin ni nom de fichier : seul le code ENOSPC/EDQUOT est exposé. */
+function diskError(error: Error): Error {
+  const code = (error as NodeJS.ErrnoException).code
+  if (code === 'ENOSPC' || code === 'EDQUOT') {
+    return new UploadError('disk_full', 'Espace disque insuffisant sur le serveur.')
+  }
+  return new Error('Erreur d’écriture sur le disque du serveur.')
+}
+
 const aborted = () => new UploadError('aborted', 'Envoi interrompu.')
 const ignoreStreamError = () => undefined
 
@@ -122,7 +132,6 @@ export function createUploadManager(deps: {
   const log = deps.log ?? defaultLog
   let reserved = 0
   let used = 0
-  let filesCount = 0
   let closed = false
   const sessions = new Set<UploadSession>()
   const activeTemps = new Set<string>()
@@ -142,7 +151,6 @@ export function createUploadManager(deps: {
 
     // Une lecture SQL au début seulement ; les commits suivants sont suivis en mémoire.
     used = store.usedBytes()
-    filesCount = store.liveCount()
     const ctrl = new AbortController()
     const staged: StagedFile[] = []
     const temps: string[] = []
@@ -225,6 +233,23 @@ export function createUploadManager(deps: {
       out.on('error', (error) => {
         outputError = error
       })
+      // Attend 'drain' sans jamais se bloquer si le flux est déjà (ou devient) en erreur ou fermé.
+      const drained = () =>
+        new Promise<void>((resolve, reject) => {
+          if (outputError) return reject(outputError)
+          if (out.destroyed) return reject(new Error('Flux de sortie fermé'))
+          const settle = (done: () => void) => {
+            out.off('drain', onDrain)
+            out.off('error', onClose)
+            out.off('close', onClose)
+            done()
+          }
+          const onDrain = () => settle(resolve)
+          const onClose = () => settle(() => reject(outputError ?? new Error('Flux de sortie fermé')))
+          out.on('drain', onDrain)
+          out.on('error', onClose)
+          out.on('close', onClose)
+        })
       const hash = createHash('sha256')
       const head: Buffer[] = []
       let headLen = 0
@@ -257,21 +282,24 @@ export function createUploadManager(deps: {
             headLen += part.length
             if (headLen >= DETECTION_BYTES) await detect()
           }
-          if (!out.write(chunk)) await once(out, 'drain')
+          if (outputError) throw outputError
+          if (!out.write(chunk)) await drained()
           if (outputError) throw outputError
         }
         if (ctrl.signal.aborted) throw aborted()
         if (size === 0) throw new UploadError('empty_file', 'Fichier vide.')
         if (detected === null) await detect()
-        const complete = once(out, 'finish')
+        // `detect` est asynchrone : le flux a pu tomber en erreur entre-temps (finish n'arriverait jamais).
+        if (outputError) throw outputError
         out.end()
-        await complete
+        await streamFinished(out)
         if (outputError) throw outputError
       } catch (error) {
         // R3 : le descripteur est fermé avant de retirer son temporaire.
         await destroyOutput(out)
         if (error instanceof UploadError) throw error
         if (ctrl.signal.aborted) throw aborted()
+        if (outputError) throw diskError(outputError)
         throw error
       }
 
@@ -318,7 +346,6 @@ export function createUploadManager(deps: {
           if (!result.ok) store.unlinkFinal(ids)
           else {
             used += staged.reduce((total, file) => total + file.size_bytes, 0)
-            filesCount += staged.length
           }
           finish()
           return result
@@ -355,17 +382,20 @@ export function createUploadManager(deps: {
     reservedBytes: () => reserved,
     activeTempIds: () => new Set(activeTemps),
     snapshot() {
+      // Lecture rare : relue en base pour rester juste (démarrage, nettoyage de rétention).
+      const usedNow = store.usedBytes()
+      const filesNow = store.liveCount()
       const quota = quotaBytes()
       const free = diskFreeBytes()
       const minFree = minFreeBytes()
       return {
-        used_bytes: used,
+        used_bytes: usedNow,
         reserved_bytes: reserved,
         quota_bytes: quota,
         disk_free_bytes: free,
         min_free_bytes: minFree,
-        files_count: filesCount,
-        accepting: !closed && settings.get('attachments_enabled') && used + reserved < quota && free > minFree,
+        files_count: filesNow,
+        accepting: !closed && settings.get('attachments_enabled') && usedNow + reserved < quota && free > minFree,
       }
     },
     async shutdown() {

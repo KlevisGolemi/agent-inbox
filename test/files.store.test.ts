@@ -1,13 +1,13 @@
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openDb } from '../src/db/index.js'
 import { migrate } from '../src/db/migrations.js'
 import { computeExpiresAt } from '../src/files/retention.js'
 import type { FileStore } from '../src/files/store.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
-import { filesFixture, finalFiles, tempFiles } from './helpers/files.js'
+import { cleanupFixtures, filesFixture, finalFiles, tempFiles } from './helpers/files.js'
 
 const HOUR = 3_600_000
 const MB = 1024 * 1024
@@ -23,6 +23,7 @@ beforeEach(() => {
   seedSettings(settings, db, {}, () => 'x'.repeat(64))
   ;({ store, root } = filesFixture(db, settings))
 })
+afterEach(cleanupFixtures)
 
 function insertAttachment(id: string, size: number, deleted = false) {
   db.prepare(`INSERT OR IGNORE INTO messages (id, source, payload, status, created_at) VALUES ('m', 't', '{}', 'pending', 1)`).run()

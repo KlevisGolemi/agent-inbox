@@ -100,6 +100,14 @@ export function createFileStore(deps: { db: Database.Database; root: string; log
     listTemp: () =>
       readdirSync(tmpDir)
         .filter((name) => ID_REGEX.test(name))
-        .map((id) => ({ id, mtimeMs: statSync(join(tmpDir, id)).mtimeMs })),
+        .flatMap((id) => {
+          try {
+            return [{ id, mtimeMs: statSync(join(tmpDir, id)).mtimeMs }]
+          } catch (err) {
+            // Temporaire supprimé entre readdir et stat : rien à nettoyer.
+            if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []
+            throw err
+          }
+        }),
   }
 }

@@ -117,7 +117,8 @@ export function inlineKindFor(mime: string, category: FileCategory): InlineKind 
 }
 
 function looksLikeText(head: Uint8Array): boolean {
-  const sample = head.subarray(0, Math.max(0, head.length - 3))
+  // Un échantillon tronqué peut couper un caractère UTF-8 : on ignore alors les 3 derniers octets.
+  const sample = head.length >= DETECTION_BYTES ? head.subarray(0, head.length - 3) : head
   if (sample.includes(0)) return false
   try {
     new TextDecoder('utf-8', { fatal: true }).decode(sample)

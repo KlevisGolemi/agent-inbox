@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type Database from 'better-sqlite3'
@@ -38,9 +38,17 @@ export const fakeStatfs =
   (freeBytes: number): StatFs =>
   () => ({ bavail: freeBytes, bsize: 1 })
 
+const fixtureRoots: string[] = []
+
+/** Supprime les dossiers créés par filesFixture (à appeler dans afterEach). */
+export function cleanupFixtures(): void {
+  for (const dir of fixtureRoots.splice(0)) rmSync(dir, { recursive: true, force: true })
+}
+
 /** FileStore + UploadManager dans un dossier temporaire, disque « infini » par défaut. */
 export function filesFixture(db: Database.Database, settings: Settings, freeBytes = 1e12) {
   const root = mkdtempSync(join(tmpdir(), 'inbox-files-'))
+  fixtureRoots.push(root)
   const store = createFileStore({ db, root, log: () => {} })
   store.init()
   const uploads = createUploadManager({ store, settings, statfs: fakeStatfs(freeBytes), log: () => {} })

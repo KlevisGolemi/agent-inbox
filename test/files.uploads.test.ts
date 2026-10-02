@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { PassThrough, Readable } from 'node:stream'
 import type Database from 'better-sqlite3'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { openDb } from '../src/db/index.js'
 import { migrate } from '../src/db/migrations.js'
 import type { FileStore } from '../src/files/store.js'
 import { UploadError, type UploadManager } from '../src/files/uploads.js'
 import { createSettings, seedSettings, type Settings } from '../src/settings/index.js'
-import { chunked, filesFixture, finalFiles, PDF_MINI, PNG_1X1, sized, tempFiles } from './helpers/files.js'
+import { chunked, cleanupFixtures, filesFixture, finalFiles, PDF_MINI, PNG_1X1, sized, tempFiles } from './helpers/files.js'
 
 const MB = 1024 * 1024
 const GB = 1024 ** 3
@@ -25,6 +25,7 @@ beforeEach(() => {
   seedSettings(settings, db, {}, () => 'x'.repeat(64))
   ;({ store, uploads, root } = filesFixture(db, settings))
 })
+afterEach(cleanupFixtures)
 
 /** Occupe le quota sauf `free` octets (ligne vivante factice). */
 function fillQuota(free: number) {
