@@ -298,7 +298,7 @@ Modifiables à chaud dans Admin → Réglages, sans redémarrage.
 | `json_max_kb` | 1 024 | 16 – 51 200 | Corps JSON de `/webhook` et `payload` multipart |
 | `attachments_enabled` | `true` | booléen | Interrupteur global des pièces jointes |
 | `attachments_max_per_message` | 10 | 1 – 50 | Fichiers maximum par message ou par requête de drop |
-| `file_max_mb` | `{image:20, audio:50, video:200, document:50, archive:500, other:100}` | 1 – 2048 par catégorie | Taille maximum par catégorie |
+| `file_max_mb` | `{image:20, audio:50, video:95, document:50, archive:95, other:100}` | 1 – 2048 par catégorie | Taille maximum par catégorie (au-delà de 95 Mo : seulement sans proxy Cloudflare, voir installation) |
 | `file_allowed_categories` | les 6 | sous-ensemble | Catégories acceptées |
 | `file_blocked_extensions` | `[]` | ≤ 50 | Extensions refusées (ex. `exe`, `bat`) |
 | `storage_quota_gb` | 5 | 0.1 – 1000 | Quota de stockage des fichiers |

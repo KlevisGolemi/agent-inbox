@@ -91,6 +91,12 @@ l'adresse canonique (métadonnées OAuth, URLs affichées dans l'interface).
 `CQ_BEHIND_CLOUDFLARE=1` règle `TRUST_PROXY=2`. Sans cela, l'adresse IP vue par l'application est celle de
 Cloudflare et la limite de débit s'applique à tous les clients en même temps.
 
+**Taille des envois derrière Cloudflare.** Cloudflare refuse tout corps de requête au-delà de **100 Mo**
+(offres Free et Pro) ou **200 Mo** (Business), avant même d'atteindre le serveur. C'est pourquoi les plafonds
+par défaut `file_max_mb` de `video` et `archive` sont de **95 Mo**. Ne les montez au-delà que si l'hôte n'est
+**pas** derrière le proxy Cloudflare (DNS seul, nuage gris) ou s'il est en offre Business (jusqu'à 195 Mo
+environ). Une installation existante garde ses réglages : vérifiez-les dans Admin → Réglages.
+
 ### Ne publiez jamais le port de l'application
 
 La limite de débit (`/webhook`, `/login`, `/token`…) lit l'adresse du client dans `X-Forwarded-For` en ne

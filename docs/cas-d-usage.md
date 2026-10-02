@@ -97,7 +97,8 @@ Les digests s'accumulent : donnez-leur une rétention propre avec le réglage `t
 ## 4. Envoyer un gros zip depuis Codex vers Claude Code
 
 **Quand** : vous travaillez dans un environnement avec shell (Codex, Claude Code) et vous voulez transférer
-une archive d'un agent à l'autre sans limite de taille.
+une archive d'un agent à l'autre, au-delà de ce que permet `queue_send` (jusqu'au plafond `file_max_mb` de la
+catégorie : 95 Mo par défaut pour une archive).
 
 **Depuis l'agent expéditeur** :
 

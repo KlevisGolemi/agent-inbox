@@ -45,7 +45,7 @@ describe('réglages', () => {
       json_max_kb: 1024,
       attachments_enabled: true,
       attachments_max_per_message: 10,
-      file_max_mb: { image: 20, audio: 50, video: 200, document: 50, archive: 500, other: 100 },
+      file_max_mb: { image: 20, audio: 50, video: 95, document: 50, archive: 95, other: 100 },
       file_allowed_categories: ['image', 'audio', 'video', 'document', 'archive', 'other'],
       file_blocked_extensions: [],
       storage_quota_gb: 5,
@@ -147,7 +147,7 @@ describe('réglages', () => {
   })
 })
 
-const CATS = { image: 20, audio: 50, video: 200, document: 50, archive: 500, other: 100 }
+const CATS = { image: 20, audio: 50, video: 95, document: 50, archive: 95, other: 100 }
 
 describe('réglages v2.2', () => {
   it('amorce file_signing_secret et ne l’écrase jamais au redémarrage', () => {

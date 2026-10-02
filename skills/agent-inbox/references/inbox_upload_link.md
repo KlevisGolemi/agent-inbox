@@ -1,6 +1,6 @@
 # inbox_upload_link
 
-Crée un lien d'upload à usage unique (15 min) pour déposer un ou plusieurs fichiers depuis un shell, sans limite pratique de taille : exécute ensuite la commande `curl` renvoyée (`curl -F file=@chemin <url>`, un `-F` par fichier). Le message créé porte `topic`, `tags`, `correlation_id` et `payload` donnés ici ; confiance interne. À préférer à `queue_send.attachments` dès qu'un fichier dépasse quelques Mo (archive zip d'un projet, vidéo…). `tags` n'accepte que des tags existants : crée-les d'abord avec `inbox_create_tag`.
+Crée un lien d'upload à usage unique (15 min) pour déposer un ou plusieurs fichiers depuis un shell, jusqu'au plafond `file_max_mb` de leur catégorie (95 Mo par défaut pour vidéo et archive, voir `max_file_mb` dans la réponse) : exécute ensuite la commande `curl` renvoyée (`curl -F file=@chemin <url>`, un `-F` par fichier). Le message créé porte `topic`, `tags`, `correlation_id` et `payload` donnés ici ; confiance interne. À préférer à `queue_send.attachments` dès qu'un fichier dépasse quelques Mo (archive zip d'un projet, vidéo…). `tags` n'accepte que des tags existants : crée-les d'abord avec `inbox_create_tag`.
 
 ## Paramètres
 

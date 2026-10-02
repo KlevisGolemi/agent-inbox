@@ -11,7 +11,7 @@ import { finalFiles, PDF_MINI, sized, tempFiles } from './helpers/files.js'
 const SECRET = 's'.repeat(40)
 const H = { 'x-webhook-secret': SECRET }
 const MB = 1024 * 1024
-const CATS = { image: 20, audio: 50, video: 200, document: 50, archive: 500, other: 100 }
+const CATS = { image: 20, audio: 50, video: 95, document: 50, archive: 95, other: 100 }
 
 function setup() {
   const t = makeTestApp()

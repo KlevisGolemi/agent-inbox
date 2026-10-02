@@ -72,7 +72,8 @@ export const DEFAULTS: Omit<SettingValues, SecretKey> = {
   json_max_kb: 1024,
   attachments_enabled: true,
   attachments_max_per_message: 10,
-  file_max_mb: { image: 20, audio: 50, video: 200, document: 50, archive: 500, other: 100 },
+  // video et archive à 95 Mo : sous la limite de corps de Cloudflare Free/Pro (100 Mo) ; réglables en base.
+  file_max_mb: { image: 20, audio: 50, video: 95, document: 50, archive: 95, other: 100 },
   file_allowed_categories: [...FILE_CATEGORIES],
   file_blocked_extensions: [],
   storage_quota_gb: 5,

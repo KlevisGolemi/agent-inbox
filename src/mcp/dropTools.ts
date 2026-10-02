@@ -25,8 +25,8 @@ export function registerDropTools(server: McpServer, deps: McpToolDeps): void {
     {
       title: 'Lien d’upload pour un gros fichier',
       description:
-        'Crée un lien d’upload à usage unique (15 min) pour déposer un ou plusieurs fichiers depuis un shell, sans limite ' +
-        'pratique de taille : exécute ensuite la commande curl renvoyée (curl -F file=@chemin <url>, un -F par fichier). ' +
+        'Crée un lien d’upload à usage unique (15 min) pour déposer un ou plusieurs fichiers depuis un shell, jusqu’au ' +
+        'plafond file_max_mb de leur catégorie (renvoyé dans max_file_mb) : exécute ensuite la commande curl renvoyée (curl -F file=@chemin <url>, un -F par fichier). ' +
         'Le message créé porte topic, tags, correlation_id et payload donnés ici ; trust interne. À préférer à ' +
         'queue_send.attachments dès qu’un fichier dépasse quelques Mo (archive zip d’un projet, vidéo…).',
       inputSchema: {
