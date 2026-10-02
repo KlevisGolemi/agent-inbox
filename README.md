@@ -151,7 +151,7 @@ Détails et signalement d'une faille : [SECURITY.md](SECURITY.md).
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/admin-dashboard.png" alt="Tableau de bord"><br><sub>Le tableau de bord : état de la file d'un coup d'œil.</sub></td>
+    <td width="50%"><img src="docs/images/admin-stockage.png" alt="Tableau de bord"><br><sub>Le tableau de bord : état de la file d'un coup d'œil.</sub></td>
     <td width="50%"><img src="docs/images/admin-explorer.png" alt="Queue Explorer"><br><sub>Queue Explorer : lecture seule, filtres par topic et statut, aucun message consommé.</sub></td>
   </tr>
   <tr>
@@ -161,6 +161,13 @@ Détails et signalement d'une faille : [SECURITY.md](SECURITY.md).
   <tr>
     <td><img src="docs/images/admin-sauvegardes.png" alt="Sauvegardes"><br><sub>Sauvegardes de la base : télécharger ou restaurer en un clic.</sub></td>
     <td><img src="docs/images/consentement.png" alt="Écran de consentement OAuth"><br><sub>Consentement OAuth : vous autorisez chaque client, et seulement lui.</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/admin-tags.png" alt="Tags"><br><sub>Tags.</sub></td>
+    <td><img src="docs/images/admin-drops.png" alt="Liens de dépôt"><br><sub>Liens de dépôt.</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/images/page-depot.png" alt="Page publique de dépôt"><br><sub>Page publique de dépôt.</sub></td>
   </tr>
 </table>
 
