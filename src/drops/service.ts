@@ -1,8 +1,7 @@
 import type { FileCategory, OnDownload } from '../files/types.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 import type { Settings } from '../settings/index.js'
-import type { NewTag } from '../tags/attach.js'
-import type { NewTagInput, SimilarTag, TagRegistry } from '../tags/registry.js'
+import type { SimilarTag, TagRegistry } from '../tags/registry.js'
 import type { DropsRepo, DropView } from './repo.js'
 
 export const SELF_LINK_TTL_MIN = 15
@@ -47,7 +46,6 @@ export interface PublicDropInput {
 export interface SelfLinkInput {
   topic?: string
   tags?: string[]
-  newTags?: NewTagInput[]
   correlationId?: string
   payload?: Record<string, unknown>
   onDownload?: OnDownload
@@ -74,20 +72,15 @@ function cleanLabel(raw: string): string {
     .trim()
 }
 
-/** Validation seule (R11) : les tags à créer sont posés dans la transaction de création du lien. */
+/** Tags EXISTANTS seulement : un tag inconnu est refusé avec les tags proches (aucune écriture). */
 function resolveTags(
   deps: DropServiceDeps,
   tags: string[] | undefined,
-  newTags: NewTagInput[] | undefined,
   createdBy: string,
-): { ok: true; names: string[]; fresh: NewTag[] } | DropServiceError {
-  if (!tags?.length && !newTags?.length) return { ok: true, names: [], fresh: [] }
-  const r = deps.tags.resolveForMcp({
-    ...(tags ? { tags } : {}),
-    ...(newTags ? { newTags } : {}),
-    createdBy,
-  })
-  if (r.ok) return { ok: true, names: r.tags, fresh: r.newTags }
+): { ok: true; names: string[] } | DropServiceError {
+  if (!tags?.length) return { ok: true, names: [] }
+  const r = deps.tags.resolveForMcp({ tags, createdBy })
+  if (r.ok) return { ok: true, names: r.tags }
   return err(r.error, r.message, {
     hint: r.hint,
     ...(r.unknown ? { unknown: r.unknown } : {}),
@@ -131,7 +124,7 @@ export function createPublicDrop(
       field: 'max_file_mb',
       max: maxMb,
     })
-  const tags = resolveTags(deps, input.tags, undefined, input.createdBy)
+  const tags = resolveTags(deps, input.tags, input.createdBy)
   if (!tags.ok) return tags
   const { drop, token } = deps.drops.create({
     kind: 'public',
@@ -167,7 +160,7 @@ export function createSelfLink(
     return err('invalid_topic', 'Topic invalide : ^[A-Za-z0-9_-]{1,128}$')
   if (input.correlationId !== undefined && !CORRELATION_ID_REGEX.test(input.correlationId))
     return err('invalid_correlation_id', 'Format attendu : ^[A-Za-z0-9_-]{1,128}$')
-  const tags = resolveTags(deps, input.tags, input.newTags, input.createdBy)
+  const tags = resolveTags(deps, input.tags, input.createdBy)
   if (!tags.ok) return tags
   const allowed = settings.get('file_allowed_categories')
   if (allowed.length === 0)
@@ -177,7 +170,6 @@ export function createSelfLink(
     label: 'upload',
     topic,
     tags: tags.names,
-    newTags: tags.fresh,
     maxFiles: settings.get('attachments_max_per_message'),
     maxFileMb: maxMbFor(settings, allowed),
     allowedCategories: [...allowed],

@@ -79,13 +79,11 @@ export function createDropsRouter(deps: {
     }
     if (!req.is('multipart/form-data')) {
       req.resume()
-      res
-        .status(415)
-        .json({
-          ok: false,
-          error: 'multipart_required',
-          message: 'Envoyez les fichiers en multipart/form-data.',
-        })
+      res.status(415).json({
+        ok: false,
+        error: 'multipart_required',
+        message: 'Envoyez les fichiers en multipart/form-data.',
+      })
       return
     }
     // Lien self : réservé atomiquement pour CETTE requête dès le début (une seule requête).
@@ -158,13 +156,11 @@ export function createDropsRouter(deps: {
       }
       if (!out.result.ok) {
         compensate('duplicate_correlation_id')
-        res
-          .status(409)
-          .json({
-            ok: false,
-            error: 'duplicate_correlation_id',
-            existing_id: out.result.existingId,
-          })
+        res.status(409).json({
+          ok: false,
+          error: 'duplicate_correlation_id',
+          existing_id: out.result.existingId,
+        })
         return
       }
       done = true // dépôt commité : le lien self reste consommé, les places restent prises

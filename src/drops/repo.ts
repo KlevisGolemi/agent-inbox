@@ -1,7 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import type { FileCategory, OnDownload } from '../files/types.js'
-import { createTags, type NewTag } from '../tags/attach.js'
 
 export type DropKind = 'public' | 'self'
 export type DropStatus = 'active' | 'expired' | 'revoked' | 'exhausted' | 'used'
@@ -58,8 +57,6 @@ export interface CreateDropInput {
   topic: string
   /** Tags déjà au registre (validés par l'appelant). */
   tags: string[]
-  /** Tags validés à créer dans la même transaction que le lien (aucun orphelin si l'insertion échoue). */
-  newTags?: NewTag[]
   maxFiles: number
   maxFileMb: number
   allowedCategories: FileCategory[]
@@ -139,7 +136,6 @@ export function createDropsRepo(
       const token = randomBytes(32).toString('base64url') // 256 bits, montré une seule fois
       const t = now()
       db.transaction(() => {
-        createTags(db, input.newTags ?? [], t)
         db.prepare(
           `INSERT INTO drops (id, token_hash, kind, label, topic, max_files, max_file_mb, allowed_categories,
              message_payload, correlation_id, on_download, created_by, created_at, expires_at)
@@ -161,8 +157,7 @@ export function createDropsRepo(
           input.expiresAt,
         )
         const tag = db.prepare('INSERT OR IGNORE INTO drop_tags (drop_id, tag) VALUES (?, ?)')
-        for (const name of [...input.tags, ...(input.newTags ?? []).map((n) => n.name)])
-          tag.run(id, name)
+        for (const name of input.tags) tag.run(id, name)
       })()
       return { drop: view(byId.get(id) as DropRow), token }
     },

@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
+import http from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import request from 'supertest'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createPublicDrop, createSelfLink, type DropServiceDeps } from '../src/drops/service.js'
 import { EXTERNAL_WARNING, itemView } from '../src/queue/http.js'
 import { createFileStore } from '../src/files/store.js'
@@ -355,16 +357,88 @@ describe('compensation et lien self concurrent', () => {
     expect(finalFiles(t.files.root)).toEqual([])
   })
 
-  it('new_tags du lien self : créés avec le lien, posés sur le message', async () => {
+  it('lien self : tag inconnu refusé (tags existants seulement), rien créé', () => {
     const t = setup()
-    const s = createSelfLink(svc(t), {
-      createdBy: 't',
-      newTags: [{ name: 'archives-projet', description: 'Archives zip de projets livrés' }],
+    const r = createSelfLink(svc(t), { createdBy: 't', tags: ['archives-projet'] })
+    expect(r).toMatchObject({ ok: false, error: 'unknown_tags' })
+    expect(t.tags.get('archives-projet')).toBeNull()
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM drops').get()).toEqual({ n: 0 })
+  })
+
+  it('erreur interne sur /d/<jeton> : le jeton n’est jamais journalisé', async () => {
+    const base = makeTestApp()
+    const repo = {
+      ...base.repo,
+      enqueue: () => {
+        throw new Error('boom')
+      },
+    }
+    const t = makeTestApp({
+      db: base.db,
+      settings: base.settings,
+      files: base.files,
+      uploads: base.uploads,
+      repo,
     })
+    const d = publicDrop(t)
+    const token = pathOf(d.url).slice(3)
+    const lines: string[] = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      lines.push(String(c))
+      return true
+    })
+    try {
+      const res = await request(t.app).post(pathOf(d.url)).attach('file', PNG_1X1, 'p.png')
+      expect(res.status).toBe(500)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(lines.join('')).toContain('Erreur non gérée')
+    expect(lines.join('')).not.toContain(token)
+    expect(t.drops.get(d.drop.id)!.files_count).toBe(0)
+  })
+
+  it('client coupé en plein upload : lien self restauré, rien de résiduel', async () => {
+    const t = setup()
+    const s = createSelfLink(svc(t), { createdBy: 't' })
     if (!s.ok) throw new Error('attendu ok')
-    expect(t.drops.tagsOf(s.drop.id)).toEqual(['archives-projet'])
-    const res = await request(t.app).post(pathOf(s.url)).attach('file', PNG_1X1, 'p.png')
-    expect(t.repo.findById(res.body.id)!.tags).toEqual(['archives-projet'])
+    const server = t.app.listen(0)
+    try {
+      const { port } = server.address() as AddressInfo
+      const boundary = 'xxbound'
+      const head = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="p.png"\r\nContent-Type: image/png\r\n\r\n`
+      await new Promise<void>((resolve) => {
+        const req = http.request({
+          host: '127.0.0.1',
+          port,
+          method: 'POST',
+          path: pathOf(s.url),
+          headers: {
+            'content-type': `multipart/form-data; boundary=${boundary}`,
+            'content-length': String(10 * MB),
+          },
+        })
+        req.on('error', () => resolve())
+        req.write(head)
+        req.write(Buffer.concat([PNG_1X1, Buffer.alloc(200_000)]))
+        setTimeout(() => {
+          req.destroy()
+          resolve()
+        }, 150)
+      })
+      await vi.waitFor(() => {
+        expect(t.drops.events(s.drop.id)[0]).toMatchObject({ outcome: 'rejected:aborted' })
+      })
+      expect(t.drops.get(s.drop.id)).toMatchObject({
+        files_count: 0,
+        revoked_at: null,
+        status: 'active',
+      })
+      expect(finalFiles(t.files.root)).toEqual([])
+      expect(tempFiles(t.files.root)).toEqual([])
+    } finally {
+      server.close()
+    }
   })
 
   it('multipart absent : 415 sans toucher au lien self', async () => {

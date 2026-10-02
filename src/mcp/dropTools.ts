@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { createPublicDrop, createSelfLink, type DropServiceDeps } from '../drops/service.js'
 import { FILE_CATEGORIES } from '../files/types.js'
-import { correlationSchema, fail, newTagSchema, result, tagsSchema, topicSchema } from './common.js'
+import { correlationSchema, fail, result, tagsSchema, topicSchema } from './common.js'
 import type { McpToolDeps } from './tools.js'
 
 export function registerDropTools(server: McpServer, deps: McpToolDeps): void {
@@ -30,8 +30,11 @@ export function registerDropTools(server: McpServer, deps: McpToolDeps): void {
         'queue_send.attachments dès qu’un fichier dépasse quelques Mo (archive zip d’un projet, vidéo…).',
       inputSchema: {
         topic: topicSchema,
-        tags: tagsSchema.optional().describe('Tags existants du registre.'),
-        new_tags: z.array(newTagSchema).max(20).optional().describe('Tags à créer puis poser.'),
+        tags: tagsSchema
+          .optional()
+          .describe(
+            'Tags EXISTANTS du registre (inbox_tags ; crée-les d’abord avec inbox_create_tag).',
+          ),
         correlation_id: correlationSchema
           .optional()
           .describe('Identifiant unique du futur message.'),
@@ -46,12 +49,11 @@ export function registerDropTools(server: McpServer, deps: McpToolDeps): void {
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    ({ topic, tags, new_tags, correlation_id, payload, on_download }) => {
+    ({ topic, tags, correlation_id, payload, on_download }) => {
       const r = createSelfLink(svc(), {
         createdBy: 'mcp',
         ...(topic !== undefined ? { topic } : {}),
         ...(tags !== undefined ? { tags } : {}),
-        ...(new_tags !== undefined ? { newTags: new_tags } : {}),
         ...(correlation_id !== undefined ? { correlationId: correlation_id } : {}),
         ...(payload !== undefined ? { payload } : {}),
         ...(on_download !== undefined ? { onDownload: on_download } : {}),
