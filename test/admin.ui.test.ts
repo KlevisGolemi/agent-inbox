@@ -42,9 +42,9 @@ describe('interface : aucun texte externe interprété comme HTML', () => {
     expect(out).toContain('&lt;img src=x onerror=alert(1)&gt;')
   })
 
-  it('l’aperçu n’est demandé que pour les images non actives', () => {
+  it('l’aperçu n’est demandé que pour les images inline (jpeg, png, gif, webp)', () => {
     expect(html).toContain(
-      "att.category === 'image' && att.status === 'available' && att.mime_type !== 'image/svg+xml'",
+      "att.status === 'available' && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(att.mime_type)",
     )
   })
 })

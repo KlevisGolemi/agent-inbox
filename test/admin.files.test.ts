@@ -8,7 +8,7 @@ import { AUTO_TAG_DESCRIPTION } from '../src/tags/registry.js'
 import { createFileStore } from '../src/files/store.js'
 import { makeTestApp } from './helpers/app.js'
 import { testDb } from './helpers/app.js'
-import { PDF_MINI, PNG_1X1, SVG_ACTIVE } from './helpers/files.js'
+import { HEIC_MINI, PDF_MINI, PNG_1X1, SVG_ACTIVE } from './helpers/files.js'
 
 const SECRET = 's'.repeat(40)
 const D = 'Une description suffisante'
@@ -70,6 +70,10 @@ describe('admin : stockage et pièces jointes', () => {
     expect(svg.body.error).toBe('not_previewable')
     expect(
       (await t.api('get', `/files/${await t.uploadFile(PDF_MINI, 'a.pdf')}/preview`)).status,
+    ).toBe(415)
+    // Image hors liste blanche (HEIC, TIFF…) : pas d'aperçu, comme pour l'inline MCP.
+    expect(
+      (await t.api('get', `/files/${await t.uploadFile(HEIC_MINI, 'i.heic')}/preview`)).status,
     ).toBe(415)
     expect(
       (

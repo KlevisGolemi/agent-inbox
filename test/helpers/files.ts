@@ -11,6 +11,19 @@ export const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
   'base64',
 )
+/** En-tête HEIC (photo d'iPhone) : image que les clients LLM refusent en bloc inline. */
+export const HEIC_MINI = Buffer.concat([
+  Buffer.from([0, 0, 0, 0x18]),
+  Buffer.from('ftypheic'),
+  Buffer.from([0, 0, 0, 0]),
+  Buffer.from('mif1heic'),
+  Buffer.alloc(64),
+])
+/** En-tête TIFF petit-boutiste. */
+export const TIFF_MINI = Buffer.concat([
+  Buffer.from([0x49, 0x49, 0x2a, 0, 8, 0, 0, 0]),
+  Buffer.alloc(64),
+])
 export const PDF_MINI = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n')
 export const SVG_ACTIVE = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',

@@ -47,6 +47,8 @@ const ACTIVE_EXTENSIONS = new Set([
   'js',
   'mjs',
 ])
+/** Seuls formats d'image acceptés en bloc inline par les clients LLM ; les autres (HEIC, TIFF…) passent par un lien. */
+const INLINE_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
 const INLINE_TEXT_MIMES = new Set(['text/plain', 'text/markdown', 'text/csv', 'application/json'])
 /** Repli sur l'extension pour du texte seulement : une image, un son ou une vidéo exigent une signature. */
 const TEXT_EXT_MIMES: Record<string, string> = {
@@ -121,7 +123,7 @@ function categoryOf(mime: string): FileCategory {
 
 export function inlineKindFor(mime: string, category: FileCategory): InlineKind {
   if (ACTIVE_MIMES.has(mime)) return null
-  if (category === 'image') return 'image'
+  if (category === 'image') return INLINE_IMAGE_MIMES.has(mime) ? 'image' : null
   if (category === 'audio') return 'audio'
   return INLINE_TEXT_MIMES.has(mime) ? 'text' : null
 }

@@ -227,7 +227,7 @@ export function createAdminRouter(deps: AdminDeps): Router {
     return row
   }
 
-  // Aperçu : images non actives seulement (jamais SVG) ; mêmes en-têtes de sécurité que le téléchargement.
+  // Aperçu : images inline seulement (jpeg, png, gif, webp ; jamais SVG ni HEIC/TIFF) ; mêmes en-têtes de sécurité que le téléchargement.
   router.get('/files/:id/preview', (req, res) => {
     const row = availableAttachment(req, res)
     if (!row) return

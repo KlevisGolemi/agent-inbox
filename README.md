@@ -109,8 +109,8 @@ est **emprunté** (statut `leased`) : acquittez-le avec `queue_ack`, sinon il es
 | `inbox_revoke_drop` | Révoque immédiatement un lien de dépôt                                                         | `drop_id`                                                                  |
 
 Les clients **avec shell** (Claude Code, Codex) téléchargent les gros fichiers par lien signé (`inbox_get_file`
-avec `delivery: link`). Les clients **sans shell** (Claude Desktop/Web, ChatGPT) reçoivent les images et
-les sons en inline jusqu'à `inline_max_mb` ; au-delà, l'outil renvoie un lien à ouvrir par l'humain.
+avec `delivery: link`). Les clients **sans shell** (Claude Desktop/Web, ChatGPT) reçoivent les images
+(JPEG, PNG, GIF, WebP) et les sons en inline jusqu'à `inline_max_mb` ; au-delà, l'outil renvoie un lien à ouvrir par l'humain.
 
 Ce que vous écrivez à Claude, tout simplement :
 

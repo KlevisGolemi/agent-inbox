@@ -1,7 +1,7 @@
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { detectFile, extensionOf, sanitizeFilename } from '../src/files/detect.js'
-import { HTML_PAGE, PDF_MINI, PNG_1X1, SVG_ACTIVE } from './helpers/files.js'
+import { HEIC_MINI, HTML_PAGE, PDF_MINI, PNG_1X1, SVG_ACTIVE, TIFF_MINI } from './helpers/files.js'
 
 describe('detectFile', () => {
   it.each([
@@ -16,6 +16,18 @@ describe('detectFile', () => {
       PNG_1X1,
       'x.pdf',
       { mime: 'image/png', category: 'image', inline: 'image', active: false },
+    ],
+    [
+      'HEIC (image refusée inline par les clients LLM)',
+      HEIC_MINI,
+      'IMG_0001.heic',
+      { mime: 'image/heic', category: 'image', inline: null, active: false },
+    ],
+    [
+      'TIFF (image refusée inline par les clients LLM)',
+      TIFF_MINI,
+      'scan.tif',
+      { mime: 'image/tiff', category: 'image', inline: null, active: false },
     ],
     [
       'PDF',

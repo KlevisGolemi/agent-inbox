@@ -11,7 +11,7 @@ Récupère une pièce jointe par son identifiant. Modifie l'état seulement si l
 
 Modes (`inline_max_mb` : 5 Mo par défaut ; `0` désactive l'inline) :
 
-- `auto` : inline si la pièce est une image ou un son de taille au plus `inline_max_mb`, ou un texte d'au plus 1 Mo (et `inline_max_mb`) ; sinon lien signé.
+- `auto` : inline si la pièce est une image JPEG, PNG, GIF ou WebP ou un son de taille au plus `inline_max_mb`, ou un texte d'au plus 1 Mo (et `inline_max_mb`) ; sinon lien signé. Les autres images (HEIC, TIFF, BMP, AVIF…) passent toujours par un lien : les clients LLM les refusent inline.
 - `inline` : tente l'inline pour tout type, jusqu'à `inline_max_mb` (un type non texte/image/son part en ressource binaire base64). Si c'est impossible, renvoie un lien avec un `note` : type actif (SVG, HTML, XML, scripts) jamais livré inline, ou pièce trop volumineuse.
 - `link` : toujours un lien signé temporaire (`download_link_ttl_min`, 60 min par défaut), sans limite de taille.
 

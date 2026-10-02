@@ -1,7 +1,15 @@
 import request from 'supertest'
 import { describe, expect, it } from 'vitest'
 import { EXTERNAL_WARNING } from '../src/queue/http.js'
-import { finalFiles, HTML_PAGE, PDF_MINI, PNG_1X1, SVG_ACTIVE } from './helpers/files.js'
+import {
+  finalFiles,
+  HEIC_MINI,
+  HTML_PAGE,
+  PDF_MINI,
+  PNG_1X1,
+  SVG_ACTIVE,
+  TIFF_MINI,
+} from './helpers/files.js'
 import { call, data, mcpSetup, rpc } from './helpers/mcp.js'
 
 const b64 = (b: Buffer) => b.toString('base64')
@@ -195,6 +203,20 @@ describe('inbox_get_file', () => {
       attachment: { id: att.id, status: 'available' },
     })
     expect(ctx.db.prepare('SELECT downloads FROM attachments').get()).toEqual({ downloads: 1 })
+  })
+
+  it('HEIC et TIFF : lien en auto, jamais de bloc image (formats refusés par les clients)', async () => {
+    const ctx = mcpSetup()
+    for (const [buf, name] of [
+      [HEIC_MINI, 'IMG_0001.heic'],
+      [TIFF_MINI, 'scan.tif'],
+    ] as const) {
+      const att = (await sendFile(ctx, buf, name)).attachments[0]
+      expect(att.category).toBe('image')
+      const body = await call(ctx, 'inbox_get_file', { attachment_id: att.id })
+      expect(body.result.content.some((c: { type: string }) => c.type === 'image')).toBe(false)
+      expect(data(body)).toMatchObject({ delivery: 'link' })
+    }
   })
 
   it('SVG (type actif) : lien en auto, lien + note en inline ; jamais de bloc image', async () => {
