@@ -1,26 +1,19 @@
 import { randomBytes } from 'node:crypto'
 import { Router, type NextFunction, type Request, type Response } from 'express'
-import type Database from 'better-sqlite3'
 import { z } from 'zod'
-import { BackupError, BACKUP_NAME_REGEX, type Backups } from '../backups/index.js'
-import type { ApiKeys } from '../auth/apiKeys.js'
+import { BackupError, BACKUP_NAME_REGEX } from '../backups/index.js'
+import type { AppDeps } from '../app.js'
 import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
 import { revokeUserTokens } from '../auth/oauth/provider.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
-import { SESSION_COOKIE, type AdminSessions } from '../auth/sessions.js'
-import type { User, Users } from '../auth/users.js'
-import type { DropsRepo } from '../drops/repo.js'
+import { SESSION_COOKIE } from '../auth/sessions.js'
+import type { User } from '../auth/users.js'
 import { createPublicDrop } from '../drops/service.js'
-import type { Env } from '../env.js'
-import type { AttachmentsRepo } from '../files/attachments.js'
 import { inlineKindFor } from '../files/detect.js'
 import { sendAttachment } from '../files/http.js'
-import type { FileStore } from '../files/store.js'
 import { FILE_CATEGORIES } from '../files/types.js'
-import type { UploadManager } from '../files/uploads.js'
 import { log } from '../log.js'
 import { itemView, queryString } from '../queue/http.js'
-import type { QueueRepo } from '../queue/repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
 import {
   rotateFileSigningSecret,
@@ -28,28 +21,9 @@ import {
   SettingValidationError,
   type Settings,
 } from '../settings/index.js'
-import type { TagRegistry } from '../tags/registry.js'
-import type { VersionService } from '../version/index.js'
 
-export interface AdminDeps {
-  db: Database.Database
-  settings: Settings
-  repo: QueueRepo
-  files: FileStore
-  uploads: UploadManager
-  attachments: AttachmentsRepo
-  tags: TagRegistry
-  drops: DropsRepo
-  version: string
-  versions: VersionService
-  /** Remplaçable en test ; `fetch` global par défaut. */
-  updaterFetch?: typeof fetch
-  env: Env
-  users: Users
-  sessions: AdminSessions
-  apiKeys: ApiKeys
-  backups: Backups
-}
+/** Même contrat de dépendances que l'application : un seul type, pas de copie qui dérive. */
+export type AdminDeps = AppDeps
 
 const MASK = '••••'
 const MAX_LIMIT = 500
