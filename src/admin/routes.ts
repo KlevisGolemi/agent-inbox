@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router, type NextFunction, type Request, type Response } from 'express'
 import type Database from 'better-sqlite3'
+import { z } from 'zod'
 import { BackupError, BACKUP_NAME_REGEX, type Backups } from '../backups/index.js'
 import type { ApiKeys } from '../auth/apiKeys.js'
 import { issueCsrfToken, requireCsrfJson } from '../auth/csrf.js'
@@ -8,18 +9,37 @@ import { revokeUserTokens } from '../auth/oauth/provider.js'
 import { MIN_PASSWORD_LENGTH, PASSWORD_TOO_SHORT } from '../auth/password.js'
 import { SESSION_COOKIE, type AdminSessions } from '../auth/sessions.js'
 import type { User, Users } from '../auth/users.js'
+import type { DropsRepo } from '../drops/repo.js'
+import { createPublicDrop } from '../drops/service.js'
 import type { Env } from '../env.js'
+import type { AttachmentsRepo } from '../files/attachments.js'
+import { inlineKindFor } from '../files/detect.js'
+import { sendAttachment } from '../files/http.js'
+import type { FileStore } from '../files/store.js'
+import { FILE_CATEGORIES } from '../files/types.js'
+import type { UploadManager } from '../files/uploads.js'
 import { log } from '../log.js'
 import { itemView, queryString } from '../queue/http.js'
 import type { QueueRepo } from '../queue/repo.js'
 import { CORRELATION_ID_REGEX, TOPIC_REGEX } from '../queue/validation.js'
-import { SETTING_KEYS, SettingValidationError, type Settings } from '../settings/index.js'
+import {
+  rotateFileSigningSecret,
+  SETTING_KEYS,
+  SettingValidationError,
+  type Settings,
+} from '../settings/index.js'
+import type { TagRegistry } from '../tags/registry.js'
 import type { VersionService } from '../version/index.js'
 
 export interface AdminDeps {
   db: Database.Database
   settings: Settings
   repo: QueueRepo
+  files: FileStore
+  uploads: UploadManager
+  attachments: AttachmentsRepo
+  tags: TagRegistry
+  drops: DropsRepo
   version: string
   versions: VersionService
   /** Remplaçable en test ; `fetch` global par défaut. */
@@ -66,7 +86,7 @@ function intParam(req: Request, name: string, fallback: number, min: number, max
 export function createAdminRouter(deps: AdminDeps): Router {
   const { db, settings, repo, env, users, sessions, apiKeys } = deps
   const router = Router()
-  const { backups } = deps
+  const { backups, files, uploads, attachments, tags, drops } = deps
 
   // Session vérifiée en amont par app.ts (avant la lecture du corps) : res.locals.user est posé.
   // Réponses sensibles (secret, clés, jeton CSRF) : jamais mises en cache.
@@ -90,6 +110,7 @@ export function createAdminRouter(deps: AdminDeps): Router {
       webhookUrl: `${publicBase}webhook`,
       uptime_s: Math.floor(process.uptime()),
       stats: repo.stats(),
+      storage: uploads.snapshot(),
       settings: maskedSettings(settings),
       user: { email: (res.locals.user as User).email },
       csrfToken: issueCsrfToken(req, res, env),
@@ -216,6 +237,171 @@ export function createAdminRouter(deps: AdminDeps): Router {
     const deleted = repo.clear()
     log('info', 'File vidée depuis l’administration', { deleted })
     res.json({ ok: true, deleted })
+  })
+
+  // ── Stockage et pièces jointes ───────────────────────────────────
+  router.get('/storage', (_req, res) => {
+    res.json({ ok: true, storage: uploads.snapshot() })
+  })
+
+  function availableAttachment(req: Request, res: Response) {
+    const row = attachments.get(String(req.params.id))
+    if (!row || attachments.status(row) !== 'available') {
+      fail(res, 404, 'not_found', 'Pièce introuvable ou indisponible.')
+      return null
+    }
+    return row
+  }
+
+  // Aperçu : images non actives seulement (jamais SVG) ; mêmes en-têtes de sécurité que le téléchargement.
+  router.get('/files/:id/preview', (req, res) => {
+    const row = availableAttachment(req, res)
+    if (!row) return
+    if (inlineKindFor(row.mime_type, row.category) !== 'image') {
+      fail(res, 415, 'not_previewable', 'Aperçu réservé aux images.')
+      return
+    }
+    sendAttachment(req, res, row, { files, attachments }, { count: false, disposition: 'inline' })
+  })
+
+  router.get('/files/:id/download', (req, res) => {
+    const row = availableAttachment(req, res)
+    if (row) sendAttachment(req, res, row, { files, attachments }, { count: false })
+  })
+
+  router.post('/settings/file-signing-secret/rotate', (_req, res) => {
+    rotateFileSigningSecret(settings)
+    log('info', 'Secret de signature des liens renouvelé')
+    res.json({ ok: true })
+  })
+
+  // ── Tags ──────────────────────────────────────────────────────────
+  // Les erreurs sont distinguées par leur code (jamais par le message français).
+  const tagError = (res: Response, r: { error: string; message: string; similar?: unknown }) =>
+    res
+      .status(r.error === 'similar_exists' || r.error === 'exists' ? 409 : 400)
+      .json({ ok: false, ...r })
+
+  router.get('/tags', (req, res) => {
+    const q = queryString(req, 'q')
+    res.json({ ok: true, tags: tags.list({ ...(q ? { query: q } : {}), limit: 200 }) })
+  })
+
+  router.post('/tags', (req, res) => {
+    const b = isPlainObject(req.body) ? req.body : {}
+    if (typeof b.name !== 'string' || typeof b.description !== 'string') {
+      fail(res, 400, 'invalid_body', 'Champs « name » et « description » obligatoires.')
+      return
+    }
+    const r = tags.create({
+      name: b.name,
+      description: b.description,
+      createdBy: 'admin',
+      force: b.force === true,
+    })
+    if (!r.ok) {
+      tagError(res, r)
+      return
+    }
+    res.status(201).json({ ok: true, tag: r.tag })
+  })
+
+  router.patch('/tags/:name', (req, res) => {
+    const d = isPlainObject(req.body) ? req.body.description : undefined
+    if (typeof d !== 'string') {
+      fail(res, 400, 'invalid_body', 'Champ « description » obligatoire.')
+      return
+    }
+    const name = String(req.params.name)
+    if (!tags.get(name)) {
+      fail(res, 404, 'not_found', 'Tag introuvable.')
+      return
+    }
+    const r = tags.updateDescription(name, d)
+    if (!r.ok) {
+      tagError(res, r)
+      return
+    }
+    res.json({ ok: true, tag: r.tag })
+  })
+
+  router.post('/tags/:name/merge', (req, res) => {
+    const into = isPlainObject(req.body) ? req.body.into : undefined
+    if (typeof into !== 'string') {
+      fail(res, 400, 'invalid_body', 'Champ « into » obligatoire.')
+      return
+    }
+    const r = tags.merge(String(req.params.name), into)
+    if (!r.ok) {
+      if (r.error === 'not_found') fail(res, 404, 'not_found', 'Tag introuvable.')
+      else fail(res, 400, 'same_tag', 'Un tag ne peut pas être fusionné avec lui-même.')
+      return
+    }
+    log('info', 'Tags fusionnés', { moved: r.moved })
+    res.json({ ok: true, moved: r.moved })
+  })
+
+  router.delete('/tags/:name', (req, res) => {
+    if (tags.remove(String(req.params.name))) res.json({ ok: true })
+    else fail(res, 404, 'not_found', 'Tag introuvable.')
+  })
+
+  // ── Liens de dépôt ────────────────────────────────────────────────
+  const dropBody = z.object({
+    label: z.string().min(1).max(80),
+    topic: z.string().optional(),
+    tags: z.array(z.string()).max(20).optional(),
+    expires_in_hours: z.number().int().min(1).max(720).optional(),
+    max_files: z.number().int().min(1).max(1000).optional(),
+    max_file_mb: z.number().int().min(1).max(2048).optional(),
+    allowed_categories: z.array(z.enum(FILE_CATEGORIES)).min(1).max(6).optional(),
+  })
+
+  router.get('/drops', (req, res) => {
+    res.json({ ok: true, drops: drops.list({ includeExpired: queryString(req, 'all') === '1' }) })
+  })
+
+  router.post('/drops', (req, res) => {
+    const parsed = dropBody.safeParse(req.body)
+    if (!parsed.success) {
+      fail(
+        res,
+        400,
+        'invalid_body',
+        parsed.error.issues.map((i) => `${i.path.join('.')} : ${i.message}`).join(' ; '),
+      )
+      return
+    }
+    const b = parsed.data
+    const r = createPublicDrop(
+      { drops, tags, settings, publicUrl: env.publicUrl },
+      {
+        label: b.label,
+        createdBy: 'admin',
+        ...(b.topic !== undefined ? { topic: b.topic } : {}),
+        ...(b.tags !== undefined ? { tags: b.tags } : {}),
+        ...(b.expires_in_hours !== undefined ? { expiresInHours: b.expires_in_hours } : {}),
+        ...(b.max_files !== undefined ? { maxFiles: b.max_files } : {}),
+        ...(b.max_file_mb !== undefined ? { maxFileMb: b.max_file_mb } : {}),
+        ...(b.allowed_categories !== undefined ? { allowedCategories: b.allowed_categories } : {}),
+      },
+    )
+    if (!r.ok) {
+      res.status(400).json(r)
+      return
+    }
+    // Ni l'adresse ni le jeton ne sont journalisés.
+    log('info', 'Lien de dépôt créé depuis l’administration', { drop_id: r.drop.id })
+    res.status(201).json(r)
+  })
+
+  router.delete('/drops/:id', (req, res) => {
+    if (drops.revoke(String(req.params.id))) res.json({ ok: true })
+    else fail(res, 404, 'not_found', 'Lien introuvable ou déjà révoqué.')
+  })
+
+  router.get('/drops/:id/events', (req, res) => {
+    res.json({ ok: true, events: drops.events(String(req.params.id)) })
   })
 
   // ── Clés API ──────────────────────────────────────────────────────

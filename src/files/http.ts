@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs'
+import { resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import type { Request, Response } from 'express'
 import type { AttachmentRow, AttachmentsRepo } from './attachments.js'
@@ -63,7 +64,8 @@ export function sendAttachment(
     'Content-Type': row.mime_type,
     'Content-Disposition': contentDisposition(row.filename, opts.disposition),
   })
-  const path = deps.files.path(row.id)
+  // res.sendFile exige un chemin absolu : la racine du stockage peut être relative (DB_PATH relatif).
+  const path = resolve(deps.files.path(row.id))
   if (row.on_download === 'keep') {
     const ranged = req.headers.range !== undefined
     res.sendFile(

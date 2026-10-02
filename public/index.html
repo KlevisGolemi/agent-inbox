@@ -87,6 +87,9 @@
         Connexions
       </button>
 
+      <button class="tab-btn" :class="tab==='tags'&&'active'" @click="tab='tags'; loadTags()">Tags</button>
+      <button class="tab-btn" :class="tab==='drops'&&'active'" @click="tab='drops'; loadDrops()">Liens de dépôt</button>
+
       <button class="tab-btn" :class="tab==='backups'&&'active'" @click="tab='backups'; loadBackups()">
         <svg class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2 3.6 3 8 3s8-1 8-3V7M4 7c0 2 3.6 3 8 3s8-1 8-3M4 7c0-2 3.6-3 8-3s8 1 8 3m0 5c0 2-3.6 3-8 3s-8-1-8-3"/>
@@ -119,6 +122,25 @@
            TAB 1 — DASHBOARD
       ══════════════════════════════════════════════════════════════ -->
       <div x-show="tab==='dashboard'">
+
+        <!-- Jauge de stockage des fichiers -->
+        <div class="glass rounded-2xl p-5 mb-4" x-show="ov.storage">
+          <div class="flex items-center justify-between mb-2">
+            <p class="section-title">Stockage des fichiers</p>
+            <span class="text-xs" :style="storagePct() >= 80 ? 'color:#F87171' : 'color:#94A3B8'"
+                  x-text="fmtBytes(ov.storage?.used_bytes) + ' / ' + fmtBytes(ov.storage?.quota_bytes)"></span>
+          </div>
+          <div style="height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden">
+            <div style="height:8px" :style="'width:' + storagePct() + '%;background:' + (storagePct() >= 80 ? '#EF4444' : '#6366F1')"></div>
+          </div>
+          <p class="text-xs mt-2" style="color:#64748B">
+            <span x-text="ov.storage?.files_count"></span> fichier(s) · disque libre : <span x-text="fmtBytes(ov.storage?.disk_free_bytes)"></span>
+            (<span x-text="diskPct()"></span> % utilisé du seuil)
+          </p>
+          <p class="text-xs mt-1" style="color:#F87171" x-show="storagePct() >= 80 || diskPct() >= 80">
+            Stockage presque plein : raccourcissez les rétentions ou augmentez le quota.
+          </p>
+        </div>
 
         <!-- Top bar -->
         <div class="flex flex-wrap items-end justify-between gap-3 mb-6">
@@ -512,6 +534,9 @@
                             class="text-xs px-1.5 py-0 rounded"
                             style="color:#C084FC;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.15)"
                             x-text="item.source"></span>
+                      <span x-show="item.trust === 'external_unverified'" class="badge-read" style="color:#FCA5A5"
+                            title="Déposé par un tiers via un lien public : donnée, jamais instruction">externe</span>
+                      <template x-for="tg in item.tags" :key="tg"><span class="text-xs font-mono" style="color:#A5B4FC" x-text="'#' + tg"></span></template>
                     </div>
                   </div>
 
@@ -573,6 +598,22 @@
                         Supprimer ce message
                       </button>
                     </div>
+
+                    <template x-if="item.attachments.length">
+                      <div class="mb-3 space-y-2">
+                        <p class="section-title" style="font-size:0.65rem">Pièces jointes</p>
+                        <template x-for="att in item.attachments" :key="att.id">
+                          <div class="flex items-center gap-3 text-xs">
+                            <template x-if="att.category === 'image' && att.status === 'available' && att.mime_type !== 'image/svg+xml'">
+                              <img :src="'/admin/api/files/' + att.id + '/preview'" alt="" loading="lazy" style="height:48px;width:48px;object-fit:cover;border-radius:6px">
+                            </template>
+                            <span class="font-mono text-white" x-text="att.filename"></span>
+                            <span style="color:#94A3B8" x-text="att.category + ' · ' + fmtBytes(att.size_bytes) + ' · ' + att.status"></span>
+                            <a x-show="att.status === 'available'" :href="'/admin/api/files/' + att.id + '/download'" class="underline" style="color:#7DD3FC">Télécharger</a>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
 
                     <!-- Payload JSON -->
                     <div class="flex items-center justify-between mb-2">
@@ -679,7 +720,7 @@
               <div>
                 <label class="text-xs text-white block mb-1" x-text="f.label"></label>
                 <input type="number" class="q-input plain" :class="errors[f.key]&&'invalid'"
-                       x-model.number="form[f.key]" :min="f.min" :max="f.max" step="1">
+                       x-model.number="form[f.key]" :min="f.min" :max="f.max" :step="f.step || 1">
                 <p class="text-xs mt-1" style="color:#64748B" x-text="f.help"></p>
                 <p class="field-error" x-show="errors[f.key]" x-text="errors[f.key]"></p>
               </div>
@@ -703,6 +744,89 @@
             </div>
             <button class="btn btn-ghost mt-2" @click="ttlRows.push({topic:'', hours:''})">+ Ajouter un topic</button>
             <p class="field-error" x-show="errors.topic_ttl_overrides" x-text="errors.topic_ttl_overrides"></p>
+          </div>
+        </div>
+
+        <!-- Fichiers et liens -->
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-4">Fichiers et liens</p>
+          <div class="flex items-center justify-between gap-4 mb-3">
+            <p class="text-sm text-white">Pièces jointes activées</p>
+            <label class="toggle" @click="form.attachments_enabled = !form.attachments_enabled">
+              <div class="toggle-track" :class="form.attachments_enabled&&'on'"><div class="toggle-thumb"></div></div>
+            </label>
+          </div>
+          <div class="flex items-center justify-between gap-4 mb-4">
+            <p class="text-sm text-white">Liens de dépôt activés</p>
+            <label class="toggle" @click="form.drops_enabled = !form.drops_enabled">
+              <div class="toggle-track" :class="form.drops_enabled&&'on'"><div class="toggle-thumb"></div></div>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <template x-for="f in fileFields" :key="f.key">
+              <div>
+                <label class="text-xs text-white block mb-1" x-text="f.label"></label>
+                <input type="number" class="q-input plain" :class="errors[f.key]&&'invalid'"
+                       x-model.number="form[f.key]" :min="f.min" :max="f.max" :step="f.step || 1">
+                <p class="text-xs mt-1" style="color:#64748B" x-text="f.help"></p>
+                <p class="field-error" x-show="errors[f.key]" x-text="errors[f.key]"></p>
+              </div>
+            </template>
+          </div>
+
+          <div class="mt-5">
+            <label class="text-xs text-white block mb-1">Au téléchargement, par défaut</label>
+            <select class="q-input plain sm" x-model="form.file_on_download_default">
+              <option value="keep">keep : conserver jusqu'à l'échéance</option>
+              <option value="consume">consume : effacer après le premier téléchargement</option>
+            </select>
+          </div>
+
+          <div class="mt-5">
+            <label class="text-xs text-white block mb-1">Taille max par catégorie (Mo)</label>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
+              <template x-for="c in fileCategories" :key="c">
+                <div>
+                  <span class="text-xs" style="color:#94A3B8" x-text="c"></span>
+                  <input type="number" class="q-input plain sm" min="1" max="2048" step="1" x-model.number="form.file_max_mb[c]">
+                </div>
+              </template>
+            </div>
+            <p class="field-error" x-show="errors.file_max_mb" x-text="errors.file_max_mb"></p>
+          </div>
+
+          <div class="mt-5">
+            <label class="text-xs text-white block mb-1">Rétention par catégorie (heures)</label>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-2">
+              <template x-for="c in fileCategories" :key="c">
+                <div>
+                  <span class="text-xs" style="color:#94A3B8" x-text="c"></span>
+                  <input type="number" class="q-input plain sm" min="1" max="8760" step="1" x-model.number="form.file_retention_hours[c]">
+                </div>
+              </template>
+            </div>
+            <p class="field-error" x-show="errors.file_retention_hours" x-text="errors.file_retention_hours"></p>
+          </div>
+
+          <div class="mt-5">
+            <label class="text-xs text-white block mb-1">Catégories acceptées</label>
+            <div class="flex flex-wrap gap-4">
+              <template x-for="c in fileCategories" :key="c">
+                <label class="text-xs text-white"><input type="checkbox" :value="c" x-model="form.file_allowed_categories"> <span x-text="c"></span></label>
+              </template>
+            </div>
+            <p class="field-error" x-show="errors.file_allowed_categories" x-text="errors.file_allowed_categories"></p>
+          </div>
+
+          <div class="mt-5">
+            <label class="text-xs text-white block mb-1">Extensions refusées</label>
+            <input type="text" class="q-input plain" placeholder="exe, bat, scr (séparées par des virgules)" x-model="form.file_blocked_extensions">
+            <p class="field-error" x-show="errors.file_blocked_extensions" x-text="errors.file_blocked_extensions"></p>
+          </div>
+
+          <div class="mt-5 flex items-center justify-between gap-4">
+            <p class="text-xs" style="color:#64748B">Renouveler le secret invalide tous les liens de téléchargement déjà émis.</p>
+            <button class="btn btn-ghost" @click="askRotateSigning()">Renouveler le secret des liens</button>
           </div>
         </div>
 
@@ -803,6 +927,86 @@
           </div>
         </div>
       </div><!-- /settings -->
+
+
+      <!-- ══════════════════════════════════════════════════════════
+           TAB — TAGS
+      ══════════════════════════════════════════════════════════════ -->
+      <div x-show="tab==='tags'" style="display:none">
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-3">Nouveau tag</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input class="q-input plain" placeholder="nom (ex. facture-client)" x-model="newTag.name" maxlength="60">
+            <input class="q-input plain md:col-span-2" placeholder="Quand l’utiliser (10 à 280 caractères)" x-model="newTag.description" maxlength="280">
+          </div>
+          <p class="field-error" x-show="tagError" x-text="tagError"></p>
+          <template x-for="s in tagSimilar" :key="s.name"><p class="text-xs" style="color:#FCD34D" x-text="'Proche : ' + s.name + ' — ' + s.description"></p></template>
+          <div class="flex gap-2 mt-3">
+            <button class="btn btn-primary" @click="createTag(false)">Créer</button>
+            <button class="btn btn-ghost" x-show="tagSimilar.length" @click="createTag(true)">Créer quand même</button>
+          </div>
+        </div>
+        <div class="glass rounded-2xl p-5">
+          <input class="q-input plain mb-3" placeholder="Filtrer" x-model="tagQuery" @input.debounce.300ms="loadTags()">
+          <template x-for="tag in tagList" :key="tag.name">
+            <div class="py-2 border-b" style="border-color:rgba(255,255,255,0.05)">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-white" x-text="tag.name"></span>
+                <span class="text-xs" style="color:#94A3B8" x-text="tag.usage_count + ' usage(s)'"></span>
+                <span x-show="tag.needs_description" class="text-xs" style="color:#FCD34D">à décrire</span>
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <input class="q-input plain sm flex-1" :value="tag.description" @change="saveTagDescription(tag.name, $event.target.value)" maxlength="280">
+                <select class="q-input plain sm" @change="mergeTag(tag.name, $event.target.value); $event.target.value=''">
+                  <option value="">Fusionner dans…</option>
+                  <template x-for="o in tagList.filter(x => x.name !== tag.name)" :key="o.name"><option :value="o.name" x-text="o.name"></option></template>
+                </select>
+                <button class="btn btn-ghost text-xs" @click="deleteTag(tag.name)">Supprimer</button>
+              </div>
+              <p class="text-xs mt-1" style="color:#64748B" x-text="tag.description"></p>
+            </div>
+          </template>
+        </div>
+      </div><!-- /tags -->
+
+      <!-- ══════════════════════════════════════════════════════════
+           TAB — LIENS DE DÉPÔT
+      ══════════════════════════════════════════════════════════════ -->
+      <div x-show="tab==='drops'" style="display:none">
+        <div class="glass rounded-2xl p-5 mb-4">
+          <p class="section-title mb-3">Nouveau lien de dépôt</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input class="q-input plain md:col-span-2" placeholder="Libellé affiché au déposant" x-model="newDrop.label" maxlength="80">
+            <input class="q-input plain" placeholder="topic (drops)" x-model="newDrop.topic" maxlength="128">
+            <input class="q-input plain" type="number" min="1" max="720" placeholder="heures" x-model.number="newDrop.expires_in_hours">
+            <input class="q-input plain" type="number" min="1" max="1000" placeholder="fichiers max" x-model.number="newDrop.max_files">
+            <input class="q-input plain" placeholder="tags existants (séparés par des virgules)" x-model="newDrop.tags">
+          </div>
+          <p class="field-error" x-show="dropError" x-text="dropError"></p>
+          <button class="btn btn-primary mt-3" @click="createDrop()">Créer le lien</button>
+        </div>
+        <div class="glass rounded-2xl p-5">
+          <label class="text-xs"><input type="checkbox" x-model="dropsAll" @change="loadDrops()"> Afficher aussi expirés et révoqués</label>
+          <template x-for="drop in dropList" :key="drop.id">
+            <div class="py-2 border-b" style="border-color:rgba(255,255,255,0.05)">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-white" x-text="drop.label"></span>
+                <span style="color:#94A3B8" x-text="drop.kind + ' · ' + drop.status + ' · ' + drop.files_count + '/' + drop.max_files + ' · expire ' + new Date(drop.expires_at).toLocaleString('fr')"></span>
+                <button class="btn btn-ghost text-xs" @click="toggleDropEvents(drop)">Historique</button>
+                <button class="btn btn-ghost text-xs" x-show="drop.status === 'active'" @click="revokeDrop(drop.id)">Révoquer</button>
+              </div>
+              <template x-if="dropEvents.id === drop.id">
+                <div class="mt-1 pl-3">
+                  <p class="text-xs" style="color:#64748B" x-text="'Historique de ' + dropEvents.t.label"></p>
+                  <template x-for="ev in dropEvents.items" :key="ev.at + ev.outcome">
+                    <p class="text-xs font-mono" style="color:#94A3B8"><span x-text="new Date(ev.at).toLocaleString('fr')"></span> · <span x-text="ev.outcome"></span> · <span x-text="ev.files + ' fichier(s), ' + fmtBytes(ev.bytes)"></span></p>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div><!-- /drops -->
 
 
       <!-- ══════════════════════════════════════════════════════════
@@ -1186,6 +1390,28 @@ const SETTING_HINTS = {
   backup_retention: 'entier entre 1 et 90',
   topic_ttl_overrides: 'topics valides (lettres, chiffres, _ et -) avec un TTL entier entre 1 et 8760 h',
   update_check_enabled: 'valeur oui / non',
+  json_max_kb: 'entier entre 16 et 51200',
+  attachments_enabled: 'valeur oui / non',
+  attachments_max_per_message: 'entier entre 1 et 50',
+  file_max_mb: 'entier entre 1 et 2048 pour chaque catégorie',
+  file_allowed_categories: 'catégories sans doublon',
+  file_blocked_extensions: 'extensions valides, 50 au maximum',
+  storage_quota_gb: 'nombre entre 0,1 et 1000',
+  storage_min_free_gb: 'nombre entre 0 et 1000',
+  file_retention_hours: 'entier entre 1 et 8760 pour chaque catégorie',
+  file_retention_large_mb: 'entier entre 1 et 2048',
+  file_retention_large_hours: 'entier entre 1 et 8760',
+  file_on_download_default: 'keep ou consume',
+  consume_grace_min: 'entier entre 1 et 1440',
+  inline_max_mb: 'nombre entre 0 et 20',
+  mcp_upload_max_mb: 'nombre entre 0 et 20',
+  download_link_ttl_min: 'entier entre 1 et 1440',
+  tags_injected_count: 'entier entre 0 et 50',
+  drops_enabled: 'valeur oui / non',
+  drop_default_hours: 'entier entre 1 et 720',
+  drop_max_hours: 'entier entre 1 et 720',
+  drop_default_max_files: 'entier entre 1 et 1000',
+  drop_rate_limit_per_min: 'entier entre 1 et 600',
 }
 
 // Instances Chart.js hors de l'état Alpine : un proxy réactif autour d'un Chart
@@ -1240,8 +1466,8 @@ function app() {
     ver: {},
     updateCmd: '',
 
-    // Réglages
-    form: {},
+    // Réglages (objets par catégorie présents dès le départ : les gabarits les lisent avant le chargement)
+    form: { file_max_mb: {}, file_retention_hours: {}, file_allowed_categories: [] },
     errors: {},
     ttlRows: [],
     secret: '',
@@ -1256,12 +1482,34 @@ function app() {
       { key: 'webhook_rate_limit_per_min', label: 'Limite du webhook (requêtes/min)', min: 1, max: 10000,
         help: 'Par adresse IP, sur POST /webhook.' },
     ],
+    fileFields: [
+      { key: 'json_max_kb', label: 'Taille max du JSON (Ko)', min: 16, max: 51200, help: 'Corps JSON et partie « payload » acceptés.' },
+      { key: 'attachments_max_per_message', label: 'Pièces max par message', min: 1, max: 50, help: 'Fichiers joints à un même message.' },
+      { key: 'storage_quota_gb', label: 'Quota de stockage (Go)', min: 0.1, max: 1000, step: 'any', help: 'Au-delà, les envois sont refusés.' },
+      { key: 'storage_min_free_gb', label: 'Espace disque libre minimal (Go)', min: 0, max: 1000, step: 'any', help: 'Envois refusés sous ce seuil.' },
+      { key: 'file_retention_large_mb', label: 'Seuil « gros fichier » (Mo)', min: 1, max: 2048, help: 'Au-delà, la rétention courte s\'applique.' },
+      { key: 'file_retention_large_hours', label: 'Rétention des gros fichiers (h)', min: 1, max: 8760, help: 'Durée de conservation des gros fichiers.' },
+      { key: 'consume_grace_min', label: 'Délai de grâce « consume » (min)', min: 1, max: 1440, help: 'Avant effacement après le premier téléchargement.' },
+      { key: 'inline_max_mb', label: 'Taille max inline (Mo)', min: 0, max: 20, step: 'any', help: 'Contenu renvoyé directement au client MCP.' },
+      { key: 'mcp_upload_max_mb', label: 'Envoi MCP max (Mo)', min: 0, max: 20, step: 'any', help: 'Fichiers envoyés en base64 par un outil MCP.' },
+      { key: 'download_link_ttl_min', label: 'Validité des liens signés (min)', min: 1, max: 1440, help: 'Durée de vie d\'un lien de téléchargement.' },
+      { key: 'tags_injected_count', label: 'Tags injectés aux clients', min: 0, max: 50, help: 'Nombre de tags rappelés dans les instructions MCP.' },
+      { key: 'drop_default_hours', label: 'Durée par défaut d\'un lien de dépôt (h)', min: 1, max: 720, help: 'Si non précisée à la création.' },
+      { key: 'drop_max_hours', label: 'Durée max d\'un lien de dépôt (h)', min: 1, max: 720, help: 'Plafond de validité.' },
+      { key: 'drop_default_max_files', label: 'Fichiers max par lien (défaut)', min: 1, max: 1000, help: 'Si non précisé à la création.' },
+      { key: 'drop_rate_limit_per_min', label: 'Limite des dépôts (requêtes/min)', min: 1, max: 600, help: 'Par adresse IP, sur les liens publics.' },
+    ],
+    fileCategories: ['image', 'audio', 'video', 'document', 'archive', 'other'],
     backupFields: [
       { key: 'backup_interval_hours', label: 'Fréquence (heures)', min: 0, max: 168,
         help: '0 désactive les sauvegardes automatiques.' },
       { key: 'backup_retention', label: 'Sauvegardes conservées', min: 1, max: 90,
         help: 'Les plus anciennes sont supprimées.' },
     ],
+
+    tagList: [], tagQuery: '', newTag: { name: '', description: '' }, tagError: '', tagSimilar: [],
+    dropList: [], dropsAll: false, newDrop: { label: '', topic: '', expires_in_hours: null, max_files: null, tags: '' },
+    dropError: '', dropEvents: { id: null, items: [], t: null },
 
     // Connexions
     apiKeys: [],
@@ -1307,6 +1555,7 @@ function app() {
         err.status = r.status
         err.code = data && data.error
         err.key = data && data.key
+        err.similar = data && data.similar
         err.command = data && data.command
         throw err
       }
@@ -1379,7 +1628,15 @@ function app() {
           update_check_enabled: s.update_check_enabled,
           backup_interval_hours: s.backup_interval_hours,
           backup_retention: s.backup_retention,
+          attachments_enabled: s.attachments_enabled,
+          drops_enabled: s.drops_enabled,
+          file_on_download_default: s.file_on_download_default,
+          file_max_mb: { ...s.file_max_mb },
+          file_retention_hours: { ...s.file_retention_hours },
+          file_allowed_categories: [...s.file_allowed_categories],
+          file_blocked_extensions: (s.file_blocked_extensions || []).join(', '),
         }
+        for (const f of this.fileFields) this.form[f.key] = s[f.key]
         this.ttlRows = Object.entries(s.topic_ttl_overrides || {}).map(([topic, hours]) => ({ topic, hours }))
         this.errors = {}
       } catch (e) { this.showToast(e.message, false) }
@@ -1411,7 +1668,8 @@ function app() {
       }
       this.saving.settings = true
       try {
-        const d = await this.call('PATCH', '/settings', { ...this.form, topic_ttl_overrides: overrides })
+        const blocked = String(this.form.file_blocked_extensions || '').split(',').map(x => x.trim()).filter(Boolean)
+        const d = await this.call('PATCH', '/settings', { ...this.form, file_blocked_extensions: blocked, topic_ttl_overrides: overrides })
         this.ov.settings = d.settings
         this.m.ttl = d.settings.ttl_hours
         this.showToast('Réglages enregistrés', true)
@@ -1448,6 +1706,15 @@ function app() {
           await this.loadOverview()
           this.showOnce('Nouveau secret du webhook',
             'Mettez à jour vos workflows (n8n, Make…) avec ce nouveau secret ; l\'ancien est déjà invalide.', d.secret)
+        })
+    },
+    askRotateSigning() {
+      this.ask('Renouveler le secret des liens ?',
+        'Tous les liens de téléchargement déjà émis cesseront de fonctionner.',
+        'Renouveler', async () => {
+          await this.call('POST', '/settings/file-signing-secret/rotate')
+          await this.loadOverview()
+          this.showToast('Les liens déjà émis ne fonctionnent plus', true)
         })
     },
     async vacuum() {
@@ -1555,6 +1822,74 @@ function app() {
       this.once = { open: true, title, note, value }
     },
 
+    // ── Stockage, tags, liens de dépôt ─────────────────────────────
+    fmtBytes(n) {
+      if (n == null) return '—'
+      const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0
+      while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
+      return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i]
+    },
+    storagePct() {
+      const s = this.ov.storage
+      return s && s.quota_bytes ? Math.min(100, Math.round(100 * (s.used_bytes + s.reserved_bytes) / s.quota_bytes)) : 0
+    },
+    diskPct() {
+      const s = this.ov.storage
+      return s && s.disk_free_bytes ? Math.min(100, Math.round(100 * s.min_free_bytes / s.disk_free_bytes)) : 0
+    },
+    async loadTags() {
+      try { this.tagList = (await this.call('GET', '/tags' + (this.tagQuery ? '?q=' + encodeURIComponent(this.tagQuery) : ''))).tags }
+      catch (e) { this.showToast(e.message, false) }
+    },
+    async createTag(force) {
+      this.tagError = ''
+      try {
+        await this.call('POST', '/tags', { ...this.newTag, force })
+        this.newTag = { name: '', description: '' }; this.tagSimilar = []
+        this.showToast('Tag créé', true); this.loadTags()
+      } catch (e) { this.tagError = e.message; this.tagSimilar = e.similar || [] }
+    },
+    async saveTagDescription(name, description) {
+      try { await this.call('PATCH', '/tags/' + encodeURIComponent(name), { description }); this.showToast('Description enregistrée', true); this.loadTags() }
+      catch (e) { this.showToast(e.message, false) }
+    },
+    async mergeTag(from, into) {
+      if (!into) return
+      try { const d = await this.call('POST', '/tags/' + encodeURIComponent(from) + '/merge', { into }); this.showToast(d.moved + ' message(s) déplacé(s)', true); this.loadTags() }
+      catch (e) { this.showToast(e.message, false) }
+    },
+    async deleteTag(name) {
+      try { await this.call('DELETE', '/tags/' + encodeURIComponent(name)); this.loadTags() } catch (e) { this.showToast(e.message, false) }
+    },
+    async loadDrops() {
+      try { this.dropList = (await this.call('GET', '/drops' + (this.dropsAll ? '?all=1' : ''))).drops }
+      catch (e) { this.showToast(e.message, false) }
+    },
+    async createDrop() {
+      this.dropError = ''
+      const b = { label: this.newDrop.label }
+      if (this.newDrop.topic) b.topic = this.newDrop.topic
+      if (this.newDrop.expires_in_hours) b.expires_in_hours = this.newDrop.expires_in_hours
+      if (this.newDrop.max_files) b.max_files = this.newDrop.max_files
+      const tags = this.newDrop.tags.split(',').map(s => s.trim()).filter(Boolean)
+      if (tags.length) b.tags = tags
+      try {
+        const d = await this.call('POST', '/drops', b)
+        this.showOnce('Lien de dépôt créé', 'Cette adresse ne sera plus affichée : copiez-la maintenant.', d.url)
+        this.newDrop = { label: '', topic: '', expires_in_hours: null, max_files: null, tags: '' }
+        this.loadDrops()
+      } catch (e) { this.dropError = e.message }
+    },
+    async toggleDropEvents(drop) {
+      if (this.dropEvents.id === drop.id) { this.dropEvents = { id: null, items: [], t: null }; return }
+      try { this.dropEvents = { id: drop.id, items: (await this.call('GET', '/drops/' + drop.id + '/events')).events, t: drop } }
+      catch (e) { this.showToast(e.message, false) }
+    },
+    async revokeDrop(id) {
+      try { await this.call('DELETE', '/drops/' + id); this.showToast('Lien révoqué', true); this.loadDrops() }
+      catch (e) { this.showToast(e.message, false) }
+    },
+
     // ── Explorer ──────────────────────────────────────────────────
     filteredItems() {
       if (this.explorerStatusFilter === 'all') return this.explorerItems
@@ -1631,6 +1966,9 @@ function app() {
         source:        item.source ?? null,
         topic:         item.topic ?? 'default',
         attempts:      item.attempts ?? 0,
+        trust:         item.trust ?? 'internal',
+        tags:          item.tags ?? [],
+        attachments:   item.attachments ?? [],
       }
     },
 
