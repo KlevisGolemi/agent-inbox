@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { once } from 'node:events'
 import { createWriteStream, statfsSync } from 'node:fs'
 import { finished as streamFinished } from 'node:stream/promises'
 import { log as defaultLog } from '../log.js'
@@ -190,9 +189,14 @@ export function createUploadManager(deps: {
       held += bytes
     }
 
+    /**
+     * Ne rejette jamais : une écriture encore en vol au moment de notre destroy() se termine en
+     * ERR_STREAM_DESTROYED (émis en 'error' avant 'close'). `events.once` rejetterait alors et
+     * masquerait l'erreur métier à l'origine de l'abandon. L'écouteur 'error' permanent absorbe l'erreur.
+     */
     async function destroyOutput(out: ReturnType<typeof createWriteStream>): Promise<void> {
       if (out.closed) return
-      const close = once(out, 'close')
+      const close = new Promise<void>((resolve) => out.once('close', () => resolve()))
       out.destroy()
       await close
     }
@@ -295,11 +299,13 @@ export function createUploadManager(deps: {
         await streamFinished(out)
         if (outputError) throw outputError
       } catch (error) {
+        // Erreur disque relevée AVANT notre destroy() : celle qu'il provoque n'est qu'une conséquence.
+        const writeError: Error | null = outputError
         // R3 : le descripteur est fermé avant de retirer son temporaire.
         await destroyOutput(out)
         if (error instanceof UploadError) throw error
         if (ctrl.signal.aborted) throw aborted()
-        if (outputError) throw diskError(outputError)
+        if (writeError) throw diskError(writeError)
         throw error
       }
 

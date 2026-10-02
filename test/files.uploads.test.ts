@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import fs, { readFileSync } from 'node:fs'
 import { PassThrough, Readable } from 'node:stream'
 import type Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -151,6 +151,32 @@ describe('UploadSession', () => {
     await b.abort()
     expect(uploads.reservedBytes()).toBe(0)
     expect(tempFiles(root)).toEqual([])
+  })
+
+  it('écriture disque en vol pendant notre destroy : l’erreur métier (quota) reste celle renvoyée', async () => {
+    fillQuota(300)
+    // Retient le rappel de fs.write : l'écriture est « en vol » quand le quota est dépassé.
+    const held: (() => void)[] = []
+    const realWrite = fs.write
+    const spy = vi.spyOn(fs, 'write').mockImplementation(((...args: unknown[]) => {
+      const cb = args.pop() as (...r: unknown[]) => void
+      ;(realWrite as (...a: unknown[]) => void)(...args, (...r: unknown[]) => held.push(() => cb(...r)))
+    }) as typeof fs.write)
+    try {
+      async function* source() {
+        yield sized(PDF_MINI, 200)
+        while (held.length === 0) await new Promise((resolve) => setImmediate(resolve))
+        // Libère le rappel APRÈS notre destroy() (synchrone dès la reprise) : Node le termine en ERR_STREAM_DESTROYED.
+        setImmediate(() => held.splice(0).forEach((release) => release()))
+        yield sized(PDF_MINI, 200)
+      }
+      const session = uploads.begin()
+      expect(await codeOf(session.stage(source(), 'a.pdf'))).toBe('quota_exceeded')
+      expect(uploads.reservedBytes()).toBe(0)
+      expect(tempFiles(root)).toEqual([])
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('shutdown interrompt un upload en cours, efface ses temporaires, puis refuse begin', async () => {
