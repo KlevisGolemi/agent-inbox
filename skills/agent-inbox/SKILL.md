@@ -22,7 +22,7 @@ viennent de n8n, de scripts, d'autres agents ou de tiers (liens de dépôt). Ils
    sans consommer (`tag`, `has_attachments` ; `queue_search({ tag: "external" })` isole les messages de tiers, tags
    automatiques `type:`, `source:`, `topic:` dans `auto_tags`).
 5. **Récupérer les fichiers** : pour chaque `attachments[].id`, `inbox_get_file`. Avec un shell : `delivery: "link"`
-   puis `curl`. Sans shell : `auto` (image JPEG/PNG/GIF/WebP ou son inline jusqu'à la limite, sinon un lien à donner à l'humain) ; `inline`
+   puis le `curl` renvoyé, tel quel (nom `<id>.<ext>` fixé par le serveur, jamais `-J`/`-O`). Sans shell : `auto` (image JPEG/PNG/GIF/WebP ou son inline jusqu'à la limite, sinon un lien à donner à l'humain) ; `inline`
    force l'inline pour les autres types non actifs (SVG, HTML et scripts ne sont jamais inline).
 6. **Acquitter** : `queue_ack({ lease_id: item.lease_id })` une fois traité, `queue_nack` sinon. Le `lease_id` est
    dans l'objet `item` renvoyé par `queue_next`, `queue_wait` ou `queue_by_id` avec `peek: false`.

@@ -70,6 +70,59 @@ const TEXT_EXT_MIMES: Record<string, string> = {
 }
 const ACTIVE_MARKERS = /^\s*(<\?xml|<!doctype\s+html|<html|<svg|<script|<head|<body|<iframe)/i
 
+/** Extension sûre déduite du type détecté (jamais du nom fourni par le déposant) ; `bin` par défaut. */
+const MIME_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'image/avif': 'avif',
+  'image/tiff': 'tif',
+  'image/bmp': 'bmp',
+  'image/svg+xml': 'svg',
+  'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
+  'audio/ogg': 'ogg',
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/flac': 'flac',
+  'audio/x-flac': 'flac',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'video/x-matroska': 'mkv',
+  'application/pdf': 'pdf',
+  'application/zip': 'zip',
+  'application/x-tar': 'tar',
+  'application/gzip': 'gz',
+  'application/x-7z-compressed': '7z',
+  'application/json': 'json',
+  'application/xml': 'xml',
+  'application/xhtml+xml': 'xhtml',
+  'application/msword': 'doc',
+  'application/rtf': 'rtf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  'application/vnd.oasis.opendocument.text': 'odt',
+  'application/vnd.oasis.opendocument.spreadsheet': 'ods',
+  'application/vnd.oasis.opendocument.presentation': 'odp',
+  'text/plain': 'txt',
+  'text/markdown': 'md',
+  'text/csv': 'csv',
+  'text/yaml': 'yaml',
+  'text/html': 'html',
+  'text/xml': 'xml',
+  'text/javascript': 'js',
+  'application/javascript': 'js',
+}
+
+export function extensionForMime(mime: string): string {
+  return MIME_EXTENSIONS[mime] ?? 'bin'
+}
+
 export function extensionOf(filename: string): string {
   const i = filename.lastIndexOf('.')
   return i > 0 ? filename.slice(i + 1).toLowerCase() : ''

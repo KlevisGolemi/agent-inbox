@@ -245,9 +245,30 @@ describe('inbox_get_file', () => {
     ctx.settings.set('inline_max_mb', 0)
     const att = (await sendFile(ctx, PNG_1X1, 'p.png')).attachments[0]
     const out = data(await call(ctx, 'inbox_get_file', { attachment_id: att.id }))
-    expect(out).toMatchObject({ delivery: 'link', curl: `curl -fLJO '${out.url}'` })
+    expect(out).toMatchObject({
+      delivery: 'link',
+      curl: `curl -fL -o '${att.id}.png' '${out.url}'`,
+    })
     const u = new URL(out.url)
     expect((await request(ctx.app).get(u.pathname + u.search)).status).toBe(200)
+  })
+
+  it('curl : nom fixé par le serveur (id + extension détectée), jamais -J ni le nom du déposant', async () => {
+    const ctx = mcpSetup()
+    for (const [buf, name, ext] of [
+      [Buffer.from('import os\n'), 'conftest.py', 'txt'],
+      [PDF_MINI, '.envrc', 'pdf'],
+      [Buffer.from([0, 159, 146, 150, 1, 2, 3]), 'Makefile', 'bin'],
+    ] as const) {
+      const att = (await sendFile(ctx, buf, name)).attachments[0]
+      ctx.db.prepare("UPDATE messages SET trust = 'external'").run()
+      const out = data(
+        await call(ctx, 'inbox_get_file', { attachment_id: att.id, delivery: 'link' }),
+      )
+      expect(out.curl).toBe(`curl -fL -o '${att.id}.${ext}' '${out.url}'`)
+      expect(out.curl).not.toMatch(/-[a-zA-Z]*J|-O|conftest|envrc|Makefile/)
+      expect(out.attachment.filename).toBe(name)
+    }
   })
 
   it('texte : resource text ; PDF en inline explicite : resource blob', async () => {

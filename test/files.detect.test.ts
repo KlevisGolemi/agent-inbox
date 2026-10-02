@@ -1,6 +1,6 @@
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { detectFile, extensionOf, sanitizeFilename } from '../src/files/detect.js'
+import { detectFile, extensionForMime, extensionOf, sanitizeFilename } from '../src/files/detect.js'
 import { HEIC_MINI, HTML_PAGE, PDF_MINI, PNG_1X1, SVG_ACTIVE, TIFF_MINI } from './helpers/files.js'
 
 describe('detectFile', () => {
@@ -116,5 +116,22 @@ describe('detectFile : petits tampons', () => {
     )
     expect(result.category).toBe('other')
     expect(result.inline).toBeNull()
+  })
+})
+
+describe('extensionForMime', () => {
+  it.each([
+    ['image/png', 'png'],
+    ['image/jpeg', 'jpg'],
+    ['image/heic', 'heic'],
+    ['application/pdf', 'pdf'],
+    ['text/plain', 'txt'],
+    ['text/markdown', 'md'],
+    ['application/zip', 'zip'],
+    ['application/octet-stream', 'bin'],
+    ['application/x-inconnu', 'bin'],
+  ])('%s → %s', (mime, ext) => {
+    expect(extensionForMime(mime)).toBe(ext)
+    expect(ext).toMatch(/^[a-z0-9]{1,16}$/)
   })
 })

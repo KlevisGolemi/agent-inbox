@@ -17,7 +17,7 @@ Modes (`inline_max_mb` : 5 Mo par défaut ; `0` désactive l'inline) :
 
 ## Exemples
 
-- Client avec shell : `{"attachment_id": "…", "delivery": "link"}` puis exécuter le `curl` renvoyé (`curl -fLJO '<url>'`).
+- Client avec shell : `{"attachment_id": "…", "delivery": "link"}` puis exécuter le `curl` renvoyé (`curl -fL -o '<attachment_id>.<ext>' '<url>'`). Le fichier est enregistré sous un nom fixé par le serveur (identifiant + extension déduite du type détecté) ; le nom d'origine, choisi par l'expéditeur, reste dans `attachment.filename`. Ne jamais télécharger sous le nom d'origine (`-J`, `-O`) : un tiers pourrait déposer `conftest.py`, `.envrc` ou `Makefile` dans le répertoire de travail. Renommer seulement après inspection et accord de l'utilisateur.
 - Client sans shell : `{"attachment_id": "…"}` ; si la réponse est un lien, le donner à l'utilisateur.
 
 ## Réponse

@@ -228,7 +228,9 @@ Télécharge une pièce jointe. Deux modes d'accès :
 
 En-têtes de réponse : `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`,
 `Content-Security-Policy: sandbox; default-src 'none'`, `Cache-Control: private, no-store`.
-Pas de `Range` sur une pièce `consume`.
+Pas de `Range` sur une pièce `consume`. Le nom du `Content-Disposition` est le nom d'origine assaini, choisi par
+l'expéditeur : la commande `curl` proposée par `inbox_get_file` ne l'utilise pas (`curl -fL -o '<id>.<ext>' '<url>'`,
+jamais `-J`/`-O`).
 
 Le décompte des livraisons est **au plus une fois** : `downloads` n'est incrémenté que sur une livraison
 complète. Une pièce `consume` est effacée après `consume_grace_min` (10 min par défaut) suivant sa

@@ -114,7 +114,7 @@ et dure 15 minutes ; le message créé a `trust: internal`.
 ```text
 queue_wait(correlation_id: "projet-x-2026-10-02", timeout_sec: 30)
 inbox_get_file({ attachment_id: "...", delivery: "link" })
-# exécute le curl, dézippe, travaille
+# exécute le curl tel quel : fichier <attachment_id>.zip (nom fixé par le serveur), dézippe, travaille
 queue_ack({ lease_id: "..." })
 ```
 

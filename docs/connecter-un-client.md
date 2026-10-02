@@ -26,7 +26,7 @@ le serveur MCP ne garde aucune session en mémoire. Un jeton d'accès dure 1 heu
 (refresh token : 30 jours).
 
 **Fichiers.** Les clients avec shell (Claude Code, Codex) préfèrent `inbox_get_file` en mode `link` puis
-`curl` : aucune limite pratique. Les clients sans shell (Claude Desktop/Web, ChatGPT) reçoivent les images
+`curl` (enregistré sous `<attachment_id>.<ext>`, jamais sous le nom choisi par l'expéditeur). Les clients sans shell (Claude Desktop/Web, ChatGPT) reçoivent les images
 (JPEG, PNG, GIF, WebP ; HEIC ou TIFF passent par un lien) et les sons en inline jusqu'à `inline_max_mb` (5 Mo par défaut) ; au-delà, l'outil renvoie un lien signé
 à ouvrir par l'humain.
 
