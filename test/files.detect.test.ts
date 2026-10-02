@@ -91,6 +91,9 @@ describe('sanitizeFilename', () => {
     [undefined, 'fichier'],
     ['..', 'fichier'],
     ['  devis final.pdf ', 'devis final.pdf'],
+    ['malware.exe.', 'malware.exe'],
+    ['malware.exe. . ', 'malware.exe'],
+    ['...', 'fichier'],
   ])('%j → %j', (raw, expected) => {
     expect(sanitizeFilename(raw)).toBe(expected)
   })

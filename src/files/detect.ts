@@ -139,13 +139,25 @@ function forbiddenFilenameCodePoint(code: number): boolean {
   )
 }
 
+/**
+ * Points et espaces finaux retirés (« malware.exe. » → « malware.exe ») : même extension pour le
+ * blocage et pour le nom affiché (Windows les ignore aussi). Boucle linéaire, sans regex ancrée en fin.
+ */
+function trimTrailingDots(name: string): string {
+  let end = name.length
+  while (end > 0 && (name[end - 1] === '.' || name[end - 1]!.trim() === '')) end--
+  return name.slice(0, end)
+}
+
 /** Nom d'affichage sûr ; le chemin disque n'en dépend jamais. */
 export function sanitizeFilename(raw: string | undefined): string {
   const base = basename(String(raw ?? '').replaceAll('\\', '/'))
-  const clean = Array.from(base)
-    .filter((char) => !forbiddenFilenameCodePoint(char.codePointAt(0) ?? 0))
-    .join('')
-    .trim()
+  const clean = trimTrailingDots(
+    Array.from(base)
+      .filter((char) => !forbiddenFilenameCodePoint(char.codePointAt(0) ?? 0))
+      .join('')
+      .trim(),
+  )
   const safe = clean === '' || clean === '.' || clean === '..' ? 'fichier' : clean
   const points = Array.from(safe)
   if (points.length <= MAX_FILENAME_LENGTH) return safe

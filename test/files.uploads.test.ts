@@ -142,6 +142,17 @@ describe('UploadSession', () => {
     expect(tempFiles(root)).toEqual([])
   })
 
+  it.each(['malware.exe.', 'malware.exe ', 'malware.exe. . '])(
+    'extension bloquée malgré points/espaces finaux : %j',
+    async (name) => {
+      settings.set('file_blocked_extensions', ['exe'])
+      const session = uploads.begin()
+      expect(await codeOf(session.stage(Readable.from([PDF_MINI]), name))).toBe('extension_blocked')
+      await session.abort()
+      expect(tempFiles(root)).toEqual([])
+    },
+  )
+
   it('catégorie refusée par StageOptions.allowedCategories', async () => {
     const session = uploads.begin()
     expect(
