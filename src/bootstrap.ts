@@ -12,6 +12,9 @@ import { openDb } from './db/index.js'
 import { migrate } from './db/migrations.js'
 import type { Env } from './env.js'
 import { startBackups } from './jobs/backup.js'
+import { createAttachmentsRepo } from './files/attachments.js'
+import { createFileStore, type FileStore } from './files/store.js'
+import { createUploadManager, type UploadManager } from './files/uploads.js'
 import { startCleanup } from './jobs/cleanup.js'
 import { log } from './log.js'
 import { createWaitPool, type WaitPool } from './queue/http.js'
@@ -36,6 +39,8 @@ export interface Runtime {
   settings: Settings
   users: Users
   backups: Backups
+  files: FileStore
+  uploads: UploadManager
   setupCode: { value: string | null }
   /** Arrêt : `shutdown.abort()` résout aussitôt toutes les attentes longues (HTTP et MCP). */
   shutdown: AbortController
@@ -56,9 +61,15 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
   const setupCode = { value: (await ensureAdmin({ users, env, log })).setupCode }
 
   const sessions = createAdminSessions(db)
+  const files = createFileStore({ db, root: join(dirname(env.dbPath), 'files') })
+  files.init()
+  const uploads = createUploadManager({ store: files, settings })
   const repo = createQueueRepo(db, {
     leaseTimeoutMs: () => settings.get('lease_timeout_sec') * 1000,
+    files,
+    settings,
   })
+  const attachments = createAttachmentsRepo(db, { files, settings })
   const backups = createBackups({
     db,
     dir: join(dirname(env.dbPath), 'backups'),
@@ -71,6 +82,9 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     db,
     settings,
     repo,
+    files,
+    uploads,
+    attachments,
     version: VERSION,
     versions: createVersionService({ settings, fetch, current: VERSION, repo: env.updateRepo }),
     env,
@@ -89,11 +103,13 @@ export async function buildRuntime(env: Env): Promise<Runtime> {
     settings,
     users,
     backups,
+    files,
+    uploads,
     setupCode,
     shutdown,
     waits,
     start() {
-      const cleanup = startCleanup({ db, repo, settings })
+      const cleanup = startCleanup({ db, repo, settings, files, uploads })
       const backupJob = startBackups({ backups, settings })
       return {
         stop() {

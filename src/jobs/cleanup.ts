@@ -1,4 +1,7 @@
 import type Database from 'better-sqlite3'
+import type { FileStore } from '../files/store.js'
+import { sweepFiles, type FileSweepReport } from '../files/sweep.js'
+import type { UploadManager } from '../files/uploads.js'
 import { log as defaultLog } from '../log.js'
 import type { QueueRepo } from '../queue/repo.js'
 import type { Settings } from '../settings/index.js'
@@ -8,7 +11,14 @@ const MIN_MS = 60_000
 /** Un client OAuth inactif (aucun jeton valide ni code en cours) depuis sa création au-delà de ce délai est purgé. */
 export const OAUTH_CLIENT_IDLE_MS = 30 * 24 * HOUR_MS
 
-export interface CleanupReport {
+const EMPTY_SWEEP: FileSweepReport = {
+  filesExpired: 0,
+  filesConsumed: 0,
+  orphansDeleted: 0,
+  tempsDeleted: 0,
+}
+
+export interface CleanupReport extends FileSweepReport {
   readDeleted: number
   pendingExpired: number
   oauthDeleted: number
@@ -20,6 +30,8 @@ export interface CleanupDeps {
   db: Database.Database
   repo: QueueRepo
   settings: Settings
+  files?: FileStore
+  uploads?: UploadManager
   log?: typeof defaultLog
   now?: () => number
   setTimer?: typeof setTimeout
@@ -56,6 +68,10 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
 
   function execute(): CleanupReport {
     const t = now()
+    // Pièces avant messages : un message à pièce vivante n'est jamais supprimé par le TTL.
+    const sweep = deps.files
+      ? sweepFiles({ db, files: deps.files, settings, uploads: deps.uploads, now: t })
+      : EMPTY_SWEEP
     const { read, pending } = repo.deleteExpired(
       t - settings.get('ttl_hours') * HOUR_MS,
       settings.get('topic_ttl_overrides'),
@@ -71,8 +87,11 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
       oauthDeleted,
       clientsDeleted,
       sessionsDeleted,
+      ...sweep,
     }
-    if (read + pending + oauthDeleted + clientsDeleted + sessionsDeleted > 0) {
+    const sweepTotal =
+      sweep.filesExpired + sweep.filesConsumed + sweep.orphansDeleted + sweep.tempsDeleted
+    if (read + pending + oauthDeleted + clientsDeleted + sessionsDeleted + sweepTotal > 0) {
       log('info', 'Nettoyage effectué', report)
     }
     return report
@@ -92,6 +111,7 @@ export function startCleanup(deps: CleanupDeps): { runOnce(): CleanupReport; sto
         oauthDeleted: 0,
         clientsDeleted: 0,
         sessionsDeleted: 0,
+        ...EMPTY_SWEEP,
       }
     }
   }

@@ -5,6 +5,9 @@ import type Database from 'better-sqlite3'
 import type { Response } from 'supertest'
 import { createApp, type AppDeps } from '../../src/app.js'
 import { createBackups } from '../../src/backups/index.js'
+import { createAttachmentsRepo } from '../../src/files/attachments.js'
+import { createFileStore } from '../../src/files/store.js'
+import { createUploadManager } from '../../src/files/uploads.js'
 import { createApiKeys } from '../../src/auth/apiKeys.js'
 import { SqliteOAuthProvider } from '../../src/auth/oauth/provider.js'
 import { createAdminSessions } from '../../src/auth/sessions.js'
@@ -47,10 +50,25 @@ export function makeAppDeps(over: Partial<AppDeps> = {}): AppDeps {
   if (!over.settings) seedSettings(settings, db, {}, () => 'g'.repeat(64))
   const env = over.env ?? testEnv()
   const sessions = over.sessions ?? createAdminSessions(db)
+  const files =
+    over.files ??
+    createFileStore({ db, root: mkdtempSync(join(tmpdir(), 'inbox-files-')), log: () => {} })
+  if (!over.files) files.init()
+  const uploads =
+    over.uploads ??
+    createUploadManager({
+      store: files,
+      settings,
+      statfs: () => ({ bavail: 1e12, bsize: 1 }),
+      log: () => {},
+    })
   return {
     db,
     settings,
-    repo: over.repo ?? createQueueRepo(db),
+    repo: over.repo ?? createQueueRepo(db, { files, settings }),
+    files,
+    uploads,
+    attachments: over.attachments ?? createAttachmentsRepo(db, { files, settings }),
     version: over.version ?? '0.0.0-test',
     versions:
       over.versions ??

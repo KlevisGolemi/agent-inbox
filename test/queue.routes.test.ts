@@ -170,6 +170,8 @@ describe('GET /next', () => {
     const r = await request(app).get('/next').set(H)
     expect(r.body).toMatchObject({ ok: true, empty: false, pending: 0 })
     expect(Object.keys(r.body.item).sort()).toEqual([
+      'attachments',
+      'auto_tags',
       'correlation_id',
       'created_at',
       'delete_at',
@@ -177,6 +179,7 @@ describe('GET /next', () => {
       'payload',
       'read_at',
       'source',
+      'tags',
       'topic',
     ])
     expect(
@@ -406,6 +409,18 @@ describe('GET /by-id/:cid', () => {
 })
 
 describe('peek, stats, suppression, search', () => {
+  it('GET /search : tag et has_attachments (additifs), valeur invalide → 400', async () => {
+    await post({ a: 1 })
+    expect(
+      (await request(app).get('/search?has_attachments=false').set(H)).body.items,
+    ).toHaveLength(1)
+    expect((await request(app).get('/search?tag=topic:default').set(H)).body.items).toHaveLength(1)
+    expect((await request(app).get('/search?has_attachments=peut-etre').set(H)).body).toEqual({
+      ok: false,
+      error: 'invalid_has_attachments',
+    })
+  })
+
   it('GET /peek pagine et renvoie les stats', async () => {
     for (let i = 0; i < 3; i++) {
       await post({ i })

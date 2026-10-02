@@ -11,6 +11,9 @@ import { createAuthPagesRouter } from './auth/pages.js'
 import { requireAdminSession, type AdminSessions } from './auth/sessions.js'
 import type { Users } from './auth/users.js'
 import type { Backups } from './backups/index.js'
+import type { AttachmentsRepo } from './files/attachments.js'
+import type { FileStore } from './files/store.js'
+import type { UploadManager } from './files/uploads.js'
 import type { Env } from './env.js'
 import { createJsonBody } from './http/jsonBody.js'
 import { log } from './log.js'
@@ -26,6 +29,9 @@ export interface AppDeps {
   db: Database.Database
   settings: Settings
   repo: QueueRepo
+  files: FileStore
+  uploads: UploadManager
+  attachments: AttachmentsRepo
   version: string
   versions: VersionService
   /** Remplaçable en test ; `fetch` global par défaut. */

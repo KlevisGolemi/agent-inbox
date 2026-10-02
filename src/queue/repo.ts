@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
+import {
+  createAttachmentsRepo,
+  type AttachmentView,
+  type NewAttachment,
+} from '../files/attachments.js'
+import type { FileStore } from '../files/store.js'
 import { log } from '../log.js'
+import type { Settings } from '../settings/index.js'
+import { attachTags, createTags, type NewTag } from '../tags/attach.js'
 
 export type MessageStatus = 'pending' | 'leased' | 'read'
+export type Trust = 'internal' | 'external'
 
 export type QueueItem = {
   id: string
@@ -16,6 +25,10 @@ export type QueueItem = {
   /** `<uuid>.<attempts>` quand le message est emprunté, sinon null. */
   lease_id: string | null
   attempts: number
+  trust: Trust
+  drop_id: string | null
+  attachments: AttachmentView[]
+  tags: string[]
   payload: unknown
 }
 
@@ -29,6 +42,8 @@ export type SearchFilter = {
   since?: number
   until?: number
   text?: string
+  tag?: string
+  hasAttachments?: boolean
   limit?: number
 }
 
@@ -44,13 +59,23 @@ export type EnqueueResult =
   | { ok: true; id: string; pending: number }
   | { ok: false; error: 'duplicate_correlation_id'; existingId: string | null }
 
+export interface EnqueueInput {
+  payload: unknown
+  source: string
+  correlationId: string | null
+  topic?: string
+  attachments?: NewAttachment[]
+  /** Tags du registre déjà validés : posés dans la transaction (clé étrangère). */
+  tags?: string[]
+  /** Tags déjà validés à créer puis poser, dans la même transaction (aucun orphelin si l'envoi échoue). */
+  newTags?: NewTag[]
+  trust?: Trust
+  dropId?: string | null
+}
+
 export interface QueueRepo {
-  enqueue(input: {
-    payload: unknown
-    source: string
-    correlationId: string | null
-    topic?: string
-  }): EnqueueResult
+  enqueue(input: EnqueueInput): EnqueueResult
+  findById(id: string): QueueItem | null
   claimNext(opts?: { topic?: string; lease?: boolean }): QueueItem | null
   claimByCorrelation(cid: string, opts?: { lease?: boolean }): ClaimByCorrelation
   findByCorrelation(cid: string): QueueItem | null
@@ -74,6 +99,9 @@ export interface QueueRepoOptions {
   now?: () => number
   /** Durée du bail en ms, relue à chaque emprunt. */
   leaseTimeoutMs?: () => number
+  /** Efface les fichiers des pièces après suppression d'un message. */
+  files?: FileStore
+  settings?: Settings
 }
 
 type Row = {
@@ -87,10 +115,12 @@ type Row = {
   lease_until: number | null
   attempts: number
   correlation_id: string | null
+  trust: Trust
+  drop_id: string | null
 }
 
 const COLS =
-  'id, source, payload, status, topic, created_at, read_at, lease_until, attempts, correlation_id'
+  'id, source, payload, status, topic, created_at, read_at, lease_until, attempts, correlation_id, trust, drop_id'
 /** `<uuid>.<attempts>` : UUID (insensible à la casse) et tentatives entières ≥ 1 sans zéro initial. */
 const LEASE_ID_REGEX =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([1-9]\d{0,8})$/i
@@ -106,32 +136,50 @@ function safeParse(raw: string): unknown {
   }
 }
 
-function toItem(r: Row): QueueItem {
-  return {
-    id: r.id,
-    source: r.source,
-    correlation_id: r.correlation_id,
-    topic: r.topic,
-    status: r.status,
-    created_at: new Date(r.created_at).toISOString(),
-    read_at: iso(r.read_at),
-    lease_until: iso(r.lease_until),
-    lease_id: r.status === 'leased' ? `${r.id}.${r.attempts}` : null,
-    attempts: r.attempts,
-    payload: safeParse(r.payload),
-  }
-}
-
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`)
 
 export function createQueueRepo(db: Database.Database, options: QueueRepoOptions = {}): QueueRepo {
   const now = options.now ?? Date.now
   const leaseTimeoutMs = options.leaseTimeoutMs ?? (() => 300_000)
   const listeners = new Set<(item: QueueItem) => void>()
+  const attachments = createAttachmentsRepo(db, {
+    files: options.files,
+    settings: options.settings,
+    now,
+  })
+  const tagsOf = db.prepare('SELECT tag FROM message_tags WHERE message_id = ? ORDER BY tag')
+  const liveFilesOf = db.prepare(
+    'SELECT id FROM attachments WHERE message_id = ? AND deleted_at IS NULL',
+  )
+  const allLiveFiles = db.prepare('SELECT id FROM attachments WHERE deleted_at IS NULL')
+  const insertAttachment = db.prepare(
+    `INSERT INTO attachments (id, message_id, filename, mime_type, category, size_bytes, sha256, on_download, created_at, expires_at)
+     VALUES (@id, @message_id, @filename, @mime_type, @category, @size_bytes, @sha256, @on_download, @created_at, @expires_at)`,
+  )
+
+  function toItem(r: Row): QueueItem {
+    return {
+      id: r.id,
+      source: r.source,
+      correlation_id: r.correlation_id,
+      topic: r.topic,
+      status: r.status,
+      created_at: new Date(r.created_at).toISOString(),
+      read_at: iso(r.read_at),
+      lease_until: iso(r.lease_until),
+      lease_id: r.status === 'leased' ? `${r.id}.${r.attempts}` : null,
+      attempts: r.attempts,
+      trust: r.trust,
+      drop_id: r.drop_id,
+      attachments: attachments.forMessage(r.id).map(attachments.view),
+      tags: (tagsOf.all(r.id) as { tag: string }[]).map((t) => t.tag),
+      payload: safeParse(r.payload),
+    }
+  }
 
   const insert = db.prepare(
-    `INSERT INTO messages (id, source, payload, status, created_at, correlation_id, topic)
-     VALUES (?, ?, ?, 'pending', ?, ?, ?)`,
+    `INSERT INTO messages (id, source, payload, status, created_at, correlation_id, topic, trust, drop_id)
+     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
   )
   const selectById = db.prepare(`SELECT ${COLS} FROM messages WHERE id = ?`)
   const selectByCid = db.prepare(`SELECT ${COLS} FROM messages WHERE correlation_id = ?`)
@@ -187,24 +235,44 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
   }
 
   return {
-    enqueue({ payload, source, correlationId, topic }) {
+    enqueue({
+      payload,
+      source,
+      correlationId,
+      topic,
+      attachments: files = [],
+      tags = [],
+      newTags = [],
+      trust = 'internal',
+      dropId = null,
+    }) {
       const id = randomUUID()
+      const t = now()
       try {
-        insert.run(
-          id,
-          source,
-          JSON.stringify(payload ?? {}),
-          now(),
-          correlationId,
-          topic ?? 'default',
-        )
+        // Une seule transaction : message + pièces + tags (créés puis posés) ; rien ne subsiste si elle échoue.
+        db.transaction(() => {
+          insert.run(
+            id,
+            source,
+            JSON.stringify(payload ?? {}),
+            t,
+            correlationId,
+            topic ?? 'default',
+            trust,
+            dropId,
+          )
+          for (const a of files) insertAttachment.run({ ...a, message_id: id, created_at: t })
+          createTags(db, newTags, t)
+          attachTags(db, id, [...tags, ...newTags.map((n) => n.name)], t)
+        })()
       } catch (err) {
         if (
           (err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE' &&
           correlationId !== null
         ) {
           const existing = selectByCid.get(correlationId) as Row | undefined
-          return { ok: false, error: 'duplicate_correlation_id', existingId: existing?.id ?? null }
+          if (existing)
+            return { ok: false, error: 'duplicate_correlation_id', existingId: existing.id }
         }
         throw err
       }
@@ -217,6 +285,11 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
         }
       }
       return { ok: true, id, pending: (countPending.get() as { n: number }).n }
+    },
+
+    findById(id) {
+      const row = selectById.get(id) as Row | undefined
+      return row ? toItem(row) : null
     },
 
     claimNext(opts = {}) {
@@ -272,6 +345,30 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
       if (f.until !== undefined) add('created_at <= :until', 'until', f.until)
       if (f.text !== undefined)
         add(`payload LIKE :text ESCAPE '\\'`, 'text', `%${escapeLike(f.text)}%`)
+      if (f.hasAttachments !== undefined)
+        where.push(
+          `${f.hasAttachments ? '' : 'NOT '}EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = messages.id)`,
+        )
+      if (f.tag !== undefined) {
+        const colon = f.tag.indexOf(':')
+        const kind = colon < 0 ? '' : f.tag.slice(0, colon)
+        const value = colon < 0 ? f.tag : f.tag.slice(colon + 1)
+        if (f.tag === 'external') where.push(`trust = 'external'`)
+        else if (kind === 'type')
+          add(
+            'EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = messages.id AND a.category = :tagv)',
+            'tagv',
+            value,
+          )
+        else if (kind === 'source') add('source = :tagv', 'tagv', value)
+        else if (kind === 'topic') add('topic = :tagv', 'tagv', value)
+        else
+          add(
+            'EXISTS (SELECT 1 FROM message_tags mt WHERE mt.message_id = messages.id AND mt.tag = :tagv)',
+            'tagv',
+            f.tag,
+          )
+      }
       const sql = `SELECT ${COLS} FROM messages ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
                    ORDER BY created_at DESC, rowid DESC LIMIT :limit`
       return (db.prepare(sql).all(params) as Row[]).map(toItem)
@@ -296,28 +393,48 @@ export function createQueueRepo(db: Database.Database, options: QueueRepoOptions
       return { ...totals, topics: Object.fromEntries(byTopic.map((r) => [r.topic, r.n])) }
     },
 
+    // Les fichiers sont effacés APRÈS la transaction (la cascade SQL ne supprime jamais de fichier) ;
+    // un échec d'effacement laisse un orphelin que le nettoyage reprend.
     deleteById(id) {
-      return db.prepare('DELETE FROM messages WHERE id = ?').run(id).changes > 0
+      const { deleted, ids } = db.transaction(() => {
+        const ids = (liveFilesOf.all(id) as { id: string }[]).map((r) => r.id)
+        return { deleted: db.prepare('DELETE FROM messages WHERE id = ?').run(id).changes > 0, ids }
+      })()
+      if (deleted) options.files?.unlinkFinal(ids)
+      return deleted
     },
 
     clear() {
-      return db.prepare('DELETE FROM messages').run().changes
+      const { n, ids } = db.transaction(() => {
+        const ids = (allLiveFiles.all() as { id: string }[]).map((r) => r.id)
+        return { n: db.prepare('DELETE FROM messages').run().changes, ids }
+      })()
+      options.files?.unlinkFinal(ids)
+      return n
     },
 
+    // Un message qui a une pièce vivante n'est jamais supprimé par le TTL.
     deleteExpired(cutoffMs, overrides, nowMs) {
+      const LIVE = `NOT EXISTS (SELECT 1 FROM attachments a
+                     WHERE a.message_id = messages.id AND a.deleted_at IS NULL AND a.expires_at > :now)`
       const delRead = (cond: string) =>
-        `DELETE FROM messages WHERE status = 'read' AND read_at < ? AND ${cond}`
+        `DELETE FROM messages WHERE status = 'read' AND read_at < :cut AND ${LIVE} AND ${cond}`
       const delOpen = (cond: string) =>
-        `DELETE FROM messages WHERE status != 'read' AND created_at < ? AND ${cond}`
+        `DELETE FROM messages WHERE status != 'read' AND created_at < :cut AND ${LIVE} AND ${cond}`
       const topics = Object.keys(overrides)
-      const notIn = topics.length ? `topic NOT IN (${topics.map(() => '?').join(',')})` : '1 = 1'
+      const notIn = topics.length ? 'topic NOT IN (SELECT value FROM json_each(:topics))' : '1 = 1'
+      const globalParams = {
+        cut: cutoffMs,
+        now: nowMs,
+        ...(topics.length ? { topics: JSON.stringify(topics) } : {}),
+      }
       return db.transaction(() => {
-        let read = db.prepare(delRead(notIn)).run(cutoffMs, ...topics).changes
-        let pending = db.prepare(delOpen(notIn)).run(cutoffMs, ...topics).changes
+        let read = db.prepare(delRead(notIn)).run(globalParams).changes
+        let pending = db.prepare(delOpen(notIn)).run(globalParams).changes
         for (const topic of topics) {
-          const cut = nowMs - overrides[topic]! * HOUR_MS
-          read += db.prepare(delRead('topic = ?')).run(cut, topic).changes
-          pending += db.prepare(delOpen('topic = ?')).run(cut, topic).changes
+          const p = { cut: nowMs - overrides[topic]! * HOUR_MS, now: nowMs, topic }
+          read += db.prepare(delRead('topic = :topic')).run(p).changes
+          pending += db.prepare(delOpen('topic = :topic')).run(p).changes
         }
         return { read, pending }
       })()

@@ -6,7 +6,7 @@ export type FileCategory = (typeof FILE_CATEGORIES)[number]
 export type OnDownload = 'keep' | 'consume'
 export type InlineKind = 'image' | 'audio' | 'text' | null
 export type AttachmentStatus = 'available' | 'expired' | 'consumed' | 'file_gone'
-export type DeletedReason = 'expired' | 'consumed' | 'message_deleted'
+export type DeletedReason = 'expired' | 'consumed'
 
 /** Fonction de journalisation injectable, sans donnée sensible. */
 export type LogFn = (level: LogLevel, msg: string, fields?: Record<string, unknown>) => void

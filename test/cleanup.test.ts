@@ -205,6 +205,10 @@ describe('planification', () => {
       oauthDeleted: 0,
       clientsDeleted: 0,
       sessionsDeleted: 0,
+      filesExpired: 0,
+      filesConsumed: 0,
+      orphansDeleted: 0,
+      tempsDeleted: 0,
     })
     expect(log).toHaveBeenCalledWith('error', expect.any(String), { error: 'boom' })
   })
