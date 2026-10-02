@@ -27,6 +27,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) · versionnage
 - Migration v4 : les sauvegardes de la v3 deviennent incompatibles avec le nouveau schéma. Faites une
   sauvegarde juste après la mise à jour.
 
+### Security
+
+- Inline et aperçu admin limités aux images JPEG, PNG, GIF et WebP ; HEIC, TIFF… passent par un lien.
+- `inbox_get_file` propose `curl -fL -o '<id>.<ext>'` : jamais `-J`/`-O` fondés sur le nom choisi par le déposant.
+- `/mcp` : limiteur et Bearer vérifiés avant toute lecture du corps JSON (un POST anonyme n'est jamais lu).
+- Les descriptions de tags ne sont plus injectées dans `tools/list` : seuls les noms des plus utilisés le sont.
+- Plafonds `file_max_mb` vidéo et archive à 95 Mo par défaut (limite de corps de Cloudflare Free/Pro).
+- Liens de dépôt expirés ou révoqués depuis 30 jours purgés ; payload d'un lien self plafonné à `json_max_kb`.
+
 ## [2.1.0] - 2026-10-01
 
 ### Changed
