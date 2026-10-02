@@ -131,7 +131,7 @@
                   x-text="fmtBytes(ov.storage?.used_bytes) + ' / ' + fmtBytes(ov.storage?.quota_bytes)"></span>
           </div>
           <div style="height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden">
-            <div style="height:8px" :style="'width:' + storagePct() + '%;background:' + (storagePct() >= 80 ? '#EF4444' : '#6366F1')"></div>
+            <div class="h-2" :style="'width:' + storagePct() + '%;background:' + (storagePct() >= 80 ? '#EF4444' : '#6366F1')"></div>
           </div>
           <p class="text-xs mt-2" style="color:#64748B">
             <span x-text="ov.storage?.files_count"></span> fichier(s) · disque libre : <span x-text="fmtBytes(ov.storage?.disk_free_bytes)"></span>
@@ -955,13 +955,17 @@
                 <span class="text-xs" style="color:#94A3B8" x-text="tag.usage_count + ' usage(s)'"></span>
                 <span x-show="tag.needs_description" class="text-xs" style="color:#FCD34D">à décrire</span>
               </div>
-              <div class="flex items-center gap-2 mt-1">
-                <input class="q-input plain sm flex-1" :value="tag.description" @change="saveTagDescription(tag.name, $event.target.value)" maxlength="280">
-                <select class="q-input plain sm" @change="mergeTag(tag.name, $event.target.value); $event.target.value=''">
-                  <option value="">Fusionner dans…</option>
-                  <template x-for="o in tagList.filter(x => x.name !== tag.name)" :key="o.name"><option :value="o.name" x-text="o.name"></option></template>
-                </select>
-                <button class="btn btn-ghost text-xs" @click="deleteTag(tag.name)">Supprimer</button>
+              <div class="flex flex-col md:flex-row md:items-center gap-2 mt-1">
+                <input class="q-input plain sm md:flex-1 min-w-0" :value="tag.description" @change="saveTagDescription(tag.name, $event.target.value)" maxlength="280" aria-label="Description du tag">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 md:flex-none md:w-44">
+                    <select class="q-input plain sm" aria-label="Fusionner ce tag dans un autre" @change="mergeTag(tag.name, $event.target.value); $event.target.value=''">
+                      <option value="">Fusionner dans…</option>
+                      <template x-for="o in tagList.filter(x => x.name !== tag.name)" :key="o.name"><option :value="o.name" x-text="o.name"></option></template>
+                    </select>
+                  </div>
+                  <button class="btn btn-ghost text-xs shrink-0" @click="deleteTag(tag.name)">Supprimer</button>
+                </div>
               </div>
               <p class="text-xs mt-1" style="color:#64748B" x-text="tag.description"></p>
             </div>

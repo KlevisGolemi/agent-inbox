@@ -48,3 +48,14 @@ describe('interface : aucun texte externe interprété comme HTML', () => {
     )
   })
 })
+
+describe('interface : mise en page', () => {
+  it('la barre de jauge garde sa hauteur par une classe (un style statique est écrasé par :style)', () => {
+    expect(html).toContain('<div class="h-2" :style="\'width:\' + storagePct()')
+  })
+
+  it('l’onglet Tags : la description n’est pas écrasée par le sélecteur de fusion', () => {
+    expect(html).toContain('class="q-input plain sm md:flex-1 min-w-0"')
+    expect(html).toContain('md:flex-none md:w-44')
+  })
+})
