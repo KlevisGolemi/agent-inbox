@@ -1,4 +1,4 @@
-import express, { type Request, type RequestHandler, type Response } from 'express'
+import express, { type RequestHandler, type Response } from 'express'
 import { closeAfterResponse, lingerAfterError } from '../files/http.js'
 import { checkWebhookSecret } from '../queue/secret.js'
 import type { Settings } from '../settings/index.js'
@@ -23,47 +23,61 @@ export function jsonLimitFor(path: string, settings: Settings): number {
   return DEFAULT_JSON_LIMIT_BYTES
 }
 
-const jsonTooLarge = new WeakSet<Request>()
-
-/** Vrai si le corps JSON annoncé dépasse la limite et n'a pas été lu (refus laissé à la route). */
-export function isJsonTooLarge(req: Request): boolean {
-  return jsonTooLarge.has(req)
-}
-
 /** Réponse 413 commune aux corps JSON trop gros. */
 export function sendPayloadTooLarge(res: Response): void {
   res.status(413).json({ ok: false, error: 'payload_too_large' })
 }
 
-/**
- * Parseur JSON choisi par requête : une instance `express.json` par valeur de limite (mémoïsée),
- * ce qui conserve les erreurs `entity.too.large` / `entity.parse.failed` (413 / 400) existantes.
- */
-export function createJsonBody(settings: Settings): RequestHandler {
+/** Parseurs `express.json` mémoïsés par valeur de limite (erreurs 413 / 400 existantes conservées). */
+function parserCache(): (limit: number) => RequestHandler {
   const parsers = new Map<number, RequestHandler>()
-  return (req, res, next) => {
-    const limit = jsonLimitFor(req.path, settings)
-    // Corps JSON annoncé trop gros : refus immédiat (express.json le lirait en entier avant de
-    // répondre). Producteur authentifié (secret webhook valide) : lingering borné pour qu'il lise
-    // bien le 413 ; sinon fermeture immédiate, rien n'est lu pour un inconnu.
-    if (req.is('application/json') && Number(req.headers['content-length']) > limit) {
-      // /mcp : l'appelant n'est connu qu'après le Bearer du routeur MCP, qui répond lui-même
-      // (401 et fermeture, ou 413 et lingering) ; le corps n'est pas lu.
-      if (req.path === '/mcp') {
-        jsonTooLarge.add(req)
-        next()
-        return
-      }
-      if (req.path === '/webhook' && checkWebhookSecret(req, settings)) lingerAfterError(req, res)
-      else closeAfterResponse(req, res)
-      sendPayloadTooLarge(res)
-      return
-    }
+  return (limit) => {
     let parser = parsers.get(limit)
     if (!parser) {
       parser = express.json({ limit })
       parsers.set(limit, parser)
     }
-    parser(req, res, next)
+    return parser
+  }
+}
+
+/**
+ * Parseur JSON choisi par requête, monté sur toute l'application. `/mcp` en est exclu : son corps
+ * n'est lu qu'après le limiteur et le Bearer, par `createMcpJsonBody`.
+ */
+export function createJsonBody(settings: Settings): RequestHandler {
+  const parserFor = parserCache()
+  return (req, res, next) => {
+    if (req.path === '/mcp') {
+      next()
+      return
+    }
+    const limit = jsonLimitFor(req.path, settings)
+    // Corps JSON annoncé trop gros : refus immédiat (express.json le lirait en entier avant de
+    // répondre). Producteur authentifié (secret webhook valide) : lingering borné pour qu'il lise
+    // bien le 413 ; sinon fermeture immédiate, rien n'est lu pour un inconnu.
+    if (req.is('application/json') && Number(req.headers['content-length']) > limit) {
+      if (req.path === '/webhook' && checkWebhookSecret(req, settings)) lingerAfterError(req, res)
+      else closeAfterResponse(req, res)
+      sendPayloadTooLarge(res)
+      return
+    }
+    parserFor(limit)(req, res, next)
+  }
+}
+
+/**
+ * Parseur JSON de `POST /mcp`, placé après le limiteur et le Bearer : un appelant anonyme
+ * (même en chunked) n'a jamais son corps lu. Corps annoncé trop gros : 413 sans lecture.
+ */
+export function createMcpJsonBody(settings: Settings): RequestHandler {
+  const parserFor = parserCache()
+  return (req, res, next) => {
+    const limit = jsonLimitFor('/mcp', settings)
+    if (req.is('application/json') && Number(req.headers['content-length']) > limit) {
+      sendPayloadTooLarge(res)
+      return
+    }
+    parserFor(limit)(req, res, next)
   }
 }

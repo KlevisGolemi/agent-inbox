@@ -284,6 +284,72 @@ describe('refus anticipés de /webhook et /d/:token', () => {
     }
   })
 
+  it('MCP : POST anonyme en chunked (sans Content-Length) : 401 sans lire le corps, fermeture', async () => {
+    const { server } = setup()
+    const c = rawClient(server)
+    try {
+      await c.write(
+        head('/mcp', {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Transfer-Encoding': 'chunked',
+        }),
+      )
+      // Corps commencé mais jamais terminé : seul un refus avant lecture peut répondre.
+      const chunk = '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"x":"'
+      await c.write(`${chunk.length.toString(16)}\r\n${chunk}\r\n`)
+      const r = await c.response()
+      expect(r.status).toBe(401)
+      expect(r.head).toContain('www-authenticate: bearer')
+      expect(r.head).toContain('access-control-expose-headers: www-authenticate')
+      expect(r.head).toContain('connection: close')
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
+      expect(lingeringCount()).toBe(0)
+    } finally {
+      c.socket.destroy()
+      server.close()
+    }
+  })
+
+  it('MCP : chunked trop gros avec clé API valide : 413 (corps lu seulement après le Bearer)', async () => {
+    const { t, server } = setup()
+    t.settings.set('json_max_kb', 16)
+    t.settings.set('mcp_upload_max_mb', 0)
+    const { key } = t.apiKeys.create('test')
+    const body = Buffer.from(
+      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'x', params: { big: 'x'.repeat(MB) } }),
+    )
+    const chunk = (b: Buffer) =>
+      Buffer.concat([Buffer.from(`${b.length.toString(16)}\r\n`), b, Buffer.from('\r\n')])
+    const c = rawClient(server)
+    try {
+      await c.write(
+        head('/mcp', {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/event-stream',
+          'Transfer-Encoding': 'chunked',
+          Connection: 'close',
+        }),
+      )
+      // body-parser lit tout le corps avant de répondre (comportement v2.1, appelant authentifié).
+      for (let i = 0; i < body.length; i += 128 * 1024) {
+        await c.write(chunk(body.subarray(i, i + 128 * 1024)))
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+      await c.write('0\r\n\r\n')
+      const r = await c.response()
+      expect(r.status).toBe(413)
+      expect(r.body).toEqual({ ok: false, error: 'payload_too_large' })
+      c.socket.end()
+      await within(c.serverClosed, NET_MS, 'fermeture serveur')
+      expect(c.errors).toEqual([])
+    } finally {
+      c.socket.destroy()
+      server.close()
+    }
+  })
+
   it('MCP : JSON trop gros avec clé API valide, client qui envoie encore : 413 lu, fermeture propre', async () => {
     const { t, server } = setup()
     t.settings.set('json_max_kb', 16)

@@ -3,7 +3,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { Router, type RequestHandler } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { earlyResponsePolicy } from '../files/http.js'
-import { isJsonTooLarge, sendPayloadTooLarge } from '../http/jsonBody.js'
+import { createMcpJsonBody } from '../http/jsonBody.js'
 import { log } from '../log.js'
 import { registerTools, type McpToolDeps } from './tools.js'
 
@@ -53,18 +53,15 @@ export function createMcpRouter({ bearer, ...toolDeps }: McpRouterDeps): Router 
     next()
   })
 
-  // Réponse avant la fin du corps (JSON annoncé trop gros, non lu) : 401/429 → fermeture
-  // immédiate ; appelant authentifié par le Bearer → 413 et lingering borné.
+  // Limiteur et Bearer AVANT la lecture du corps : 401/429 → fermeture immédiate, corps jamais lu
+  // (même en chunked) ; appelant authentifié → corps lu, 413 éventuel avec lingering borné.
   router.post(
     '/mcp',
     earlyResponsePolicy('close'),
     mcpLimiter,
     bearer,
     earlyResponsePolicy('linger'),
-    (req, res, next) => {
-      if (isJsonTooLarge(req)) sendPayloadTooLarge(res)
-      else next()
-    },
+    createMcpJsonBody(toolDeps.settings),
     async (req, res) => {
       const server = new McpServer({ name: 'agent-inbox', version: toolDeps.version })
       registerTools(server, toolDeps)
