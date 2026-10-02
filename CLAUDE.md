@@ -53,8 +53,9 @@ npm run format      # prettier --write .
 - **`TRUST_PROXY`** : nombre exact de proxys de confiance ; ne jamais publier le port de l'application.
 - **Migrations** : on en ajoute, on ne modifie pas les existantes.
 - **Un test par changement** (Vitest + Supertest) et documentation à jour (`docs/`, `CHANGELOG.md`).
-- **FileStore seul propriétaire du disque** : suppression = marquer `deleted_at` en base puis effacer les
-  fichiers après le commit. Jamais de cascade SQL seule.
+- **FileStore seul propriétaire du disque** : supprimer un message relève les ids de ses pièces dans la
+  transaction, supprime les lignes (cascade) puis efface les fichiers après le commit. `deleted_at` /
+  `deleted_reason` (`expired` | `consumed`) ne servent qu'à l'expiration et au mode `consume` (R12).
 - **Tags créés dans la transaction d'enqueue** : `queue_send.new_tags`, `queue_tag.new_tags` et créations
   automatiques HTTP sont insérés dans la même transaction que le message, sans orphelin.
 - **Réservation atomique des drops** : `UPDATE … RETURNING` sur `files_count` (`reserveSlot`), compensée par

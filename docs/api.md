@@ -49,7 +49,7 @@ Les assistants (Claude, ChatGPT) passent plutôt par [MCP](connecter-un-client.m
 | `x-correlation-id` | non | Identifiant **unique dans toute la file**, pour retrouver ce message |
 | `x-source` | non | Origine (défaut `n8n`, 100 caractères au maximum) |
 | `x-tags` | non | Tags à poser, séparés par des virgules ; les tags inconnus sont créés automatiquement |
-| `x-on-download` | non | `keep` (défaut) ou `consume` : efface la pièce peu après sa première livraison |
+| `x-on-download` | non | `keep` ou `consume` (défaut : réglage `file_on_download_default`, `keep` à l'installation) ; `consume` efface la pièce peu après sa première livraison |
 
 **Corps JSON.** Le corps est le payload.
 
@@ -92,6 +92,7 @@ curl -X POST "$QUEUE_URL/webhook" \
 | 415 | `extension_blocked` | Extension dans `file_blocked_extensions` |
 | 507 | `quota_exceeded` | Quota `storage_quota_gb` atteint |
 | 507 | `disk_full` | Disque insuffisant compte tenu de `storage_min_free_gb` |
+| 503 | `aborted`, `shutting_down` | Envoi interrompu ou arrêt du serveur (multipart) ; renvoyer la requête |
 
 Pour les envois multipart, les requêtes interrompues ou refusées en cours d'envoi, l'en-tête `Connection`
 et les journaux d'accès du proxy : [Fichiers et journaux du proxy](installation.md#fichiers-et-journaux-du-proxy).
