@@ -50,6 +50,10 @@ export const BACKUP_NAME_REGEX =
 
 /** Enfants avant parents : ordre de suppression ; l'insertion suit l'ordre inverse. */
 const TABLES = [
+  'drop_events',
+  'drop_tags',
+  'message_tags',
+  'attachments',
   'oauth_tokens',
   'oauth_codes',
   'admin_sessions',
@@ -58,6 +62,8 @@ const TABLES = [
   'users',
   'settings',
   'messages',
+  'drops',
+  'tags',
 ] as const
 
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1')
@@ -99,6 +105,7 @@ export function createBackups(deps: {
   dir: string
   settings: Settings
   now?: () => number
+  onRestore?: () => void
 }): Backups {
   const { db, dir, settings } = deps
   const now = deps.now ?? Date.now
@@ -194,6 +201,8 @@ export function createBackups(deps: {
       db.exec('DETACH DATABASE src')
     }
     settings.reload()
+    // Après restauration : les liens signés émis avant ne doivent pas se réveiller (Task 2 câble la rotation).
+    deps.onRestore?.()
     // Purge seulement après succès, sans jamais toucher la sauvegarde restaurée.
     prune(name)
   }
