@@ -24,9 +24,38 @@ export function contentDisposition(
   return `${type}; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
 }
 
-/** Réponse d'erreur d'envoi : message sans chemin ni nom de fichier (R4 : pas de Connection: close). */
-export function sendUploadError(res: Response, err: UploadError | MultipartError): void {
+/** Durée maximale pendant laquelle on lit et jette le reste d'un corps refusé avant de fermer. */
+export const LINGER_MS = 10_000
+
+/**
+ * Réponse d'erreur envoyée avant la fin du corps : fermeture « lingering » (nginx, Apache).
+ * Node détruit le socket dès la réponse envoyée (`destroySoon`, connexion `close`) : les octets
+ * que le client envoie encore reçoivent alors un RST, et le client peut perdre la réponse
+ * (EPIPE/ECONNRESET). Ici : `Connection: close`, puis, la réponse partie, demi-fermeture (FIN) et
+ * lecture du reste du corps, jeté, jusqu'à ce que le client ferme, au plus `ms`. Sans effet si le
+ * corps a déjà été lu en entier.
+ */
+export function lingerAfterError(req: Request, res: Response, ms = LINGER_MS): void {
+  if (req.complete || res.headersSent) return
+  const socket = req.socket
+  res.set('Connection', 'close')
+  req.resume()
+  socket.destroySoon = () => {
+    socket.end()
+    const timer = setTimeout(() => socket.destroy(), ms)
+    timer.unref()
+    socket.once('close', () => clearTimeout(timer))
+  }
+}
+
+/** Réponse d'erreur d'envoi : message sans chemin ni nom de fichier, fermeture lingering. */
+export function sendUploadError(
+  req: Request,
+  res: Response,
+  err: UploadError | MultipartError,
+): void {
   if (res.headersSent || res.destroyed) return
+  lingerAfterError(req, res)
   res.status(err.status).json({ ok: false, error: err.code, message: err.message })
 }
 

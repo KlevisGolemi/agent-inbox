@@ -1,8 +1,10 @@
 import fs from 'node:fs'
 import http from 'node:http'
-import type { AddressInfo } from 'node:net'
+import net, { type AddressInfo } from 'node:net'
 import request, { type Response } from 'supertest'
 import { describe, expect, it, vi } from 'vitest'
+import express from 'express'
+import { lingerAfterError } from '../src/files/http.js'
 import { signFileUrl } from '../src/files/links.js'
 import { rotateFileSigningSecret } from '../src/settings/index.js'
 import { makeTestApp } from './helpers/app.js'
@@ -121,6 +123,70 @@ describe('POST /webhook multipart', () => {
     expect(r.status).toBe(413)
     expect(r.body).toMatchObject({ ok: false, error: 'file_too_large' })
     noResidue(t)
+  })
+
+  it('fichier trop gros, client « Connection: close » qui envoie encore : 413 lu, fermeture propre sans RST', async () => {
+    const t = setup()
+    t.settings.set('file_max_mb', { ...CATS, document: 1 })
+    const server = t.app.listen(0)
+    const { port } = server.address() as AddressInfo
+    const boundary = 'XBOUNDARY'
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="g.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
+      ),
+      sized(PDF_MINI, 4 * MB),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ])
+    // allowHalfOpen : le FIN du serveur (réponse finie) ne ferme pas notre côté, on peut continuer
+    // d'écrire, comme un client qui ne lit la réponse qu'après avoir tout envoyé.
+    const socket = net.connect({ port, host: '127.0.0.1', allowHalfOpen: true })
+    let received = Buffer.alloc(0)
+    let socketError: Error | null = null
+    socket.on('data', (c: Buffer) => (received = Buffer.concat([received, c])))
+    socket.on('error', (e) => (socketError = e))
+    const ended = new Promise<void>((resolve) => socket.once('close', () => resolve()))
+    const write = (b: Buffer) =>
+      new Promise<void>((resolve) =>
+        socket.write(b, (err) => {
+          if (err) socketError ??= err
+          resolve()
+        }),
+      )
+    try {
+      await write(
+        Buffer.from(
+          `POST /webhook HTTP/1.1\r\nHost: x\r\nx-webhook-secret: ${SECRET}\r\n` +
+            `Content-Type: multipart/form-data; boundary=${boundary}\r\n` +
+            `Content-Length: ${body.length}\r\nConnection: close\r\n\r\n`,
+        ),
+      )
+      // Assez pour dépasser la limite, puis on attend la réponse avant d'envoyer la suite.
+      await write(body.subarray(0, 2 * MB))
+      await vi.waitFor(() => expect(received.toString()).toContain('"file_too_large"'), {
+        timeout: 5000,
+      })
+      // Le client, comme la plupart, finit d'envoyer son corps : le serveur doit le lire et le
+      // jeter, pas fermer brutalement (RST → EPIPE/ECONNRESET, réponse possiblement perdue).
+      for (let i = 2 * MB; i < body.length; i += 256 * 1024) {
+        await write(body.subarray(i, i + 256 * 1024))
+        await new Promise((resolve) => setImmediate(resolve))
+      }
+      socket.end()
+      await ended
+      expect(socketError).toBeNull()
+      const text = received.toString()
+      expect(text).toMatch(/^HTTP\/1\.1 413 /)
+      expect(text.toLowerCase()).toContain('connection: close')
+      expect(JSON.parse(text.slice(text.indexOf('\r\n\r\n') + 4))).toMatchObject({
+        ok: false,
+        error: 'file_too_large',
+      })
+      noResidue(t)
+    } finally {
+      socket.destroy()
+      server.close()
+    }
   })
 
   it('doublon de correlation_id : 409, pièce effacée et aucun tag « à décrire » laissé', async () => {
@@ -335,5 +401,35 @@ describe('GET /files/:id', () => {
       ok: false,
       error: 'expired',
     })
+  })
+})
+
+describe('lingerAfterError', () => {
+  it('client qui n’en finit pas d’envoyer : réponse reçue, puis connexion fermée après le délai borné', async () => {
+    const app = express()
+    app.post('/', (req, res) => {
+      lingerAfterError(req, res, 50)
+      res.status(413).json({ ok: false, error: 'file_too_large' })
+    })
+    const server = app.listen(0)
+    const { port } = server.address() as AddressInfo
+    // Fermeture vue côté serveur : le client, à demi ouvert, ne ferme jamais de lui-même.
+    const closed = new Promise<void>((resolve) =>
+      server.once('connection', (s: net.Socket) => s.once('close', () => resolve())),
+    )
+    const socket = net.connect({ port, host: '127.0.0.1', allowHalfOpen: true })
+    let received = ''
+    socket.on('data', (c: Buffer) => (received += c.toString()))
+    socket.on('error', () => {})
+    try {
+      socket.write(`POST / HTTP/1.1\r\nHost: x\r\nContent-Length: ${10 * MB}\r\n\r\n`)
+      socket.write(Buffer.alloc(64 * 1024, 0x41)) // puis plus rien : le corps n’est jamais complet
+      await closed
+      expect(received).toMatch(/^HTTP\/1\.1 413 /)
+      expect(received).toContain('"file_too_large"')
+    } finally {
+      socket.destroy()
+      server.close()
+    }
   })
 })

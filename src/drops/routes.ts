@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { Router, type Response } from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { newAttachments } from '../files/attachments.js'
-import { attachmentSummary, sendUploadError } from '../files/http.js'
+import { attachmentSummary, lingerAfterError, sendUploadError } from '../files/http.js'
 import { MultipartError, receiveUpload } from '../files/multipart.js'
 import type { FileCategory } from '../files/types.js'
 import { UploadError, type UploadManager } from '../files/uploads.js'
@@ -73,12 +73,12 @@ export function createDropsRouter(deps: {
   router.post('/d/:token', async (req, res) => {
     const drop = drops.findActiveByToken(String(req.params.token))
     if (!drop || (drop.kind === 'public' && !settings.get('drops_enabled'))) {
-      req.resume()
+      lingerAfterError(req, res)
       unavailableJson(res)
       return
     }
     if (!req.is('multipart/form-data')) {
-      req.resume()
+      lingerAfterError(req, res)
       res.status(415).json({
         ok: false,
         error: 'multipart_required',
@@ -89,7 +89,7 @@ export function createDropsRouter(deps: {
     // Lien self : réservé atomiquement pour CETTE requête dès le début (une seule requête).
     const claimAt = drop.kind === 'self' ? Date.now() : null
     if (claimAt !== null && !drops.claimSelf(drop.id, claimAt)) {
-      req.resume()
+      lingerAfterError(req, res)
       unavailableJson(res)
       return
     }
@@ -187,7 +187,7 @@ export function createDropsRouter(deps: {
     } catch (err) {
       if (err instanceof UploadError || err instanceof MultipartError) {
         compensate(err.code)
-        sendUploadError(res, err)
+        sendUploadError(req, res, err)
         return
       }
       compensate('internal_error')

@@ -211,7 +211,7 @@ export function createQueueRouter(deps: {
         })
       } catch (err) {
         if (err instanceof UploadError || err instanceof MultipartError) {
-          sendUploadError(res, err)
+          sendUploadError(req, res, err)
           return
         }
         throw err

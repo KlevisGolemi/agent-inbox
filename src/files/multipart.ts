@@ -62,7 +62,7 @@ export function receiveMultipart(
       if (failed) return
       failed = true
       req.unpipe(bb)
-      req.resume() // vide le reste du corps : la réponse d'erreur part sans EPIPE côté client
+      req.resume() // lit et jette le reste du corps (fermeture lingering : voir lingerAfterError)
       reject(err)
     }
     bb.on('field', (name, value, info) => {
@@ -129,7 +129,7 @@ export async function receiveUpload<P, R extends { ok: boolean }>(
   try {
     session = uploads.begin()
   } catch (err) {
-    req.resume() // refus avant lecture : on vide le corps pour que la réponse parte proprement
+    req.resume() // refus avant lecture : le corps est lu et jeté (voir lingerAfterError)
     throw err
   }
   try {
