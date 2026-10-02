@@ -172,7 +172,8 @@ volume complet. Deux réglages (Admin → Réglages) le bornent : `storage_quota
 
 **Durée de vie effective.** Un message avec une pièce jointe vivante n'est pas supprimé par le nettoyage
 automatique tant qu'une de ses pièces n'est pas expirée. La durée de vie effective est donc
-`max(TTL du topic, rétention de ses pièces)`.
+`max(TTL du topic, rétention de ses pièces)`. Les liens de dépôt expirés ou révoqués depuis plus de
+30 jours sont purgés avec leur journal (`drop_events`) ; les messages déjà reçus restent.
 
 **Secret de signature régénéré après restauration.** Après toute restauration d'une sauvegarde, le réglage
 `file_signing_secret` est recréé : les anciens liens signés (`/files/<id>?exp=…&sig=…`) ne fonctionnent

@@ -33,6 +33,31 @@ describe('outils MCP des drops', () => {
     ).toHaveLength(1)
   })
 
+  it('inbox_upload_link : payload au-delà de json_max_kb refusé (payload_too_large), aucun lien', async () => {
+    const ctx = mcpSetup()
+    ctx.settings.set('json_max_kb', 16)
+    const out = data(
+      await call(ctx, 'inbox_upload_link', { payload: { texte: 'x'.repeat(17 * 1024) } }),
+    )
+    expect(out).toMatchObject({ ok: false, error: 'payload_too_large' })
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM drops').get()).toEqual({ n: 0 })
+    expect(data(await call(ctx, 'inbox_upload_link', { payload: { texte: 'court' } })).ok).toBe(
+      true,
+    )
+  })
+
+  it('inbox_upload_link : correlation_id déjà pris refusé dès la création (duplicate_correlation_id)', async () => {
+    const ctx = mcpSetup()
+    const sent = data(await call(ctx, 'queue_send', { payload: {}, correlation_id: 'pris-1' }))
+    const out = data(await call(ctx, 'inbox_upload_link', { correlation_id: 'pris-1' }))
+    expect(out).toMatchObject({
+      ok: false,
+      error: 'duplicate_correlation_id',
+      existing_id: sent.id,
+    })
+    expect(ctx.db.prepare('SELECT COUNT(*) AS n FROM drops').get()).toEqual({ n: 0 })
+  })
+
   it('inbox_create_drop, inbox_drops (sans jeton), inbox_revoke_drop', async () => {
     const ctx = mcpSetup()
     const created = data(

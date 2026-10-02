@@ -15,6 +15,8 @@ export interface DropServiceDeps {
   settings: Settings
   publicUrl: URL
   now?: () => number
+  /** Id du message qui porte déjà ce correlation_id, sinon null (contrôle anticipé du lien self). */
+  correlationOwner?: (correlationId: string) => string | null
 }
 export type DropServiceError = {
   ok: false
@@ -25,6 +27,7 @@ export type DropServiceError = {
   max?: number
   unknown?: string[]
   similar?: Record<string, SimilarTag[]>
+  existing_id?: string
 }
 export type DropCreated = {
   ok: true
@@ -160,6 +163,22 @@ export function createSelfLink(
     return err('invalid_topic', 'Topic invalide : ^[A-Za-z0-9_-]{1,128}$')
   if (input.correlationId !== undefined && !CORRELATION_ID_REGEX.test(input.correlationId))
     return err('invalid_correlation_id', 'Format attendu : ^[A-Za-z0-9_-]{1,128}$')
+  // Doublon signalé dès la création (avant l'envoi du fichier) ; l'unicité au commit reste la garantie.
+  const owner =
+    input.correlationId !== undefined ? deps.correlationOwner?.(input.correlationId) : null
+  if (owner)
+    return err('duplicate_correlation_id', 'Ce correlation_id est déjà utilisé.', {
+      existing_id: owner,
+    })
+  // Le payload est stocké avec le lien : même plafond qu'un corps JSON de /webhook.
+  if (
+    input.payload !== undefined &&
+    Buffer.byteLength(JSON.stringify(input.payload)) > settings.get('json_max_kb') * 1024
+  )
+    return err(
+      'payload_too_large',
+      `Payload trop volumineux : ${settings.get('json_max_kb')} Ko au plus (json_max_kb).`,
+    )
   const tags = resolveTags(deps, input.tags, input.createdBy)
   if (!tags.ok) return tags
   const allowed = settings.get('file_allowed_categories')

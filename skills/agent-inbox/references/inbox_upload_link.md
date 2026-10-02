@@ -24,15 +24,17 @@ Crée un lien d'upload à usage unique (15 min) pour déposer un ou plusieurs fi
 
 Création du lien (`{ ok: false, error, message }`) :
 
-| Code                     | Sens                                                                       | Que faire                                                  |
-| ------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `attachments_disabled`   | Pièces jointes désactivées, ou aucune catégorie acceptée.                  | Prévenir l'administrateur.                                 |
-| `invalid_topic`          | Topic hors `^[A-Za-z0-9_-]{1,128}$`.                                       | Corriger le topic.                                         |
-| `invalid_correlation_id` | `correlation_id` hors `^[A-Za-z0-9_-]{1,128}$`.                            | Corriger l'identifiant.                                    |
-| `unknown_tags`           | Tag(s) inconnu(s) : `unknown` et `similar` indiquent les proches.          | Créer le tag (`inbox_create_tag`) ou réutiliser un proche. |
-| `invalid_name`           | Nom de tag invalide : `^[a-z0-9][a-z0-9-]{0,47}$`.                         | Corriger le nom.                                           |
-| `too_many_tags`          | Plus de 20 tags.                                                           | En poser moins.                                            |
-| (validation du schéma)   | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus.        |
+| Code                       | Sens                                                                       | Que faire                                                  |
+| -------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `attachments_disabled`     | Pièces jointes désactivées, ou aucune catégorie acceptée.                  | Prévenir l'administrateur.                                 |
+| `invalid_topic`            | Topic hors `^[A-Za-z0-9_-]{1,128}$`.                                       | Corriger le topic.                                         |
+| `invalid_correlation_id`   | `correlation_id` hors `^[A-Za-z0-9_-]{1,128}$`.                            | Corriger l'identifiant.                                    |
+| `duplicate_correlation_id` | `correlation_id` déjà porté par un message (`existing_id`).                | Choisir un autre identifiant, ou lire `existing_id`.       |
+| `payload_too_large`        | `payload` au-delà de `json_max_kb` (sérialisé).                            | Réduire le payload, ou le joindre comme fichier.           |
+| `unknown_tags`             | Tag(s) inconnu(s) : `unknown` et `similar` indiquent les proches.          | Créer le tag (`inbox_create_tag`) ou réutiliser un proche. |
+| `invalid_name`             | Nom de tag invalide : `^[a-z0-9][a-z0-9-]{0,47}$`.                         | Corriger le nom.                                           |
+| `too_many_tags`            | Plus de 20 tags.                                                           | En poser moins.                                            |
+| (validation du schéma)     | Paramètres invalides : rejet par la validation du schéma, avant exécution. | Respecter les types et bornes du tableau ci-dessus.        |
 
 Réponses HTTP du `curl` d'upload (JSON `{ ok: false, error, message }`) :
 

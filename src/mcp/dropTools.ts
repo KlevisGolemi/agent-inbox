@@ -11,6 +11,7 @@ export function registerDropTools(server: McpServer, deps: McpToolDeps): void {
     tags: deps.tags,
     settings: deps.settings,
     publicUrl: deps.publicUrl,
+    correlationOwner: (cid) => deps.repo.findByCorrelation(cid)?.id ?? null,
   })
   /** Erreur du service → résultat d'outil (tous les champs sauf ok/error passent en extra). */
   const failure = (r: { error: string } & Record<string, unknown>) =>
