@@ -201,7 +201,22 @@ au format JSON, puis supprimer les champs qui contiennent le chemin.
 supprimez les deux, ainsi que les paramètres de requête (signatures `?sig=`). Gardez `RequestHost` et
 `DownstreamStatus`. Les en-têtes ne sont pas journalisés par défaut : si vous passez
 `--accesslog.fields.headers.defaultmode=keep`, ajoutez `--accesslog.fields.headers.names.Referer=drop`.
-Les mêmes réglages existent en YAML (`accessLog.format: json`, `accessLog.fields.names.RequestPath: drop`).
+Les mêmes réglages en YAML (configuration statique) :
+
+```yaml
+accessLog:
+  format: json
+  fields:
+    names:
+      RequestPath: drop
+      RequestLine: drop
+    queryParameters:
+      defaultMode: drop
+    headers:
+      defaultMode: keep   # seulement si vous journalisez des en-têtes
+      names:
+        Referer: drop
+```
 
 ## Migration depuis la v1
 
