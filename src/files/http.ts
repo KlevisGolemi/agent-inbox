@@ -5,7 +5,7 @@ import { log } from '../log.js'
 import type { AttachmentRow, AttachmentsRepo } from './attachments.js'
 import type { MultipartError } from './multipart.js'
 import type { FileStore } from './store.js'
-import type { FileCategory } from './types.js'
+import { MB, type FileCategory } from './types.js'
 import type { StagedFile, UploadError } from './uploads.js'
 
 export const FILE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
@@ -25,7 +25,6 @@ export function contentDisposition(
   return `${type}; filename="${ascii}"; filename*=UTF-8''${rfc5987(filename)}`
 }
 
-const MB = 1024 * 1024
 /** Durée maximale du lingering, comptée dès l'appel à `lingerAfterError`. */
 export const LINGER_MS = 10_000
 /** Octets de corps refusé lus et jetés au plus par connexion, puis coupure. */

@@ -1,4 +1,4 @@
-const MB = 1024 * 1024
+import { MB } from './types.js'
 const BASE64_REGEX = /^[A-Za-z0-9+/]*={0,2}$/
 
 export interface DecodedAttachment {

@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { detectFile, extensionForMime, extensionOf, sanitizeFilename } from '../src/files/detect.js'
@@ -136,5 +137,17 @@ describe('extensionForMime', () => {
   ])('%s → %s', (mime, ext) => {
     expect(extensionForMime(mime)).toBe(ext)
     expect(ext).toMatch(/^[a-z0-9]{1,16}$/)
+  })
+})
+
+describe('constante MB', () => {
+  it('définie une seule fois (src/files/types.ts), importée ailleurs', () => {
+    const files = readdirSync(new URL('../src/', import.meta.url), { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith('.ts'))
+    const defining = files.filter((f) =>
+      /^(export )?const MB = /m.test(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8')),
+    )
+    expect(defining).toEqual(['files/types.ts'])
   })
 })

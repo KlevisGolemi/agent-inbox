@@ -1,5 +1,6 @@
 import express, { type RequestHandler, type Response } from 'express'
 import { closeAfterResponse, lingerAfterError } from '../files/http.js'
+import { MB } from '../files/types.js'
 import { checkWebhookSecret } from '../queue/secret.js'
 import type { Settings } from '../settings/index.js'
 
@@ -7,7 +8,6 @@ export const DEFAULT_JSON_LIMIT_BYTES = 1024 * 1024
 export const MCP_JSON_MARGIN_BYTES = 64 * 1024
 /** Surcoût du base64 (4/3) plus marge JSON. */
 export const BASE64_OVERHEAD = 1.37
-const MB = 1024 * 1024
 
 /** Limite du corps JSON pour un chemin, relue à chaque requête (réglages à chaud). */
 export function jsonLimitFor(path: string, settings: Settings): number {

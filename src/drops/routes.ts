@@ -9,7 +9,7 @@ import {
   setEarlyResponsePolicy,
 } from '../files/http.js'
 import { MultipartError, receiveUpload } from '../files/multipart.js'
-import type { FileCategory } from '../files/types.js'
+import { MB, type FileCategory } from '../files/types.js'
 import { UploadError, type UploadManager } from '../files/uploads.js'
 import { log } from '../log.js'
 import type { QueueRepo } from '../queue/repo.js'
@@ -17,7 +17,6 @@ import type { Settings } from '../settings/index.js'
 import { DROP_TEXT_MAX_BYTES, dropPageCsp, renderDropPage, UNAVAILABLE_PAGE } from './page.js'
 import type { DropsRepo } from './repo.js'
 
-const MB = 1024 * 1024
 const PAGE_HEADERS = {
   'Cache-Control': 'no-store',
   'Referrer-Policy': 'no-referrer',

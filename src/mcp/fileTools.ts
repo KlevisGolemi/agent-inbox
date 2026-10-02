@@ -3,11 +3,11 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { extensionForMime, inlineKindFor, isActiveMime } from '../files/detect.js'
 import { signFileUrl } from '../files/links.js'
+import { MB } from '../files/types.js'
 import { EXTERNAL_WARNING } from '../queue/http.js'
 import { fail } from './common.js'
 import type { McpToolDeps } from './tools.js'
 
-const MB = 1024 * 1024
 export const TEXT_INLINE_MAX_BYTES = MB
 
 export function registerFileTools(server: McpServer, deps: McpToolDeps): void {
